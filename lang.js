@@ -47,7 +47,7 @@ const W=[
 ['Daily Barrier Moisturizer','مرطّب الحاجز اليومي','شێدارکەری ڕۆژانەی پارێزەری پێست'],['Rich yet non-greasy cream that protects and restores your skin barrier.','كريم غني وغير دهني يحمي حاجز البشرة ويعيد ترميمه.','کرێمێکی دەوڵەمەند و نەچەورە کە پارێزەری پێستت دەپارێزێت و چاک دەکاتەوە.'],
 ['Mineral SPF 50 Sunscreen','واقي شمس معدني SPF 50','پاراستنی کانزایی لە هەتاو SPF 50'],['Broad-spectrum protection with a sheer, comfortable finish.','حماية واسعة الطيف بملمس خفيف ومريح.','پاراستنێکی فراوان بە هەستێکی سووک و ئاسوودە.'],
 ['Overnight Repair Cream','كريم الإصلاح الليلي','کرێمی چاککردنەوەی شەوانە'],['Nourishes while you sleep for softer, smoother skin by morning.','يغذّي بشرتك أثناء نومك لتصحو على بشرة أنعم وأكثر سلاسة.','لە کاتی خەوتندا پێستت خۆراک دەدات تا بەیانی نەرمتر و لووستر بێت.']];
-const LANGS={en:{dir:'ltr',h:'en'},ar:{dir:'rtl',h:'ar'},ku:{dir:'rtl',h:'ckb'}};
+const LANGS={en:{dir:'ltr',h:'en'},ar:{dir:'rtl',h:'ar'}};
 const L={ar:{},ku:{}};W.forEach(([e,a,k])=>{L.ar[e]=a;L.ku[e]=k});
 /*GLS*/
 const GLS=`cleanser|غسول|پاککەرەوە|n
@@ -183,7 +183,7 @@ const res=[];let run=[];const fl=()=>{res.push(...run.reverse());run=[]};items.f
 function auto(l,t,f){if(l=='en'||(!f&&S.at===0)||!/[A-Za-z]/.test(t)||t.length>220)return'';gu();const k=l+'|'+t;if(GC.has(k))return GC.get(k);let o='';try{o=auto_(l,t)}catch(e){}GC.set(k,o);return o}
 /*GLE*/
 const hv=(o,k)=>o&&Object.prototype.hasOwnProperty.call(o,k)&&o[k]?o[k]:'',lk=(l,k)=>hv(S.tr&&S.tr[l],k)||hv(L[l],k);
-const dl=()=>{const d=S.dlg||'ar';if(LANGS[d])return d;const n=(navigator.language||'en').toLowerCase();return/^ar/.test(n)?'ar':/^(ku|ckb)/.test(n)?'ku':'en'};
+const dl=()=>{const d=S.dlg||'ar';if(LANGS[d])return d;const n=(navigator.language||'en').toLowerCase();return/^ar/.test(n)?'ar':'en'};
 let lang='';try{lang=localStorage.lg2||''}catch(e){}if(!LANGS[lang])lang=dl();
 const tx=k=>lang=='en'?k:(lk(lang,k)||auto(lang,k)||k);
 function tn(n){const p=n.parentElement;if(!p||p.closest('#ad,.lg,#lsw,script,style'))return;const o=n._o??=n.nodeValue,k=o.trim();if(!k)return;const v=lang=='en'?'':(lk(lang,k)||auto(lang,k)),nv=v?o.replace(k,()=>v):o;if(n.nodeValue!==nv)n.nodeValue=nv}
