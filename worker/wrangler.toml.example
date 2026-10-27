@@ -1,0 +1,12 @@
+name = "lacey-store"
+main = "worker.js"
+compatibility_date = "2024-01-01"
+
+# أنشئ الـ KV:  npx wrangler kv namespace create STORE
+kv_namespaces = [{ binding = "STORE", id = "PUT_KV_ID_HERE" }]
+
+# لا تضع الأسرار هنا. استخدم:
+#   npx wrangler secret put ADMIN_PASS
+#   npx wrangler secret put ADMIN_KEY     (اختياري)
+#   npx wrangler secret put BOT_TOKEN     (اختياري)
+#   npx wrangler secret put CHAT_ID       (اختياري)
