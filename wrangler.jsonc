@@ -1,5 +1,23 @@
 {
   "name": "laceyskin",
+  "main": "worker/worker.js",
   "compatibility_date": "2025-01-01",
-  "assets": { "directory": "./" }
+  "assets": {
+    "directory": "./",
+    "binding": "ASSETS",
+    "run_worker_first": [
+      "/login", "/catalog", "/settings", "/code", "/visit", "/stats",
+      "/order", "/order/*", "/orders", "/status", "/track",
+      "/customers", "/customer", "/discount", "/discounts"
+    ]
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "lacey-store",
+      "database_id": "4da84889-f26b-4f54-8380-98ccba1fe3c9",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "triggers": { "crons": ["* * * * *"] }
 }

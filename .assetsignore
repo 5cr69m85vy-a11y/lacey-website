@@ -2,7 +2,10 @@ wrangler.jsonc
 .assetsignore
 README.md
 .gitignore
+package.json
 worker
+migrations
+test
 .git
 node_modules
 .wrangler
