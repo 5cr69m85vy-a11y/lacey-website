@@ -7,7 +7,7 @@ C:[{c:'WELCOME10',v:10}],O:[],seq:1000};
 const PRE=/*P*/null/*E*/;let S;{let v={};try{v=JSON.parse(localStorage.lc)||{}}catch(e){}S=PRE&&(v.ver||0)<(PRE.ver||0)?{...D,...PRE,O:v.O||[],sq:v.sq||{},seq:Math.max(v.seq||0,PRE.seq||0)}:{...D,...PRE,...v}}
 if(!S.tk)S.tk=D.tk;if(!S.tid)S.tid=D.tid;
 let cart={};try{cart=JSON.parse(localStorage.lcc)||{}}catch(e){}
-const save=()=>{try{localStorage.lc=JSON.stringify(S);localStorage.lcc=JSON.stringify(cart)}catch(e){toast('Storage full. Use a smaller image.')}};
+const save=()=>{try{localStorage.lc=JSON.stringify(S);localStorage.lcc=JSON.stringify(cart)}catch(e){toast('Storage full. Use a smaller image.')}try{window.pushRemote&&pushRemote()}catch(e){}};
 const fm=n=>Number(n).toLocaleString('en-US')+' '+(S.cur=='IQD'?tx('IQD'):S.cur),esc=s=>String(s??'').replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';'),pr=c=>S.P.find(p=>p.c===c);
 const toast=m=>{const t=$('#ts');t.textContent=m;t.classList.add('on');clearTimeout(t.h);t.h=setTimeout(()=>t.classList.remove('on'),m.length>30?6000:2200)};
 
