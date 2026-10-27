@@ -8,15 +8,15 @@
 .
 ├── index.html        الصفحة الرئيسية
 ├── style.css         التصميم
-├── lang.js           الترجمات (يُحمَّل أولاً)
-├── storage.js        الحالة والإعدادات الافتراضية والحفظ في المتصفح
+├── storage.js        الحالة والإعدادات الافتراضية والحفظ في المتصفح (يُحمَّل أولاً)
+├── lang.js           الترجمات
 ├── script.js         منطق المتجر ولوحة التحكم
 └── worker/
     ├── worker.js             خادم Cloudflare Worker + KV
     └── wrangler.toml.example نموذج الإعداد
 ```
 
-ترتيب تحميل السكربتات مهم: `lang.js` ← `storage.js` ← `script.js`.
+ترتيب تحميل السكربتات مهم: `storage.js` ← `lang.js` ← `script.js`.
 
 ## تشغيل الواجهة
 
