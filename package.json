@@ -1,0 +1,8 @@
+{
+  "name": "lacey-store",
+  "private": true,
+  "scripts": {
+    "test": "node --no-warnings test/worker.test.js && node --no-warnings test/e2e.js",
+    "deploy": "wrangler deploy"
+  }
+}
