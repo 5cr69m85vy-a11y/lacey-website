@@ -13,6 +13,9 @@
      ADMIN_PASS (إلزامي)  ADMIN_KEY (اختياري)  BOT_TOKEN / CHAT_ID (اختياري: إشعار تلجرام لك)
    ============================================================ */
 
+import { authRoutes, sessionCustomer } from './auth.js';
+import { processQueue } from './wa.js';
+
 const CANCEL_WINDOW_MS = 10 * 60 * 1000;
 
 const CORS = {
@@ -75,6 +78,17 @@ async function setStatus(env, o, s, actor, note = '') {
     env.DB.prepare('INSERT INTO order_events(order_code,status,at,actor,note) VALUES(?,?,?,?,?)').bind(o.code, s, t, actor, note),
   ]);
   await queueNote(env, o.phone, 'order_status', { code: o.code, status: s, text: STATUS_TEXT[s] || '' }, o.customer_id);
+  if (s === 2) await issueReceipt(env, o);
+}
+
+/* إيصال يُصدر عند تأكيد الطلب */
+async function issueReceipt(env, o) {
+  const full = await env.DB.prepare('SELECT * FROM orders WHERE code=?').bind(o.code).first();
+  if (!full) return;
+  const data = { items: jp(full.items, []), subtotal: full.subtotal, discount: full.discount, total: full.total, pay: full.pay_method,
+    name: full.name, ph: full.phone, addr: [full.city, full.area, full.landmark].filter(Boolean).join(' — '), codes: jp(full.discount_codes, []), id: full.id };
+  await env.DB.prepare('INSERT OR IGNORE INTO receipts(order_code,number,issued_at,data) VALUES(?,?,?,?)')
+    .bind(o.code, 'LR-' + String(full.id).padStart(6, '0'), now(), JSON.stringify(data)).run();
 }
 
 /* تأكيد تلقائي لكل طلب مضى على إنشائه 10 دقائق ولم يُلغَ */
@@ -127,7 +141,7 @@ const orderView = r => ({
   items: jp(r.items, []), s: r.subtotal, dsc: r.discount, t: r.total, dc: (jp(r.discount_codes, [])[0]) || '',
   pay: r.pay_method, d: r.created_at, st: r.status,
 });
-async function createOrder(env, b) {
+async function createOrder(env, b, sess) {
   const phone = String(b.ph || '').trim();
   if (!/^07\d{9}$/.test(phone)) return J({ error: 'رقم الهاتف غير صحيح' }, 400);
   const name = String(b.name || '').trim().slice(0, 80);
@@ -173,11 +187,17 @@ async function createOrder(env, b) {
   const id = seq.value, t = now();
 
   /* العميل: إنشاء/تحديث */
-  const cust = await env.DB.prepare('SELECT id,orders_count FROM customers WHERE phone=?').bind(phone).first();
+  let cust = await env.DB.prepare('SELECT id,orders_count FROM customers WHERE phone=?').bind(phone).first();
+  if (!cust && sess && !sess.phone) {            // زبون مسجّل بالبريد/Google: نربط رقمه بحسابه
+    await env.DB.prepare('UPDATE customers SET phone=? WHERE id=?').bind(phone, sess.id).run();
+    cust = { id: sess.id, orders_count: sess.orders_count };
+  }
+  const firstOrder = !cust || cust.orders_count === 0;
   let customerId = cust ? cust.id : null, welcome = '';
   if (cust) {
     await env.DB.prepare('UPDATE customers SET name=?,city=?,area=?,landmark=?,orders_count=orders_count+1,spent=spent+?,last_order_at=?,last_seen_at=? WHERE id=?')
       .bind(name, city, area, lm, total, t, t, cust.id).run();
+    if (firstOrder) { welcome = 'WEL' + rnd(5); await env.DB.prepare("INSERT INTO discount_codes(code,kind,value,phone,auto,created_at) VALUES(?,'percent',10,?,1,?)").bind(welcome, phone, t).run(); }
   } else {
     const ins = await env.DB.prepare('INSERT INTO customers(phone,name,city,area,landmark,orders_count,spent,created_at,last_seen_at,first_order_at,last_order_at) VALUES(?,?,?,?,?,1,?,?,?,?,?) RETURNING id')
       .bind(phone, name, city, area, lm, total, t, t, t, t).first();
@@ -203,7 +223,7 @@ async function createOrder(env, b) {
 
 /* ================================================================ */
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     if (!env.DB) return J({ error: 'D1 binding DB missing' }, 500);
     if (request.method === 'OPTIONS') return new Response(null, { headers: CORS });
 
@@ -215,6 +235,8 @@ export default {
     const body = async () => { try { return await request.json(); } catch (e) { return {}; } };
 
     try {
+      { const ar = await authRoutes({ env, request, url, p, M, body, ctx }); if (ar) return ar; }
+
       /* ---------- دخول الأدمن ---------- */
       if (p === '/login' && M === 'POST') {
         if (!env.ADMIN_PASS) return J({ error: 'ADMIN_PASS is not set' }, 503);
@@ -256,7 +278,11 @@ export default {
       }
 
       /* ---------- الطلبات ---------- */
-      if (p === '/order' && M === 'POST') return await createOrder(env, await body());
+      if (p === '/order' && M === 'POST') {
+        const r = await createOrder(env, await body(), await sessionCustomer(env, request));
+        if (ctx && ctx.waitUntil) ctx.waitUntil(processQueue(env)); else await processQueue(env);
+        return r;
+      }
 
       if (p === '/order/cancel' && M === 'POST') {
         const { code, ph } = await body();
@@ -297,6 +323,7 @@ export default {
         const o = await env.DB.prepare('SELECT * FROM orders WHERE code=?').bind(String(code || '').toUpperCase()).first();
         if (!o) return J({ error: 'not found' }, 404);
         await setStatus(env, o, n, 'admin');
+        if (ctx && ctx.waitUntil) ctx.waitUntil(processQueue(env)); else await processQueue(env);
         return J({ ok: true });
       }
 
@@ -344,5 +371,5 @@ export default {
     return J({ error: 'not found' }, 404);
   },
 
-  async scheduled(event, env) { await sweep(env); },
+  async scheduled(event, env) { await sweep(env); await processQueue(env, 50); },
 };
