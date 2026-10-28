@@ -1,0 +1,1 @@
+ALTER TABLE chats ADD COLUMN product_code TEXT NOT NULL DEFAULT '';

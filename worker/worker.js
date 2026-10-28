@@ -15,6 +15,7 @@
 
 import { authRoutes, sessionCustomer } from './auth.js';
 import { processQueue } from './wa.js';
+import { quote, shopRoutes } from './shop.js';
 
 const CANCEL_WINDOW_MS = 10 * 60 * 1000;
 
@@ -155,33 +156,11 @@ async function createOrder(env, b, sess) {
   const existing = await env.DB.prepare('SELECT code FROM orders WHERE code=?').bind(b.code).first();
   if (existing) return J({ ok: true, code: b.code, duplicate: true });
 
-  /* الأسعار تُحسب من قاعدة البيانات لا من المتصفح */
-  const nProducts = (await env.DB.prepare('SELECT COUNT(*) n FROM products').first()).n;
-  const items = [];
-  for (const it of raw) {
-    const q = Math.max(1, Math.min(50, Math.floor(+it.q || 0)));
-    const code = String(it.c || '');
-    const row = await env.DB.prepare('SELECT name,price,data FROM products WHERE code=?').bind(code).first();
-    if (row) items.push({ c: code, n: row.name, cc: String(jp(row.data, {}).cc || ''), q, p: row.price });
-    else if (nProducts === 0 && +it.p >= 0) items.push({ c: code, n: String(it.n || code).slice(0, 120), q, p: Math.round(+it.p) }); // قبل أول حفظ من لوحة التحكم
-    else return J({ error: `المنتج ${code} غير متاح` }, 400);
-  }
-  const subtotal = items.reduce((a, i) => a + i.p * i.q, 0);
-
-  /* كود الخصم: من إعدادات المتجر أو من جدول الأكواد */
-  let pct = 0, usedCode = '';
-  const dc = String(b.dc || '').trim().toUpperCase();
-  if (dc) {
-    const cfg = jp((await env.DB.prepare("SELECT value FROM settings WHERE key='config'").first() || {}).value, {});
-    const fromCfg = (cfg.C || []).find(x => String(x.c).toUpperCase() === dc);
-    const fromDb = await env.DB.prepare("SELECT * FROM discount_codes WHERE code=? AND active=1 AND kind='percent'").bind(dc).first();
-    if (fromCfg) { pct = +fromCfg.v || 0; usedCode = dc; }
-    else if (fromDb && (!fromDb.phone || fromDb.phone === phone) && !(fromDb.expires_at && fromDb.expires_at < now()) && !(fromDb.max_uses && fromDb.used >= fromDb.max_uses)) {
-      pct = fromDb.value; usedCode = dc;
-    }
-  }
-  const discount = Math.round(subtotal * Math.min(100, Math.max(0, pct)) / 100);
-  const total = subtotal - discount;
+  /* الأسعار والخصومات والتوصيل تُحسب على الخادم لا من المتصفح */
+  const qt = await quote(env, { items: raw, codes: [].concat(b.codes || [], b.dc || []), ph: phone, pay: b.pay });
+  if (qt.error) return J({ error: qt.error }, 400);
+  const items = qt.lines, subtotal = qt.subtotal, discount = qt.discount, shipping = qt.shipping, total = qt.total;
+  const usedCodes = qt.applied.map(a => a.code), payM = qt.pay;
 
   const seq = await env.DB.prepare("UPDATE counters SET value=value+1 WHERE name='order_seq' RETURNING value").first();
   const id = seq.value, t = now();
@@ -209,16 +188,17 @@ async function createOrder(env, b, sess) {
   await env.DB.batch([
     env.DB.prepare(`INSERT INTO orders(code,id,customer_id,name,phone,city,area,landmark,items,subtotal,discount,total,discount_codes,pay_method,status,created_at)
       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,1,?)`)
-      .bind(b.code, id, customerId, name, phone, city, area, lm, JSON.stringify(items), subtotal, discount, total, JSON.stringify(usedCode ? [usedCode] : []), 'cod', t),
+      .bind(b.code, id, customerId, name, phone, city, area, lm, JSON.stringify(items), subtotal, discount, total, JSON.stringify(usedCodes), payM, t),
     env.DB.prepare('INSERT INTO order_events(order_code,status,at,actor,note) VALUES(?,?,?,?,?)').bind(b.code, 1, t, 'customer', ''),
-    ...(usedCode ? [env.DB.prepare('UPDATE discount_codes SET used=used+1 WHERE code=?').bind(usedCode)] : []),
+    ...usedCodes.map(c => env.DB.prepare('UPDATE discount_codes SET used=used+1 WHERE code=?').bind(c)),
+    env.DB.prepare('UPDATE orders SET shipping=?,free_shipping=? WHERE code=?').bind(shipping, qt.freeShip ? 1 : 0, b.code),
   ]);
   await queueNote(env, phone, 'order_received', { code: b.code, total }, customerId);
 
   const lines = items.map(i => `• ${i.q}× ${escH(i.n)} (${escH(i.c)})${i.cc ? ' 🎨 ' + escH(i.cc) : ''} — ${money(i.p * i.q)}`).join('\n');
   await tgNotify(env, `🛍 <b>طلب جديد #${id}</b>\nكود الطلب: <code>${escH(b.code)}</code>\n\n👤 ${escH(name)}\n📞 ${escH(phone)}\n📍 ${escH(city)} — ${escH(area)}\n🧭 ${escH(lm)}\n\n${lines}\n\n` +
-    (usedCode ? `🏷 كود الخصم: ${escH(usedCode)} (-${pct}%) −${money(discount)}\n` : '') + `💰 <b>المجموع: ${money(total)}</b>`);
-  return J({ ok: true, id, code: b.code, subtotal, discount, total, welcome: welcome || undefined, cancelUntil: t + CANCEL_WINDOW_MS });
+    (usedCodes.length ? `🏷 أكواد: ${escH(usedCodes.join(', '))} −${money(discount)}\n` : '') + (qt.freeShip ? '🚚 توصيل مجاني\n' : shipping ? `🚚 التوصيل: ${money(shipping)}\n` : '') + `💳 ${escH(payM)}\n` + `💰 <b>المجموع: ${money(total)}</b>`);
+  return J({ ok: true, id, code: b.code, subtotal, discount, shipping, total, applied: qt.applied, rejected: qt.rejected, welcome: welcome || undefined, cancelUntil: t + CANCEL_WINDOW_MS });
 }
 
 /* ================================================================ */
@@ -235,6 +215,7 @@ export default {
     const body = async () => { try { return await request.json(); } catch (e) { return {}; } };
 
     try {
+      { const sr = await shopRoutes({ env, p, M, body, url }, authed); if (sr) return sr; }
       { const ar = await authRoutes({ env, request, url, p, M, body, ctx }); if (ar) return ar; }
 
       /* ---------- دخول الأدمن ---------- */
