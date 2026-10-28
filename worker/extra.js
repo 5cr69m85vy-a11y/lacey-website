@@ -1,0 +1,232 @@
+/* extra.js — دردشة الدعم، التقييمات، الحملات التسويقية، الإحصائيات، رفع الوسائط، manifest */
+import { J, CORS, now, jp, rnd, randHex, sha256, today, cfgOf } from './lib.js';
+import { processQueue } from './wa.js';
+
+const TZ = 3 * 3600;                                    // بغداد UTC+3
+const MEDIA_TYPES = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif', 'video/mp4': 'mp4', 'video/webm': 'webm' };
+const MAX_MEDIA = 40 * 1024 * 1024, MAX_D1_MEDIA = 8 * 1024 * 1024, CHUNK = 700000;
+
+async function guestChat(env, token, create, sess, extra = {}) {
+  let ch = null;
+  if (sess) ch = await env.DB.prepare("SELECT * FROM chats WHERE customer_id=? AND channel='support' AND status='open' ORDER BY id DESC LIMIT 1").bind(sess.id).first();
+  if (!ch && token) ch = await env.DB.prepare("SELECT * FROM chats WHERE guest_token=? AND channel='support' ORDER BY id DESC LIMIT 1").bind(await sha256(token)).first();
+  if (!ch && create) {
+    const tk = token || randHex(16);
+    const id = (await env.DB.prepare("INSERT INTO chats(customer_id,channel,status,created_at,guest_token,name,phone) VALUES(?,'support','open',?,?,?,?) RETURNING id")
+      .bind(sess ? sess.id : null, now(), await sha256(tk), String(extra.name || (sess && sess.name) || '').slice(0, 60), String(extra.ph || (sess && sess.phone) || '').slice(0, 20)).first()).id;
+    ch = await env.DB.prepare('SELECT * FROM chats WHERE id=?').bind(id).first(); ch._tk = tk;
+  }
+  return ch;
+}
+const msgs = async (env, id, after) => (await env.DB.prepare('SELECT id,sender,body,at FROM chat_messages WHERE chat_id=? AND id>? ORDER BY id LIMIT 200').bind(id, after || 0).all()).results;
+
+export async function extraRoutes(c) {
+  const { env, request, url, p, M, body, authed, sess, ctx, tg } = c;
+  const adm = () => authed ? null : J({ error: 'unauthorized' }, 401);
+
+  /* ---------- manifest ديناميكي ---------- */
+  if (p === '/manifest.json') {
+    const cfg = await cfgOf(env);
+    return new Response(JSON.stringify({
+      name: cfg.nm || 'Lacey Skincare', short_name: cfg.sn || 'Lacey', description: cfg.hs || 'Lacey skincare store',
+      start_url: '/', scope: '/', display: 'standalone', lang: 'ar', dir: 'rtl',
+      background_color: cfg.cp || '#f6fbfb', theme_color: cfg.ac || '#2f8f9d',
+      icons: [{ src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' }, { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+        { src: '/icons/maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }],
+    }), { headers: { ...CORS, 'Content-Type': 'application/manifest+json; charset=utf-8', 'Cache-Control': 'public, max-age=300' } });
+  }
+
+  /* ---------- وسائط (R2) ---------- */
+  if (p === '/media' && M === 'POST') {
+    const a = adm(); if (a) return a;
+    const type = (request.headers.get('content-type') || '').split(';')[0];
+    if (!MEDIA_TYPES[type]) return J({ error: 'نوع الملف غير مدعوم (png, jpg, webp, gif, mp4, webm)' }, 415);
+    const buf = await request.arrayBuffer();
+    const max = env.MEDIA ? MAX_MEDIA : MAX_D1_MEDIA;
+    if (!buf.byteLength || buf.byteLength > max) return J({ error: `حجم الملف يجب أن يكون أقل من ${max >> 20}MB` + (env.MEDIA ? '' : ' (فعّل R2 لملفات أكبر)') }, 413);
+    const key = rnd(10).toLowerCase() + now().toString(36) + '.' + MEDIA_TYPES[type];
+    if (env.MEDIA) await env.MEDIA.put(key, buf, { httpMetadata: { contentType: type, cacheControl: 'public, max-age=31536000, immutable' } });
+    else {
+      let bin = ''; const u = new Uint8Array(buf); for (let i = 0; i < u.length; i += 8192) bin += String.fromCharCode(...u.subarray(i, i + 8192));
+      const b64 = btoa(bin), st = [];
+      for (let i = 0; i * CHUNK < b64.length; i++) st.push(env.DB.prepare('INSERT INTO media_chunks(key,idx,data) VALUES(?,?,?)').bind(key, i, b64.slice(i * CHUNK, (i + 1) * CHUNK)));
+      for (let i = 0; i < st.length; i += 10) await env.DB.batch(st.slice(i, i + 10));
+    }
+    await env.DB.prepare('INSERT INTO media(key,type,size,created_at) VALUES(?,?,?,?)').bind(key, type, buf.byteLength, now()).run();
+    return J({ url: '/media/' + key, type, size: buf.byteLength });
+  }
+  if (p.startsWith('/media/') && M === 'GET') {
+    const key = p.slice(7);
+    if (!/^[a-z0-9]+\.[a-z0-9]+$/.test(key)) return J({ error: 'not found' }, 404);
+    const base = { 'Access-Control-Allow-Origin': '*', 'Accept-Ranges': 'bytes', 'Cache-Control': 'public, max-age=31536000, immutable' };
+    if (env.MEDIA) {
+      const o = await env.MEDIA.get(key, { range: request.headers });
+      if (o) { const h = new Headers(base); o.writeHttpMetadata && o.writeHttpMetadata(h); return new Response(o.body, { status: o.range ? 206 : 200, headers: h }); }
+    }
+    const m = await env.DB.prepare('SELECT type,size FROM media WHERE key=?').bind(key).first();
+    if (!m) return J({ error: 'not found' }, 404);
+    const rows = (await env.DB.prepare('SELECT data FROM media_chunks WHERE key=? ORDER BY idx').bind(key).all()).results;
+    if (!rows.length) return J({ error: 'not found' }, 404);
+    const bin = atob(rows.map(r => r.data).join('')), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+    const rg = /bytes=(\d*)-(\d*)/.exec(request.headers.get('range') || '');
+    if (rg) {
+      let s0 = rg[1] === '' ? u.length - +rg[2] : +rg[1], e0 = rg[1] !== '' && rg[2] !== '' ? Math.min(+rg[2], u.length - 1) : u.length - 1;
+      if (s0 > e0 || s0 >= u.length) return new Response(null, { status: 416, headers: { ...base, 'Content-Range': `bytes */${u.length}` } });
+      return new Response(u.slice(s0, e0 + 1), { status: 206, headers: { ...base, 'Content-Type': m.type, 'Content-Range': `bytes ${s0}-${e0}/${u.length}` } });
+    }
+    return new Response(u, { headers: { ...base, 'Content-Type': m.type } });
+  }
+  if (p === '/media' && M === 'GET') { const a = adm(); if (a) return a; return J({ items: (await env.DB.prepare('SELECT * FROM media ORDER BY created_at DESC LIMIT 200').all()).results }); }
+
+  /* ---------- دردشة الزبائن (قناة الدعم) ---------- */
+  if (p === '/chat/send' && M === 'POST') {
+    const b = await body(); const text = String(b.text || '').trim().slice(0, 1000);
+    if (!text) return J({ error: 'empty' }, 400);
+    const ch = await guestChat(env, b.token, true, sess, b);
+    const recent = await env.DB.prepare("SELECT COUNT(*) n FROM chat_messages WHERE chat_id=? AND sender='customer' AND at>?").bind(ch.id, now() - 3600e3).first();
+    if (recent.n >= 40) return J({ error: 'رسائل كثيرة، حاول لاحقاً' }, 429);
+    if (ch.status !== 'open') await env.DB.prepare("UPDATE chats SET status='open',closed_at=NULL WHERE id=?").bind(ch.id).run();
+    await env.DB.prepare("INSERT INTO chat_messages(chat_id,sender,body,at) VALUES(?,'customer',?,?)").bind(ch.id, text, now()).run();
+    if (tg) ctx && ctx.waitUntil ? ctx.waitUntil(tg(`💬 <b>رسالة دعم</b> #${ch.id} — ${ch.name || 'زائر'} ${ch.phone || ''}\n${text.replace(/[<>&]/g, '')}`)) : 0;
+    return J({ ok: true, token: ch._tk || b.token || '', chat: ch.id });
+  }
+  if (p === '/chat/poll' && M === 'GET') {
+    const ch = await guestChat(env, url.searchParams.get('token') || '', false, sess);
+    if (!ch) return J({ chat: null, messages: [] });
+    const rated = await env.DB.prepare('SELECT 1 x FROM reviews WHERE chat_id=?').bind(ch.id).first();
+    return J({ chat: ch.id, status: ch.status, rated: !!rated, messages: await msgs(env, ch.id, +url.searchParams.get('after') || 0) }, 200, { 'Cache-Control': 'no-store' });
+  }
+  if (p === '/chat/close' && M === 'POST') {
+    const b = await body(); const ch = await guestChat(env, b.token, false, sess); if (!ch) return J({ error: 'no chat' }, 404);
+    await env.DB.prepare("UPDATE chats SET status='closed',closed_at=? WHERE id=?").bind(now(), ch.id).run();
+    return J({ ok: true });
+  }
+  if (p === '/chat/rate' && M === 'POST') {
+    const b = await body(); const ch = await guestChat(env, b.token, false, sess); if (!ch) return J({ error: 'no chat' }, 404);
+    const r = Math.round(+b.rating);
+    if (!(r >= 1 && r <= 5)) return J({ error: 'التقييم من 1 إلى 5' }, 400);
+    if (await env.DB.prepare('SELECT 1 x FROM reviews WHERE chat_id=?').bind(ch.id).first()) return J({ error: 'تم التقييم مسبقاً' }, 409);
+    await env.DB.batch([
+      env.DB.prepare('INSERT INTO reviews(chat_id,customer_id,rating,comment,at) VALUES(?,?,?,?,?)').bind(ch.id, ch.customer_id, r, String(b.comment || '').slice(0, 500), now()),
+      env.DB.prepare("UPDATE chats SET status='closed',closed_at=COALESCE(closed_at,?) WHERE id=?").bind(now(), ch.id),
+    ]);
+    return J({ ok: true });
+  }
+
+  /* ---------- لوحة الأدمن: الدعم + القناة الخاصة للمنتجات ---------- */
+  if (p === '/adm/chats' && M === 'GET') {
+    const a = adm(); if (a) return a;
+    const ch = url.searchParams.get('channel') === 'admin' ? 'admin' : 'support';
+    const rows = (await env.DB.prepare(`SELECT c.*, (SELECT body FROM chat_messages m WHERE m.chat_id=c.id ORDER BY m.id DESC LIMIT 1) last,
+      (SELECT sender FROM chat_messages m WHERE m.chat_id=c.id ORDER BY m.id DESC LIMIT 1) lastby,
+      (SELECT rating FROM reviews r WHERE r.chat_id=c.id) rating FROM chats c WHERE c.channel=? ORDER BY c.id DESC LIMIT 200`).bind(ch).all()).results;
+    return J({ chats: rows.map(r => ({ id: r.id, status: r.status, name: r.name, ph: r.phone, product: r.product_code, last: r.last || '', lastby: r.lastby || '', rating: r.rating || 0, t: r.created_at })) });
+  }
+  if (p === '/adm/chat' && M === 'GET') {
+    const a = adm(); if (a) return a;
+    const id = +url.searchParams.get('id');
+    return J({ messages: await msgs(env, id, +url.searchParams.get('after') || 0) }, 200, { 'Cache-Control': 'no-store' });
+  }
+  if (p === '/adm/chat/reply' && M === 'POST') {
+    const a = adm(); if (a) return a;
+    const b = await body(); const text = String(b.text || '').trim().slice(0, 1000); if (!text) return J({ error: 'empty' }, 400);
+    const ch = await env.DB.prepare('SELECT * FROM chats WHERE id=?').bind(+b.id).first(); if (!ch) return J({ error: 'not found' }, 404);
+    await env.DB.prepare('INSERT INTO chat_messages(chat_id,sender,body,at) VALUES(?,?,?,?)').bind(ch.id, 'admin', text, now()).run();
+    return J({ ok: true });
+  }
+  if (p === '/adm/chat/close' && M === 'POST') {
+    const a = adm(); if (a) return a;
+    const b = await body(); await env.DB.prepare("UPDATE chats SET status='closed',closed_at=? WHERE id=?").bind(now(), +b.id).run(); return J({ ok: true });
+  }
+  if (p === '/adm/inquiry' && M === 'POST') {                // قناة الأدمن الخاصة: ملاحظات/استفسارات عن منتج (لا يراها الزبائن)
+    const a = adm(); if (a) return a;
+    const b = await body(); const code = String(b.product || '').slice(0, 40), text = String(b.text || '').trim().slice(0, 1000);
+    if (!text) return J({ error: 'empty' }, 400);
+    let ch = await env.DB.prepare("SELECT id FROM chats WHERE channel='admin' AND product_code=? LIMIT 1").bind(code).first();
+    if (!ch) ch = await env.DB.prepare("INSERT INTO chats(channel,status,created_at,product_code,name) VALUES('admin','open',?,?,?) RETURNING id").bind(now(), code, String(b.name || code).slice(0, 80)).first();
+    await env.DB.prepare('INSERT INTO chat_messages(chat_id,sender,body,at) VALUES(?,?,?,?)').bind(ch.id, 'admin', text, now()).run();
+    return J({ ok: true, id: ch.id });
+  }
+  if (p === '/adm/ratings' && M === 'GET') {
+    const a = adm(); if (a) return a;
+    const s = await env.DB.prepare('SELECT COUNT(*) n, AVG(rating) avg FROM reviews').first();
+    const dist = (await env.DB.prepare('SELECT rating r, COUNT(*) n FROM reviews GROUP BY rating').all()).results;
+    const recent = (await env.DB.prepare('SELECT rating,comment,at FROM reviews ORDER BY id DESC LIMIT 20').all()).results;
+    return J({ count: s.n, avg: s.avg ? Math.round(s.avg * 100) / 100 : 0, dist, recent });
+  }
+
+  /* ---------- الحملات التسويقية عبر واتساب ---------- */
+  if (p === '/adm/campaign' && M === 'POST') {
+    const a = adm(); if (a) return a;
+    const b = await body(); const text = String(b.body || '').trim().slice(0, 900);
+    if (!text) return J({ error: 'اكتب نص الرسالة' }, 400);
+    const au = b.audience || {}; let rows = [];
+    if (au.type === 'phones') {
+      const list = [...new Set((au.phones || []).map(x => String(x).trim()).filter(x => /^07\d{9}$/.test(x)))].slice(0, 200);
+      if (list.length) rows = (await env.DB.prepare(`SELECT id,phone,name FROM customers WHERE phone IN (${list.map(() => '?').join(',')})`).bind(...list).all()).results;
+      for (const ph of list) if (!rows.some(r => r.phone === ph)) rows.push({ id: null, phone: ph, name: '' });
+    } else {
+      let q = 'SELECT id,phone,name FROM customers WHERE phone IS NOT NULL';
+      const args = [];
+      if (au.type === 'today' || au.type === 'day') {
+        const day = au.type === 'today' ? new Date(now() + TZ * 1000).toISOString().slice(0, 10) : String(au.day || '');
+        const t0 = Date.parse(day + 'T00:00:00Z') - TZ * 1000;
+        if (isNaN(t0)) return J({ error: 'تاريخ غير صحيح' }, 400);
+        q += ' AND created_at>=? AND created_at<?'; args.push(t0, t0 + 864e5);
+      } else if (au.type === 'ordered') q += ' AND orders_count>0';
+      else if (au.type === 'noorders') q += ' AND orders_count=0';
+      rows = (await env.DB.prepare(q + ' ORDER BY id DESC LIMIT 1000').bind(...args).all()).results;
+    }
+    const extraCodes = (b.codes || []).map(x => String(x).toUpperCase()).slice(0, 5);
+    const per = b.perUser && b.perUser.kind ? b.perUser : null;
+    const link = env.STORE_URL || url.origin;
+    if (b.dry) return J({ total: rows.length, sample: rows.slice(0, 5).map(r => r.phone), link });
+    const t = now(), stmts = [];
+    const days = per && +per.days > 0 ? Math.min(365, +per.days) : 0;
+    for (const r of rows) {
+      let msg = text; const cl = [...extraCodes];
+      if (per) {
+        const code = 'PR' + rnd(6); cl.push(code);
+        stmts.push(env.DB.prepare(`INSERT INTO discount_codes(code,kind,value,min_cart,expires_at,max_uses,phone,created_at,sent) VALUES(?,?,?,?,?,1,?,?,1)`)
+          .bind(code, per.kind, per.kind === 'free_shipping' ? 0 : Math.round(+per.value || 0), Math.round(+per.min || 0), days ? t + days * 864e5 : null, r.phone, t));
+      }
+      for (const code of cl) msg += `\n🏷 ${code}`;
+      msg += `\n\n🛍 ${link}`;
+      stmts.push(env.DB.prepare("INSERT INTO notifications(customer_id,phone,channel,template,payload,status,created_at) VALUES(?,?,'whatsapp','promo',?,'queued',?)").bind(r.id, r.phone, JSON.stringify({ text: msg }), t));
+    }
+    for (let i = 0; i < stmts.length; i += 50) await env.DB.batch(stmts.slice(i, i + 50));
+    await env.DB.prepare('INSERT INTO campaigns(body,audience,codes,total,created_at) VALUES(?,?,?,?,?)').bind(text, JSON.stringify(au), JSON.stringify(extraCodes), rows.length, t).run();
+    if (ctx && ctx.waitUntil) ctx.waitUntil(processQueue(env, 50));
+    return J({ ok: true, total: rows.length });
+  }
+  if (p === '/adm/campaigns' && M === 'GET') {
+    const a = adm(); if (a) return a;
+    const rows = (await env.DB.prepare('SELECT * FROM campaigns ORDER BY id DESC LIMIT 50').all()).results;
+    const st = (await env.DB.prepare("SELECT status, COUNT(*) n FROM notifications WHERE template='promo' GROUP BY status").all()).results;
+    return J({ campaigns: rows.map(r => ({ id: r.id, body: r.body, total: r.total, t: r.created_at, aud: jp(r.audience, {}) })), delivery: Object.fromEntries(st.map(x => [x.status, x.n])) });
+  }
+
+  /* ---------- إحصائيات ---------- */
+  if (p === '/adm/stats2' && M === 'GET') {
+    const a = adm(); if (a) return a;
+    const range = ['day', 'week', 'month'].includes(url.searchParams.get('range')) ? url.searchParams.get('range') : 'day';
+    const fmt = { day: '%Y-%m-%d', week: '%Y-W%W', month: '%Y-%m' }[range], span = { day: 30, week: 12, month: 12 }[range];
+    const since = now() - span * { day: 864e5, week: 7 * 864e5, month: 31 * 864e5 }[range];
+    const grp = col => `strftime('${fmt}', ${col}/1000 + ${TZ}, 'unixepoch')`;
+    const acc = (await env.DB.prepare(`SELECT ${grp('created_at')} k, COUNT(*) n FROM customers WHERE created_at>=? GROUP BY k ORDER BY k`).bind(since).all()).results;
+    const ord = (await env.DB.prepare(`SELECT ${grp('created_at')} k, COUNT(*) n, SUM(total) rev FROM orders WHERE status!=0 AND created_at>=? GROUP BY k ORDER BY k`).bind(since).all()).results;
+    const one = async (sql, ...a) => (await env.DB.prepare(sql).bind(...a).first());
+    const t = now();
+    const active = { d1: (await one('SELECT COUNT(*) n FROM customers WHERE last_seen_at>=?', t - 864e5)).n, d7: (await one('SELECT COUNT(*) n FROM customers WHERE last_seen_at>=?', t - 7 * 864e5)).n, d30: (await one('SELECT COUNT(*) n FROM customers WHERE last_seen_at>=?', t - 30 * 864e5)).n };
+    const sessions = (await one('SELECT COUNT(DISTINCT customer_id) n FROM sessions WHERE expires_at>?', t)).n;
+    const tot = await one('SELECT COUNT(*) orders, COALESCE(SUM(total),0) revenue FROM orders WHERE status!=0');
+    const cust = await one('SELECT COUNT(*) n FROM customers');
+    const od = (await env.DB.prepare('SELECT items FROM orders WHERE status!=0 AND created_at>=? LIMIT 3000').bind(t - 180 * 864e5).all()).results;
+    const top = {}; for (const o of od) for (const i of jp(o.items, [])) { const k = top[i.c] ||= { c: i.c, n: i.n, q: 0, rev: 0 }; k.q += i.q; k.rev += i.p * i.q; }
+    const rt = await one('SELECT COUNT(*) n, AVG(rating) avg FROM reviews');
+    const byStatus = (await env.DB.prepare('SELECT status s, COUNT(*) n FROM orders GROUP BY status').all()).results;
+    return J({ range, accounts: acc, orders: ord, active, loggedIn: sessions, totals: { customers: cust.n, orders: tot.orders, revenue: tot.revenue, avg: tot.orders ? Math.round(tot.revenue / tot.orders) : 0 },
+      top: Object.values(top).sort((x, y) => y.q - x.q).slice(0, 10), rating: { n: rt.n, avg: rt.avg ? Math.round(rt.avg * 100) / 100 : 0 }, byStatus });
+  }
+  return null;
+}

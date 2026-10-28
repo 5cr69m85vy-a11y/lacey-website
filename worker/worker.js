@@ -16,6 +16,7 @@
 import { authRoutes, sessionCustomer } from './auth.js';
 import { processQueue } from './wa.js';
 import { quote, shopRoutes } from './shop.js';
+import { extraRoutes } from './extra.js';
 
 const CANCEL_WINDOW_MS = 10 * 60 * 1000;
 
@@ -106,7 +107,8 @@ async function readCatalog(env, full) {
   const prods = await env.DB.prepare('SELECT data FROM products ORDER BY sort,code').all();
   const P = (prods.results || []).map(r => jp(r.data, null)).filter(Boolean);
   if (!row && !P.length) return null;
-  const data = { ...(row ? jp(row.value, {}) : {}), P };
+  const B = ((await env.DB.prepare(`SELECT data FROM boxes ${full ? '' : 'WHERE active=1'} ORDER BY sort,id`).all()).results || []).map(r => jp(r.data, null)).filter(Boolean);
+  const data = { ...(row ? jp(row.value, {}) : {}), P, B };
   if (!full) for (const k of PRIVATE) delete data[k];
   return data;
 }
@@ -128,7 +130,14 @@ async function saveCatalog(env, data) {
   });
   const have = (await env.DB.prepare('SELECT code FROM products').all()).results.map(r => r.code);
   have.filter(c => !seen.has(c)).forEach(c => stmts.push(env.DB.prepare('DELETE FROM products WHERE code=?').bind(c)));
-  const cfg = { ...data }; delete cfg.P; delete cfg.O; delete cfg.vis; delete cfg.sq; delete cfg.seq;
+  if (Array.isArray(data.B)) {
+    const bs = data.B.slice(0, 100), bseen = new Set();
+    bs.forEach((x, i) => { const id = String(x && x.id || '').trim(); if (!id || bseen.has(id)) return; bseen.add(id);
+      stmts.push(env.DB.prepare(`INSERT INTO boxes(id,sort,name,price,active,data,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET sort=excluded.sort,name=excluded.name,price=excluded.price,active=excluded.active,data=excluded.data,updated_at=excluded.updated_at`)
+        .bind(id, i, String(x.n || ''), Math.round(+x.p || 0), x.on === 0 ? 0 : 1, JSON.stringify(x), t)); });
+    (await env.DB.prepare('SELECT id FROM boxes').all()).results.filter(r => !bseen.has(r.id)).forEach(r => stmts.push(env.DB.prepare('DELETE FROM boxes WHERE id=?').bind(r.id)));
+  }
+  const cfg = { ...data }; delete cfg.B; delete cfg.P; delete cfg.O; delete cfg.vis; delete cfg.sq; delete cfg.seq;
   stmts.push(env.DB.prepare("INSERT INTO settings(key,value,updated_at) VALUES('config',?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at")
     .bind(JSON.stringify(cfg), t));
   for (let i = 0; i < stmts.length; i += 50) await env.DB.batch(stmts.slice(i, i + 50));
@@ -215,6 +224,7 @@ export default {
     const body = async () => { try { return await request.json(); } catch (e) { return {}; } };
 
     try {
+      { const er = await extraRoutes({ env, request, url, p, M, body, authed, ctx, tg: t => tgNotify(env, t), sess: (p.startsWith('/chat/') ? await sessionCustomer(env, request) : null) }); if (er) return er; }
       { const sr = await shopRoutes({ env, p, M, body, url }, authed); if (sr) return sr; }
       { const ar = await authRoutes({ env, request, url, p, M, body, ctx }); if (ar) return ar; }
 
