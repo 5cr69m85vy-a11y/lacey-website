@@ -78,6 +78,37 @@ const assert = require('assert');
   assert((await cu.$eval('#acl', e => e.textContent)).includes('LC-ACCT01')); ok('"My orders" lists the customer order with tracking');
   await cu.reload(); await cu.waitForSelector('#accb.on'); ok('login survives a reload');
 
-  for (const p of [adm, vis, cu]) assert.deepStrictEqual(p.errs, [], 'page errors: ' + p.errs);
+  /* --- phase 3: boxes, discount codes + shipping, chat + rating, hero media, rich description, PWA --- */
+  await adm.evaluate(async () => { S.sf = 5000; S.pm = [{ id: 'cod', n: 'الدفع عند الاستلام', on: 1 }, { id: 'zain', n: 'زين كاش', d: 'حوّل المبلغ', on: 1 }]; S.B = [{ id: 'gift', n: 'بوكس الهدية', p: 9000, d: 'وصف', it: [{ c: S.P[0].c, q: 1 }, { c: S.P[1].c, q: 1 }], on: 1 }]; S.P[0].di = [{ u: '/icons/icon-192.png', pos: 'mid', al: 'left', w: 40 }]; S.P[0].d = 'سطر 1\nسطر 2'; S.hm = { u: '/icons/icon-512.png', t: 'image' }; save(); await apiJ('/codes', { method: 'POST', body: JSON.stringify({ code: 'SAVE10', kind: 'percent', value: 10 }) }); await apiJ('/codes', { method: 'POST', body: JSON.stringify({ code: 'FREESHIP', kind: 'free_shipping' }) }); });
+  await new Promise(r => setTimeout(r, 1800));
+  const v3 = await mk(); await v3.goto(base + '/'); await v3.waitForSelector('.bxc', { timeout: 8000 }); ok('visitor sees the Boxes section');
+  assert((await v3.$eval('.bxc', e => e.textContent)).includes('بوكس الهدية')); assert(await v3.$('#hd.hm img')); ok('hero shows uploaded media');
+  await v3.click('.bxc [data-a=add]'); await v3.click('[data-a=addy]'); assert.strictEqual(await v3.textContent('#cn'), '1'); ok('box is added to the bag in one click');
+  await v3.click('.cb2[data-a=bag]'); await v3.waitForSelector('#cd'); await v3.waitForFunction(() => document.querySelector('#cb').textContent.includes('التوصيل') || document.querySelector('#cb').textContent.includes('Shipping'));
+  await v3.fill('#cd input', 'save10'); await v3.click('#cd button'); await v3.waitForFunction(() => document.querySelector('#cb').textContent.includes('SAVE10'));
+  await v3.fill('#cd input', 'freeship'); await v3.click('#cd button'); await v3.waitForFunction(() => /FREESHIP/.test(document.querySelector('#cb').textContent));
+  const tot = await v3.$eval('#cb .tt.b', e => e.textContent.replace(/[^0-9]/g, '')); assert.strictEqual(tot, '8100'); ok('two codes stack (10% + free shipping): 9000 − 900 = 8100');
+  await v3.click('[data-a=rmc][data-c=FREESHIP]'); await v3.waitForFunction(() => { const t = document.querySelector('#cb').textContent; return !/FREESHIP/.test(t) && /SAVE10/.test(t); }); assert.strictEqual(await v3.$eval('#cb .tt.b', e => e.textContent.replace(/[^0-9]/g, '')), '13100'); ok('removing free-shipping code restores the 5000 fee');
+  await v3.click('[data-a=vf]'); assert.strictEqual(await v3.$$eval('#of [name=pay] option', o => o.length), 2); assert.strictEqual(await v3.$eval('#of [name=pay]', s => s.value), 'cod'); ok('payment method defaults to cash on delivery, extra method offered');
+  await v3.fill('#of [name=name]', 'منى'); await v3.fill('#of [name=ph]', '07702223333'); await v3.selectOption('#of [name=ci]', { index: 1 }); await v3.fill('#of [name=ae]', 'x'); await v3.fill('#of [name=lm]', 'y');
+  await v3.selectOption('#of [name=pay]', 'zain'); assert.strictEqual(await v3.inputValue('#of [name=name]'), 'منى'); await v3.click('#of [type=submit]'); await v3.click('[data-a=c10s]'); await v3.waitForSelector('#trkbox .tl', { timeout: 8000 });
+  const orow = db.prepare("select total,shipping,pay_method,discount_codes dc from orders where phone='07702223333'").get(); assert.deepStrictEqual([orow.total, orow.shipping, orow.pay_method], [13100, 5000, 'zain']); ok('order saved with server totals, shipping and chosen payment method');
+  /* description images */
+  await v3.evaluate(() => { A.x(); }); const dh = await v3.evaluate(() => descHTML(S.P[0])); assert(/<p>سطر 1<\/p><img[^>]*width:40%;margin:8px auto 8px 0[^>]*><p>سطر 2/.test(dh), dh); ok('rich description: image in the middle, 40% wide, left-aligned');
+  /* chat */
+  await v3.click('#chfab'); await v3.fill('#scf input', 'هل المنتج مناسب للبشرة الدهنية؟'); await v3.click('#scf button'); await v3.waitForSelector('.m.customer', { timeout: 6000 }).catch(async x => { console.log('CHATDBG', await v3.$eval('#chp', n => n.innerText), v3.errs); throw x; });
+  const chatId = db.prepare('select id from chats where channel=\'support\'').get().id; ok('customer sends a support message');
+  await adm.evaluate(async id => { await apiJ('/adm/chat/reply', { method: 'POST', body: JSON.stringify({ id, text: 'نعم مناسب' }) }); await apiJ('/adm/chat/close', { method: 'POST', body: JSON.stringify({ id }) }); }, chatId);
+  await v3.waitForSelector('.m.admin', { timeout: 8000 }); await v3.waitForSelector('.stars', { timeout: 8000 }); ok('admin reply appears, closing shows the rating form');
+  await v3.click('.stars button >> nth=3'); await v3.fill('#chc', 'ممتاز'); await v3.click('[data-c=rate]'); await v3.waitForTimeout(500);
+  assert.deepStrictEqual({ ...db.prepare('select rating,comment from reviews').get() }, { rating: 4, comment: 'ممتاز' }); ok('rating saved (4 stars + comment)');
+  /* PWA */
+  const man = await v3.evaluate(async () => (await fetch('/manifest.json')).json()); assert(man.name && man.icons.length >= 3 && man.display == 'standalone'); ok('manifest.json served with icons and theme');
+  assert((await v3.request.get(base + '/sw.js')).ok() && (await v3.request.get(base + '/icons/icon-512.png')).ok()); ok('service worker + brand icons are served');
+  /* admin tabs render */
+  for (const t of ['st', 'cp', 'bx', 'hr', 'wm', 'ch', 'pm']) { await adm.evaluate(t => A.tab(t), t); await adm.waitForTimeout(500); assert((await adm.$eval('#ab', e => e.textContent)).length > 20, t); }
+  ok('all new admin tabs render (stats, codes, boxes, hero, WhatsApp, support, payment)');
+
+  for (const p of [adm, vis, cu, v3]) assert.deepStrictEqual(p.errs, [], 'page errors: ' + p.errs);
   console.log(`\n${n} e2e checks passed`); await browser.close(); srv.close();
 })().catch(e => { console.error('FAIL', e); process.exit(1); });

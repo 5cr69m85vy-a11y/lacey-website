@@ -30,8 +30,34 @@
 - يستطيع الزبون إلغاء الطلب خلال **10 دقائق** من إنشائه. بعدها يُؤكَّد تلقائياً، وباقي الخطوات يدوية من تبويب **الطلبات** في لوحة التحكم.
 - الأسعار والخصم تُحسب على الخادم من قاعدة البيانات ولا تُؤخذ من المتصفح.
 
-## الاختبارات
+## الاختبارات (`npm test`)
 
 ```bash
 npm test      # يتطلب Node 22
 ```
+
+## الأسرار والمفاتيح (Settings ← Variables and Secrets على Cloudflare)
+| الاسم | مطلوب؟ | الوظيفة |
+|---|---|---|
+| `ADMIN_PASS` | نعم | كلمة مرور لوحة التحكم |
+| `STORE_URL` | يُنصح | رابط المتجر الذي يُلحق برسائل واتساب |
+| `WA_TOKEN` + `WA_PHONE_ID` | لواتساب | توكن دائم ومعرّف رقم الهاتف من Meta WhatsApp Cloud API |
+| `WA_TPL_OTP` `WA_TPL_WELCOME` `WA_TPL_ORDER` `WA_TPL_PROMO` | لواتساب | أسماء القوالب المعتمدة (انظر أدناه) و`WA_LANG` (افتراضي ar) |
+| `GOOGLE_CLIENT_ID` | لـ Google | معرّف عميل OAuth (Web) — أضف نطاق المتجر في Authorized JavaScript origins |
+| `BOT_TOKEN` + `CHAT_ID` | اختياري | إشعار تلجرام لك عند طلب جديد/رسالة دعم |
+| `WA_DEV=1` | للتجربة فقط | يُرجع رمز OTP في الاستجابة بدل واتساب — **لا تفعّله في الإنتاج** |
+
+### قوالب واتساب (يجب اعتمادها من Meta قبل الاستخدام خارج نافذة الـ24 ساعة)
+متغيرات النص بالترتيب: **OTP** `{{1}}`=الرمز (فئة Authentication) · **WELCOME** `{{1}}`=الاسم `{{2}}`=رابط المتجر · **ORDER** `{{1}}`=كود الطلب `{{2}}`=الحالة · **PROMO** `{{1}}`=نص الرسالة (فئة Marketing). بدون قالب تُرسل رسالة نصية عادية وتصل فقط إن راسلك الزبون خلال 24 ساعة.
+
+## الجداول (migrations/)
+- `0001_init.sql`: settings, products, boxes, customers, sessions, otp_codes, orders, order_events, discount_codes, chats, chat_messages, reviews, receipts, notifications, visits, counters
+- `0002`: أعمدة customers (`pw_hash`,`pw_salt`,`welcomed`) · chats (`guest_token`,`name`,`phone`) · orders (`free_shipping`) · جداول campaigns, media
+- `0003`: chats.`product_code` (قناة الأدمن الخاصة بالمنتجات) · `0004`: media_chunks (تخزين الوسائط في D1)
+
+## الوسائط (فيديو/GIF/صور الوصف)
+تُحفظ افتراضياً في D1 (حتى 8MB للملف). لملفات أكبر (حتى 40MB): فعّل R2 من لوحة Cloudflare، أنشئ bucket باسم `lacey-media`، وأضف إلى `wrangler.jsonc`:
+`"r2_buckets": [{ "binding": "MEDIA", "bucket_name": "lacey-media" }]`
+
+## وحدات الخادم (worker/)
+`worker.js` الطلبات والكتالوج · `auth.js` الحسابات · `wa.js` واتساب وطابور الإشعارات · `shop.js` تسعير السلة والأكواد · `extra.js` الدعم والتقييمات والحملات والإحصائيات والوسائط وmanifest
