@@ -2,7 +2,7 @@ const { chromium } = require('playwright');
 const { start } = require('./serve');
 const assert = require('assert');
 (async () => {
-  const srv = await start(8788); const base = 'http://localhost:8788';
+  const srv = await start(8788, { WA_DEV: '1' }); const base = 'http://localhost:8788';
   const db = srv.env.DB.raw; let n = 0; const ok = (m) => { n++; console.log('✓', m); };
   const browser = await chromium.launch();
   const mk = async () => { const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } }); const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(e.message)); await p.route(/fonts\.(googleapis|gstatic)\.com/, r => r.abort()); p.errs = errs; return p; };
@@ -31,7 +31,7 @@ const assert = require('assert');
   assert.strictEqual(await vis.textContent('#cn'), '1'); ok('"Yes" adds exactly one');
 
   /* --- checkout: 10 s countdown, skip, tracker --- */
-  await vis.click('.cb2'); await vis.click('[data-a=vf]');
+  await vis.click('.cb2[data-a=bag]'); await vis.click('[data-a=vf]');
   await vis.fill('#of [name=name]', 'علي'); await vis.fill('#of [name=ph]', '07701234567'); await vis.selectOption('#of [name=ci]', { index: 1 }); await vis.fill('#of [name=ae]', 'الكرادة'); await vis.fill('#of [name=lm]', 'قرب المدرسة');
   await vis.click('#of [type=submit]'); await vis.waitForSelector('#c10n');
   assert.strictEqual(db.prepare('select count(*) n from orders').get().n, 0, 'nothing is sent during the countdown'); ok('countdown shown, order not yet sent');
@@ -48,7 +48,7 @@ const assert = require('assert');
   await vis.waitForSelector('#trkbox .er2'); assert.strictEqual(db.prepare('select status from orders').get().status, 0); ok('customer cancel within the window → cancelled');
 
   /* --- second order: Skip button, auto-confirm after 10 min, admin advances it --- */
-  await vis.click('[data-a=x]'); await vis.click('#grid .card [data-a=add] >> nth=1'); await vis.click('[data-a=addy]'); await vis.click('.cb2'); await vis.click('[data-a=vf]');
+  await vis.click('[data-a=x]'); await vis.click('#grid .card [data-a=add] >> nth=1'); await vis.click('[data-a=addy]'); await vis.click('.cb2[data-a=bag]'); await vis.click('[data-a=vf]');
   await vis.fill('#of [name=name]', 'علي'); await vis.fill('#of [name=ph]', '07701234567'); await vis.selectOption('#of [name=ci]', { index: 1 }); await vis.fill('#of [name=ae]', 'الكرادة'); await vis.fill('#of [name=lm]', 'قرب المدرسة');
   await vis.click('#of [type=submit]'); await vis.click('[data-a=c10s]'); await vis.waitForSelector('#trkbox .tl');
   const code = db.prepare('select code from orders where status=1').get().code; ok('"Skip" sends immediately');
@@ -62,6 +62,22 @@ const assert = require('assert');
   assert.strictEqual(db.prepare('select status from orders where code=?').get(code).status, 3); ok('admin Orders tab changes status in the database');
   await vis.fill('#tkf input', code); await vis.click('#tkf button'); await vis.waitForFunction(() => document.querySelector('#tkr .tl li.cur b')?.textContent === 'تم شحن الطلب'); ok('customer tracking shows "shipped"');
 
-  for (const p of [adm, vis]) assert.deepStrictEqual(p.errs, [], 'page errors: ' + p.errs);
+  /* --- customer account: phone OTP (dev code) → profile → order appears in "my orders" --- */
+  const cu = await mk(); await cu.goto(base + '/'); await cu.waitForSelector('#accb');
+  let devCode = ''; cu.on('response', async r => { if (r.url().endsWith('/auth/otp/send')) { try { devCode = (await r.json()).dev || ''; } catch (e) {} } });
+  await cu.click('#accb'); await cu.waitForSelector('#af-otps'); await cu.fill('#af-otps input[name=ph]', '07709990001'); await cu.click('#af-otps button.btn');
+  await cu.waitForSelector('#af-otpv'); await cu.waitForFunction(() => true); for (let i = 0; i < 20 && !devCode; i++) await new Promise(r => setTimeout(r, 100));
+  await cu.fill('#af-otpv input[name=code]', devCode); await cu.fill('#af-otpv input[name=name]', 'سارة'); await cu.click('#af-otpv button.btn');
+  await cu.waitForSelector('#af-prof'); assert.strictEqual(await cu.$eval('#af-prof input[name=name]', e => e.value), 'سارة'); ok('phone sign-in with WhatsApp code creates an account');
+  assert.strictEqual(db.prepare("select wa_verified w, welcomed d from customers where phone='07709990001'").get().w, 1); ok('account is WhatsApp-verified');
+  await cu.fill('#af-prof input[name=city]', 'بغداد'); await cu.click('#af-prof button.btn'); await new Promise(r => setTimeout(r, 400));
+  assert.strictEqual(db.prepare("select city from customers where phone='07709990001'").get().city, 'بغداد'); ok('profile saves to the server');
+  await cu.evaluate(() => { document.getElementById('acv').classList.remove('on'); });
+  const o2 = await cu.evaluate(async () => { const r = await fetch('/order', { method: 'POST', headers: { 'Content-Type': 'application/json', ...custAuth() }, body: JSON.stringify({ code: 'LC-ACCT01', name: 'سارة', ph: '07709990001', city: 'بغداد', area: 'الكرادة', lm: 'x', items: [{ c: S.P[0].c, q: 1 }] }) }); return r.json(); });
+  assert(o2.id); await cu.click('#accb'); await cu.click('[data-x=tab][data-v=o]'); await cu.waitForSelector('.aco');
+  assert((await cu.$eval('#acl', e => e.textContent)).includes('LC-ACCT01')); ok('"My orders" lists the customer order with tracking');
+  await cu.reload(); await cu.waitForSelector('#accb.on'); ok('login survives a reload');
+
+  for (const p of [adm, vis, cu]) assert.deepStrictEqual(p.errs, [], 'page errors: ' + p.errs);
   console.log(`\n${n} e2e checks passed`); await browser.close(); srv.close();
 })().catch(e => { console.error('FAIL', e); process.exit(1); });
