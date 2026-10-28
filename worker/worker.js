@@ -147,8 +147,8 @@ async function createOrder(env, b) {
   for (const it of raw) {
     const q = Math.max(1, Math.min(50, Math.floor(+it.q || 0)));
     const code = String(it.c || '');
-    const row = await env.DB.prepare('SELECT name,price FROM products WHERE code=?').bind(code).first();
-    if (row) items.push({ c: code, n: row.name, q, p: row.price });
+    const row = await env.DB.prepare('SELECT name,price,data FROM products WHERE code=?').bind(code).first();
+    if (row) items.push({ c: code, n: row.name, cc: String(jp(row.data, {}).cc || ''), q, p: row.price });
     else if (nProducts === 0 && +it.p >= 0) items.push({ c: code, n: String(it.n || code).slice(0, 120), q, p: Math.round(+it.p) }); // قبل أول حفظ من لوحة التحكم
     else return J({ error: `المنتج ${code} غير متاح` }, 400);
   }
@@ -195,7 +195,7 @@ async function createOrder(env, b) {
   ]);
   await queueNote(env, phone, 'order_received', { code: b.code, total }, customerId);
 
-  const lines = items.map(i => `• ${i.q}× ${escH(i.n)} (${escH(i.c)}) — ${money(i.p * i.q)}`).join('\n');
+  const lines = items.map(i => `• ${i.q}× ${escH(i.n)} (${escH(i.c)})${i.cc ? ' 🎨 ' + escH(i.cc) : ''} — ${money(i.p * i.q)}`).join('\n');
   await tgNotify(env, `🛍 <b>طلب جديد #${id}</b>\nكود الطلب: <code>${escH(b.code)}</code>\n\n👤 ${escH(name)}\n📞 ${escH(phone)}\n📍 ${escH(city)} — ${escH(area)}\n🧭 ${escH(lm)}\n\n${lines}\n\n` +
     (usedCode ? `🏷 كود الخصم: ${escH(usedCode)} (-${pct}%) −${money(discount)}\n` : '') + `💰 <b>المجموع: ${money(total)}</b>`);
   return J({ ok: true, id, code: b.code, subtotal, discount, total, welcome: welcome || undefined, cancelUntil: t + CANCEL_WINDOW_MS });

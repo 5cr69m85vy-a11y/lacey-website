@@ -3,7 +3,7 @@ const { DatabaseSync } = require('node:sqlite');
 const fs = require('fs'), path = require('path');
 function makeDB() {
   const db = new DatabaseSync(':memory:');
-  db.exec(fs.readFileSync(path.join(__dirname, '../migrations/0001_init.sql'), 'utf8'));
+  for (const f of fs.readdirSync(path.join(__dirname, '../migrations')).sort()) db.exec(fs.readFileSync(path.join(__dirname, '../migrations', f), 'utf8'));
   const stmt = sql => ({
     _sql: sql, _args: [],
     bind(...a) { this._args = a; return this; },
