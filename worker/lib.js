@@ -16,3 +16,22 @@ export const randHex = n => hex(crypto.getRandomValues(new Uint8Array(n)));
 export const today = () => new Date().toISOString().slice(0, 10);
 export const money = n => Number(n || 0).toLocaleString('en-US');
 export const cfgOf = async env => jp(((await env.DB.prepare("SELECT value FROM settings WHERE key='config'").first()) || {}).value, {});
+
+/* بناء الجداول تلقائياً عند أول تشغيل (يغني عن تشغيل migrations يدوياً) */
+import { MIGRATIONS } from './schema.js';
+let ready = null;
+export function ensureSchema(env) {
+  return ready ||= (async () => {
+    await env.DB.prepare('CREATE TABLE IF NOT EXISTS _migrations (name TEXT PRIMARY KEY, at INTEGER)').run();
+    const done = new Set((await env.DB.prepare('SELECT name FROM _migrations').all()).results.map(r => r.name));
+    for (const [name, sql] of MIGRATIONS) {
+      if (done.has(name)) continue;
+      const stmts = sql.replace(/--[^\n]*/g, '').split(/;\s*(?:\n|$)/).map(s => s.trim()).filter(Boolean);
+      for (const s of stmts) {
+        try { await env.DB.prepare(s).run(); }
+        catch (e) { if (!/duplicate column|already exists|UNIQUE constraint/i.test(String(e.message))) throw e; }
+      }
+      await env.DB.prepare('INSERT OR IGNORE INTO _migrations(name,at) VALUES(?,?)').bind(name, Date.now()).run();
+    }
+  })().catch(e => { ready = null; throw e; });
+}

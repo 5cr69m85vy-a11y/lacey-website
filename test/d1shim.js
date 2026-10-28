@@ -1,9 +1,9 @@
 // Minimal D1 emulation on node:sqlite (for tests only)
 const { DatabaseSync } = require('node:sqlite');
 const fs = require('fs'), path = require('path');
-function makeDB() {
+function makeDB(empty) {
   const db = new DatabaseSync(':memory:');
-  for (const f of fs.readdirSync(path.join(__dirname, '../migrations')).sort()) db.exec(fs.readFileSync(path.join(__dirname, '../migrations', f), 'utf8'));
+  if (!empty) for (const f of fs.readdirSync(path.join(__dirname, '../migrations')).sort()) db.exec(fs.readFileSync(path.join(__dirname, '../migrations', f), 'utf8'));
   const stmt = sql => ({
     _sql: sql, _args: [],
     bind(...a) { this._args = a; return this; },

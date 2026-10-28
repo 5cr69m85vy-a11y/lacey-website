@@ -15,9 +15,7 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "lacey-store",
-      "database_id": "4da84889-f26b-4f54-8380-98ccba1fe3c9",
-      "migrations_dir": "migrations"
+      "database_name": "lacey-store"
     }
   ],
   "triggers": { "crons": ["* * * * *"] }
