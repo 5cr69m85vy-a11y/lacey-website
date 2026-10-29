@@ -1,6 +1,8 @@
 /* extra.js — دردشة الدعم، التقييمات، الحملات التسويقية، الإحصائيات، رفع الوسائط، manifest */
 import { J, CORS, now, jp, rnd, randHex, sha256, today, cfgOf, IG_KEYS, IG_SECRET, readIg, resetIg } from './lib.js';
 import { waSend, waOn } from './wa.js';
+import { botReply, BOT, MAIN } from './bot.js';
+import { pbkdf2, eq } from './auth.js';
 import { processQueue } from './wa.js';
 
 const TZ = 3 * 3600;                                    // بغداد UTC+3
@@ -9,7 +11,7 @@ const MAX_MEDIA = 40 * 1024 * 1024, MAX_D1_MEDIA = 8 * 1024 * 1024, CHUNK = 7000
 
 async function guestChat(env, token, create, sess, extra = {}) {
   let ch = null;
-  if (sess) ch = await env.DB.prepare("SELECT * FROM chats WHERE customer_id=? AND channel='support' AND status='open' ORDER BY id DESC LIMIT 1").bind(sess.id).first();
+  if (sess) ch = await env.DB.prepare("SELECT * FROM chats WHERE customer_id=? AND channel='support' ORDER BY id DESC LIMIT 1").bind(sess.id).first();
   if (!ch && token) ch = await env.DB.prepare("SELECT * FROM chats WHERE guest_token=? AND channel='support' ORDER BY id DESC LIMIT 1").bind(await sha256(token)).first();
   if (!ch && create) {
     const tk = token || randHex(16);
@@ -19,7 +21,7 @@ async function guestChat(env, token, create, sess, extra = {}) {
   }
   return ch;
 }
-const msgs = async (env, id, after) => (await env.DB.prepare('SELECT id,sender,body,at FROM chat_messages WHERE chat_id=? AND id>? ORDER BY id LIMIT 200').bind(id, after || 0).all()).results;
+const msgs = async (env, id, after) => (await env.DB.prepare('SELECT id,sender,body,at,author,meta FROM chat_messages WHERE chat_id=? AND id>? ORDER BY id LIMIT 200').bind(id, after || 0).all()).results;
 
 export async function extraRoutes(c) {
   const { env, request, url, p, M, body, authed, sess, ctx, tg } = c;
@@ -38,7 +40,7 @@ export async function extraRoutes(c) {
     const b = await body(), cur = { ...(await readIg(env)) };
     for (const k of IG_KEYS) {
       if (!(k in b)) continue;
-      const val = String(b[k] ?? '').trim().slice(0, 600);
+      const val = String(b[k] ?? "").trim().slice(0, k === "AI_PROMPT" ? 1500 : 600);
       if (val === '__clear__') delete cur[k]; else if (val) cur[k] = val;      // الفارغ = إبقاء القيمة الحالية
     }
     await env.DB.prepare("INSERT INTO settings(key,value,updated_at) VALUES('integrations',?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at").bind(JSON.stringify(cur), now()).run();
@@ -112,22 +114,40 @@ export async function extraRoutes(c) {
   if (p === '/media' && M === 'GET') { const a = adm(); if (a) return a; return J({ items: (await env.DB.prepare('SELECT * FROM media ORDER BY created_at DESC LIMIT 200').all()).results }); }
 
   /* ---------- دردشة الزبائن (قناة الدعم) ---------- */
+  const addMsg = (chatId, sender, text, author = '', meta = '') =>
+    env.DB.prepare('INSERT INTO chat_messages(chat_id,sender,body,at,author,meta) VALUES(?,?,?,?,?,?)').bind(chatId, sender, text, now(), author, meta).run();
+  const staffName = async ch => ch.assigned_to ? ((await env.DB.prepare('SELECT name FROM staff WHERE id=?').bind(ch.assigned_to).first()) || {}).name || '' : '';
+  const MAINCH = MAIN;
   if (p === '/chat/send' && M === 'POST') {
-    const b = await body(); const text = String(b.text || '').trim().slice(0, 1000);
+    const b = await body(); const quick = ({ track: 'where', edit: 'modify', cancel: 'cancel', human: 'human' })[String(b.intent || '')] || String(b.quick || '').slice(0, 60);
+    const label = quick ? ((MAINCH.find(x => x.k === quick) || {}).t || (quick.startsWith('cancel_yes') ? 'نعم، ألغِ الطلب' : quick === 'no' ? 'لا' : quick)) : '';
+    const text = String(b.text || label || '').trim().slice(0, 1000);
     if (!text) return J({ error: 'empty' }, 400);
     const ch = await guestChat(env, b.token, true, sess, b);
     const recent = await env.DB.prepare("SELECT COUNT(*) n FROM chat_messages WHERE chat_id=? AND sender='customer' AND at>?").bind(ch.id, now() - 3600e3).first();
     if (recent.n >= 40) return J({ error: 'رسائل كثيرة، حاول لاحقاً' }, 429);
-    if (ch.status !== 'open') await env.DB.prepare("UPDATE chats SET status='open',closed_at=NULL WHERE id=?").bind(ch.id).run();
-    await env.DB.prepare("INSERT INTO chat_messages(chat_id,sender,body,at) VALUES(?,'customer',?,?)").bind(ch.id, text, now()).run();
-    if (tg) ctx && ctx.waitUntil ? ctx.waitUntil(tg(`💬 <b>رسالة دعم</b> #${ch.id} — ${ch.name || 'زائر'} ${ch.phone || ''}\n${text.replace(/[<>&]/g, '')}`)) : 0;
+    if (ch.status !== 'open') { await env.DB.prepare("UPDATE chats SET status='open',closed_at=NULL,mode='bot',assigned_to=NULL WHERE id=?").bind(ch.id).run(); ch.mode = 'bot'; ch.assigned_to = null; }
+    await addMsg(ch.id, 'customer', text);
+    let mode = ch.mode;
+    if (mode === 'bot') {
+      const pend = /^pending_cancel:(LC-[A-Z0-9]{6})$/.exec(ch.topic || '');
+      let q2 = quick;
+      if (!q2 && pend) { if (/^(نعم|ايه|إيه|أجل|اجل|اي|تمام|yes|y|ok)(\s|$|[.!،])/i.test(text)) q2 = 'cancel_yes:' + pend[1]; else if (/^(لا|كلا|no|n)(\s|$|[.!،])/i.test(text)) q2 = 'no'; }
+      const r = await botReply(env, ch, { text: b.intent || q2 ? '' : text, quick: q2 });
+      await addMsg(ch.id, 'bot', r.body, BOT, r.chips && r.chips.length ? JSON.stringify({ chips: r.chips }) : '');
+      const pc = (r.chips || []).find(x => x.k.startsWith('cancel_yes:'));
+      await env.DB.prepare('UPDATE chats SET topic=? WHERE id=?').bind(pc ? 'pending_cancel:' + pc.k.slice(11) : (ch.topic || '').startsWith('pending_cancel') ? '' : ch.topic || '', ch.id).run();
+      if (r.handoff) { mode = 'human'; await env.DB.prepare("UPDATE chats SET mode='human',topic=? WHERE id=?").bind(r.topic || '', ch.id).run(); }
+    }
+    if (mode === 'human' && tg && ctx && ctx.waitUntil) ctx.waitUntil(tg(`💬 <b>دعم #${ch.id}</b> ${ch.name || 'زائر'} ${ch.phone || ''}${ch.assigned_to ? ' (للموظف ' + (await staffName(ch)) + ')' : ' — بانتظار موظف'}\n${text.replace(/[<>&]/g, '')}`));
     return J({ ok: true, token: ch._tk || b.token || '', chat: ch.id });
   }
   if (p === '/chat/poll' && M === 'GET') {
     const ch = await guestChat(env, url.searchParams.get('token') || '', false, sess);
     if (!ch) return J({ chat: null, messages: [] });
     const rated = await env.DB.prepare('SELECT 1 x FROM reviews WHERE chat_id=?').bind(ch.id).first();
-    return J({ chat: ch.id, status: ch.status, rated: !!rated, messages: await msgs(env, ch.id, +url.searchParams.get('after') || 0) }, 200, { 'Cache-Control': 'no-store' });
+    return J({ chat: ch.id, status: ch.status, mode: ch.mode, staff: await staffName(ch), rated: !!rated,
+      messages: (await msgs(env, ch.id, +url.searchParams.get('after') || 0)).map(m => ({ ...m, meta: jp(m.meta, null) })) }, 200, { 'Cache-Control': 'no-store' });
   }
   if (p === '/chat/close' && M === 'POST') {
     const b = await body(); const ch = await guestChat(env, b.token, false, sess); if (!ch) return J({ error: 'no chat' }, 404);
@@ -140,36 +160,107 @@ export async function extraRoutes(c) {
     if (!(r >= 1 && r <= 5)) return J({ error: 'التقييم من 1 إلى 5' }, 400);
     if (await env.DB.prepare('SELECT 1 x FROM reviews WHERE chat_id=?').bind(ch.id).first()) return J({ error: 'تم التقييم مسبقاً' }, 409);
     await env.DB.batch([
-      env.DB.prepare('INSERT INTO reviews(chat_id,customer_id,rating,comment,at) VALUES(?,?,?,?,?)').bind(ch.id, ch.customer_id, r, String(b.comment || '').slice(0, 500), now()),
+      env.DB.prepare('INSERT INTO reviews(chat_id,customer_id,rating,comment,at,staff_id) VALUES(?,?,?,?,?,?)').bind(ch.id, ch.customer_id, r, String(b.comment || '').slice(0, 500), now(), ch.assigned_to || null),
       env.DB.prepare("UPDATE chats SET status='closed',closed_at=COALESCE(closed_at,?) WHERE id=?").bind(now(), ch.id),
     ]);
     return J({ ok: true });
   }
 
-  /* ---------- لوحة الأدمن: الدعم + القناة الخاصة للمنتجات ---------- */
-  if (p === '/adm/chats' && M === 'GET') {
-    const a = adm(); if (a) return a;
-    const ch = url.searchParams.get('channel') === 'admin' ? 'admin' : 'support';
-    const rows = (await env.DB.prepare(`SELECT c.*, (SELECT body FROM chat_messages m WHERE m.chat_id=c.id ORDER BY m.id DESC LIMIT 1) last,
-      (SELECT sender FROM chat_messages m WHERE m.chat_id=c.id ORDER BY m.id DESC LIMIT 1) lastby,
-      (SELECT rating FROM reviews r WHERE r.chat_id=c.id) rating FROM chats c WHERE c.channel=? ORDER BY c.id DESC LIMIT 200`).bind(ch).all()).results;
-    return J({ chats: rows.map(r => ({ id: r.id, status: r.status, name: r.name, ph: r.phone, product: r.product_code, last: r.last || '', lastby: r.lastby || '', rating: r.rating || 0, t: r.created_at })) });
+  /* ---------- الموظفون: دخول + إدارة ---------- */
+  if (p === '/staff/login' && M === 'POST') {
+    const b = await body();
+    const row = await env.DB.prepare('SELECT * FROM staff WHERE username=? AND active=1').bind(String(b.username || b.u || '').trim().toLowerCase()).first();
+    const h = await pbkdf2(String(b.pw || ''), row ? row.pw_salt : '00'.repeat(16));
+    if (!row || !eq(h, row.pw_hash)) return J({ error: 'اسم المستخدم أو كلمة السر غير صحيحة' }, 401);
+    const tok = 's.' + randHex(32);
+    await env.DB.prepare('INSERT INTO staff_sessions(token_hash,staff_id,expires_at) VALUES(?,?,?)').bind(await sha256(tok), row.id, now() + 30 * 864e5).run();
+    return J({ token: tok, name: row.name });
   }
-  if (p === '/adm/chat' && M === 'GET') {
-    const a = adm(); if (a) return a;
-    const id = +url.searchParams.get('id');
-    return J({ messages: await msgs(env, id, +url.searchParams.get('after') || 0) }, 200, { 'Cache-Control': 'no-store' });
+  const bearer = (request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
+  let op = null;
+  if (authed) op = { admin: true, id: 0, name: (await cfgOf(env)).an || 'الإدارة' };
+  else if (bearer.startsWith('s.')) {
+    const r = await env.DB.prepare('SELECT s.id,s.name FROM staff_sessions t JOIN staff s ON s.id=t.staff_id WHERE t.token_hash=? AND t.expires_at>? AND s.active=1').bind(await sha256(bearer), now()).first();
+    if (r) op = { admin: false, id: r.id, name: r.name };
   }
-  if (p === '/adm/chat/reply' && M === 'POST') {
+  if (p === '/staff/me' && M === 'GET') return op ? J({ name: op.name, admin: op.admin }) : J({ error: 'unauthorized' }, 401);
+  const needOp = () => op ? null : J({ error: 'unauthorized' }, 401);
+
+  if (p === '/adm/staff' && M === 'GET') {
     const a = adm(); if (a) return a;
-    const b = await body(); const text = String(b.text || '').trim().slice(0, 1000); if (!text) return J({ error: 'empty' }, 400);
-    const ch = await env.DB.prepare('SELECT * FROM chats WHERE id=?').bind(+b.id).first(); if (!ch) return J({ error: 'not found' }, 404);
-    await env.DB.prepare('INSERT INTO chat_messages(chat_id,sender,body,at) VALUES(?,?,?,?)').bind(ch.id, 'admin', text, now()).run();
+    const rows = (await env.DB.prepare(`SELECT s.id,s.name,s.username,s.active,s.created_at,
+      (SELECT COUNT(*) FROM chats c WHERE c.assigned_to=s.id) chats, (SELECT AVG(rating) FROM reviews r WHERE r.staff_id=s.id) avg, (SELECT COUNT(*) FROM reviews r WHERE r.staff_id=s.id) votes FROM staff s ORDER BY s.id`).all()).results;
+    return J({ staff: rows.map(r => ({ ...r, avg: r.avg ? Math.round(r.avg * 100) / 100 : 0, active: !!r.active })) });
+  }
+  if (p === '/adm/staff' && M === 'POST') {
+    const a = adm(); if (a) return a;
+    const b = await body(), name = String(b.name || '').trim().slice(0, 40), un = String(b.username || '').trim().toLowerCase();
+    if (name.length < 2 || !/^[a-z0-9_.-]{3,24}$/.test(un)) return J({ error: 'الاسم مطلوب واسم المستخدم 3–24 حرفاً إنجليزياً/أرقاماً' }, 400);
+    const ex = b.id ? await env.DB.prepare('SELECT id FROM staff WHERE id=?').bind(+b.id).first() : null;
+    b.password = b.password || b.pw; if (!ex && String(b.password || '').length < 6) return J({ error: 'كلمة السر 6 أحرف على الأقل' }, 400);
+    if (await env.DB.prepare('SELECT id FROM staff WHERE username=? AND id!=?').bind(un, ex ? ex.id : 0).first()) return J({ error: 'اسم المستخدم مستخدم' }, 409);
+    if (ex) {
+      await env.DB.prepare('UPDATE staff SET name=?,username=?,active=? WHERE id=?').bind(name, un, b.active === false ? 0 : 1, ex.id).run();
+      if (b.password) { if (String(b.password).length < 6) return J({ error: 'كلمة السر 6 أحرف على الأقل' }, 400); const salt = randHex(16); await env.DB.prepare('UPDATE staff SET pw_hash=?,pw_salt=? WHERE id=?').bind(await pbkdf2(String(b.password), salt), salt, ex.id).run(); }
+      if (b.active === false) await env.DB.prepare('DELETE FROM staff_sessions WHERE staff_id=?').bind(ex.id).run();
+    } else { const salt = randHex(16); await env.DB.prepare('INSERT INTO staff(name,username,pw_hash,pw_salt,created_at) VALUES(?,?,?,?,?)').bind(name, un, await pbkdf2(String(b.password), salt), salt, now()).run(); }
     return J({ ok: true });
   }
-  if (p === '/adm/chat/close' && M === 'POST') {
+  if (p === '/adm/staff' && M === 'DELETE') {
     const a = adm(); if (a) return a;
-    const b = await body(); await env.DB.prepare("UPDATE chats SET status='closed',closed_at=? WHERE id=?").bind(now(), +b.id).run(); return J({ ok: true });
+    const id = +url.searchParams.get('id'); await env.DB.batch([env.DB.prepare('DELETE FROM staff_sessions WHERE staff_id=?').bind(id), env.DB.prepare('UPDATE chats SET assigned_to=NULL WHERE assigned_to=?').bind(id), env.DB.prepare('DELETE FROM staff WHERE id=?').bind(id)]); return J({ ok: true });
+  }
+
+  /* ---------- محادثات الدعم للأدمن والموظفين ---------- */
+  if (p === '/adm/chats' && M === 'GET') {
+    const a = needOp(); if (a) return a;
+    const ch = url.searchParams.get('channel') === 'admin' ? 'admin' : 'support';
+    if (ch === 'admin' && !op.admin) return J({ error: 'unauthorized' }, 401);
+    const rows = (await env.DB.prepare(`SELECT c.*, (SELECT body FROM chat_messages m WHERE m.chat_id=c.id ORDER BY m.id DESC LIMIT 1) last,
+      (SELECT sender FROM chat_messages m WHERE m.chat_id=c.id ORDER BY m.id DESC LIMIT 1) lastby, (SELECT name FROM staff s WHERE s.id=c.assigned_to) sname,
+      (SELECT rating FROM reviews r WHERE r.chat_id=c.id) rating FROM chats c WHERE c.channel=? ORDER BY (c.mode='human' AND c.status='open') DESC, c.id DESC LIMIT 200`).bind(ch).all()).results;
+    return J({ chats: rows.map(r => ({ id: r.id, status: r.status, mode: r.mode, name: r.name, ph: r.phone, product: r.product_code, topic: r.topic, staff: r.sname || '', mine: r.assigned_to === op.id && !op.admin, last: r.last || '', lastby: r.lastby || '', rating: r.rating || 0, t: r.created_at })) });
+  }
+  if (p === '/adm/chat' && M === 'GET') {
+    const a = needOp(); if (a) return a;
+    const id = +url.searchParams.get('id');
+    const ch = await env.DB.prepare('SELECT * FROM chats WHERE id=?').bind(id).first(); if (!ch) return J({ error: 'not found' }, 404);
+    if (ch.channel === 'admin' && !op.admin) return J({ error: 'unauthorized' }, 401);
+    return J({ chat: { id: ch.id, name: ch.name, ph: ch.phone, status: ch.status, mode: ch.mode, staff: await staffName(ch), topic: ch.topic }, messages: await msgs(env, id, +url.searchParams.get('after') || 0) }, 200, { 'Cache-Control': 'no-store' });
+  }
+  if (p === '/adm/chat/reply' && M === 'POST') {
+    const a = needOp(); if (a) return a;
+    const b = await body(); const text = String(b.text || '').trim().slice(0, 1000); if (!text) return J({ error: 'empty' }, 400);
+    const ch = await env.DB.prepare('SELECT * FROM chats WHERE id=?').bind(+b.id).first(); if (!ch) return J({ error: 'not found' }, 404);
+    if (ch.channel === 'admin' && !op.admin) return J({ error: 'unauthorized' }, 401);
+    if (ch.channel === 'support' && !op.admin && ch.assigned_to && ch.assigned_to !== op.id) return J({ error: 'المحادثة مع موظف آخر: ' + (await staffName(ch)) }, 409);
+    await addMsg(ch.id, op.admin ? 'admin' : 'staff', text, op.name);
+    if (ch.channel === 'support') {
+      await env.DB.prepare("UPDATE chats SET mode='human',status='open',assigned_to=COALESCE(assigned_to,?) WHERE id=?").bind(op.admin ? null : op.id, ch.id).run();
+      await env.DB.prepare("INSERT INTO notifications(customer_id,phone,channel,template,payload,status,created_at) VALUES(?,?,'inapp','chat_reply',?,'sent',?)").bind(ch.customer_id, ch.phone || null, JSON.stringify({ text: 'رد جديد من ' + op.name + ': ' + text.slice(0, 80) }), now()).run();
+    }
+    return J({ ok: true });
+  }
+  if (p === '/adm/chat/claim' && M === 'POST') {             // استلام المحادثة (الموظف يكمل مع الزبون)
+    const a = needOp(); if (a) return a; const b = await body();
+    const ch = await env.DB.prepare("SELECT * FROM chats WHERE id=? AND channel='support'").bind(+b.id).first(); if (!ch) return J({ error: 'not found' }, 404);
+    if (op.admin) { await env.DB.prepare("UPDATE chats SET mode='human',assigned_to=NULL WHERE id=?").bind(ch.id).run(); return J({ ok: true }); }
+    if (ch.assigned_to && ch.assigned_to !== op.id && !b.force) return J({ error: 'المحادثة مع ' + (await staffName(ch)) }, 409);
+    await env.DB.prepare("UPDATE chats SET mode='human',assigned_to=? WHERE id=?").bind(op.id, ch.id).run();
+    await addMsg(ch.id, 'bot', `انضم ${op.name} إلى المحادثة وسيكمل معك 🌸`, BOT);
+    return J({ ok: true });
+  }
+  if (p === '/adm/chat/release' && M === 'POST') {            // إعادة المحادثة لقائمة الانتظار
+    const a = needOp(); if (a) return a; const b = await body();
+    const ch = await env.DB.prepare('SELECT * FROM chats WHERE id=?').bind(+b.id).first(); if (!ch) return J({ error: 'not found' }, 404);
+    if (!op.admin && ch.assigned_to !== op.id) return J({ error: 'unauthorized' }, 401);
+    await env.DB.prepare('UPDATE chats SET assigned_to=NULL WHERE id=?').bind(ch.id).run(); return J({ ok: true });
+  }
+  if (p === '/adm/chat/close' && M === 'POST') {
+    const a = needOp(); if (a) return a;
+    const b = await body(); const ch = await env.DB.prepare('SELECT * FROM chats WHERE id=?').bind(+b.id).first(); if (!ch) return J({ error: 'not found' }, 404);
+    if (!op.admin && ch.assigned_to && ch.assigned_to !== op.id) return J({ error: 'unauthorized' }, 401);
+    await env.DB.prepare("UPDATE chats SET status='closed',closed_at=? WHERE id=?").bind(now(), ch.id).run(); return J({ ok: true });
   }
   if (p === '/adm/inquiry' && M === 'POST') {                // قناة الأدمن الخاصة: ملاحظات/استفسارات عن منتج (لا يراها الزبائن)
     const a = adm(); if (a) return a;
@@ -177,7 +268,7 @@ export async function extraRoutes(c) {
     if (!text) return J({ error: 'empty' }, 400);
     let ch = await env.DB.prepare("SELECT id FROM chats WHERE channel='admin' AND product_code=? LIMIT 1").bind(code).first();
     if (!ch) ch = await env.DB.prepare("INSERT INTO chats(channel,status,created_at,product_code,name) VALUES('admin','open',?,?,?) RETURNING id").bind(now(), code, String(b.name || code).slice(0, 80)).first();
-    await env.DB.prepare('INSERT INTO chat_messages(chat_id,sender,body,at) VALUES(?,?,?,?)').bind(ch.id, 'admin', text, now()).run();
+    await addMsg(ch.id, 'admin', text, op ? op.name : 'الإدارة');
     return J({ ok: true, id: ch.id });
   }
   if (p === '/adm/ratings' && M === 'GET') {

@@ -13,7 +13,7 @@
     return `<div class="chw"><svg viewBox="0 0 ${rows.length * w + 10} ${h + 30}" role="img" style="min-width:${rows.length * 22}px;height:160px">${rows.map((r, i) => { const v = r[key] || 0, bh = Math.round(v / max * h); return `<g><rect x="${i * w + 6}" y="${h - bh + 4}" width="${w - 6}" height="${bh}" rx="3" fill="${color}"><title>${esc(r.k)}: ${N(v)}</title></rect><text x="${i * w + 6 + (w - 6) / 2}" y="${h - bh}" font-size="9" text-anchor="middle" fill="currentColor">${v || ''}</text><text x="${i * w + 6 + (w - 6) / 2}" y="${h + 18}" font-size="8" text-anchor="middle" fill="currentColor" transform="rotate(-40 ${i * w + 6 + (w - 6) / 2} ${h + 18})">${esc(String(r.k).slice(-5))}</text></g>`; }).join('')}</svg></div>`;
   };
   const add = (id, name) => { if (!TABS.find(t => t[0] === id)) TABS.push([id, name]); };
-  ['cp:أكواد الخصم', 'bx:البوكسات', 'hr:الواجهة والوصف', 'st:الإحصائيات', 'wm:رسائل واتساب', 'ch:الدعم والتقييم', 'pm:الدفع والتوصيل', 'ig:الربط والمفاتيح'].forEach(s => { const [a, b] = s.split(':'); add(a, b); });
+  ['cp:أكواد الخصم', 'bx:البوكسات', 'hr:الواجهة والوصف', 'st:الإحصائيات', 'wm:رسائل واتساب', 'ch:الدعم والتقييم', 'pm:الدفع والتوصيل', 'ig:الربط والمفاتيح', 'sf:الموظفون'].forEach(s => { const [a, b] = s.split(':'); add(a, b); });
   TABS.unshift(...TABS.splice(TABS.findIndex(t => t[0] === 'st'), 1));      // الإحصائيات أولاً
 
   /* ---------- أكواد الخصم ---------- */
@@ -128,19 +128,22 @@
   async function loadChats(quiet) { const el = $('#chs'); if (!el) return;
     try { const [j, r] = await Promise.all([J('/adm/chats?channel=' + chc), J('/adm/ratings')]);
       const rr = $('#chr'); if (rr) rr.innerHTML = `<div class="tls">${`<div class="tl2"><b>${r.count ? r.avg + ' ★' : '—'}</b><span>متوسط تقييم الخدمة (${r.count} تقييم)</span></div>`}</div>`;
-      el.innerHTML = j.chats.map(c => `<div class="row ${c.id == chId ? 'sel' : ''}" data-a="cho" data-c="${c.id}" style="cursor:pointer;grid-template-columns:1fr auto"><span><b>${esc(chc == 'admin' ? (S.P.find(p => p.c == c.product) || { n: c.product }).n : c.name || 'زائر')}</b> ${c.status == 'open' ? '' : '<small>(منتهية)</small>'}${c.rating ? ` ★${c.rating}` : ''}<br><small>${esc(c.last.slice(0, 50))}</small></span>${c.lastby == 'customer' && c.status == 'open' ? '<i class="dot"></i>' : ''}</div>`).join('') || '<p class="em">لا محادثات</p>';
+      el.innerHTML = j.chats.map(c => `<div class="row ${c.id == chId ? 'sel' : ''}" data-a="cho" data-c="${c.id}" style="cursor:pointer;grid-template-columns:1fr auto"><span><b>${esc(chc == 'admin' ? (S.P.find(p => p.c == c.product) || { n: c.product }).n : c.name || 'زائر')}</b> ${c.status == 'open' ? '' : '<small>(منتهية)</small>'}${c.rating ? ` ★${c.rating}` : ''} ${chc == 'support' ? (c.mode == 'human' ? '<small>👤 ' + esc(c.staff || 'بانتظار موظف') + '</small>' : '<small>🤖</small>') : ''}<br><small>${esc(c.last.slice(0, 50))}</small></span>${(c.lastby == 'customer' || c.mode == 'human' && !c.staff) && c.status == 'open' ? '<i class="dot"></i>' : ''}</div>`).join('') || '<p class="em">لا محادثات</p>';
       if (chId) openChat(chId, quiet); } catch (e) {} }
   A.cho = c => { chId = +c; chLast = 0; openChat(chId); };
   async function openChat(id, quiet) { const el = $('#chm'); if (!el) return; const j = await J('/adm/chat?id=' + id);
-    el.innerHTML = `<div class="msgs">${j.messages.map(m => `<div class="m ${m.sender}">${esc(m.text || m.body)}<small>${dt(m.at)}</small></div>`).join('')}</div><form id="chf" class="fm" style="grid-template-columns:1fr auto auto"><input name="text" placeholder="اكتب رداً…" required autocomplete="off"><button class="btn">إرسال</button>${chc == 'support' ? '<button type="button" class="btn g" data-a="chx">إنهاء المحادثة</button>' : ''}</form>`;
+    const hd = j.chat ? `<div class="chhd"><b>${esc(j.chat.name || 'زائر')}</b> ${esc(j.chat.ph || '')} · ${j.chat.mode == 'human' ? '👤 ' + esc(j.chat.staff || 'بانتظار موظف') : '🤖 المساعد'}</div>` : '';
+    el.innerHTML = `${hd}<div class="msgs">${j.messages.map(m => `<div class="m ${m.sender}"><small class="au">${esc(m.author || '')}</small>${esc(m.text || m.body)}<small>${dt(m.at)}</small></div>`).join('')}</div><form id="chf" class="fm" style="grid-template-columns:1fr auto auto auto"><input name="text" placeholder="اكتب رداً…" required autocomplete="off"><button class="btn">إرسال</button>${chc == 'support' ? '<button type="button" class="btn g" data-a="chk">استلام</button><button type="button" class="btn g" data-a="chx">إنهاء</button>' : ''}</form>`;
     const ms = el.querySelector('.msgs'); ms.scrollTop = ms.scrollHeight; }
   H.chf = async v => { await J(chc == 'admin' ? '/adm/inquiry' : '/adm/chat/reply', { method: 'POST', body: JSON.stringify(chc == 'admin' ? { product: (await J('/adm/chats?channel=admin')).chats.find(c => c.id == chId).product, text: v.text } : { id: chId, text: v.text }) }); openChat(chId); };
   H.chq = async (v, f) => { const r = await J('/adm/inquiry', { method: 'POST', body: JSON.stringify(v) }); f.reset(); chId = r.id; loadChats(); };
+  A.chk = async () => { try { await J('/adm/chat/claim', { method: 'POST', body: JSON.stringify({ id: chId, force: true }) }); toast('استلمت المحادثة'); loadChats(); } catch (e) { toast(e.message); } };
   A.chx = async () => { await J('/adm/chat/close', { method: 'POST', body: JSON.stringify({ id: chId }) }); toast('أُنهيت المحادثة وسيظهر للزبون نموذج التقييم'); loadChats(); };
 
   /* ---------- الربط والمفاتيح ---------- */
   const IGF = [['واتساب (Meta Cloud API)', [['WA_TOKEN', 'التوكن الدائم (Access Token)', 1], ['WA_PHONE_ID', 'معرّف رقم الهاتف (Phone Number ID)'], ['WA_LANG', 'لغة القوالب (مثل ar)'], ['WA_TPL_OTP', 'اسم قالب رمز التحقق'], ['WA_TPL_WELCOME', 'اسم قالب الترحيب'], ['WA_TPL_ORDER', 'اسم قالب حالة الطلب'], ['WA_TPL_PROMO', 'اسم قالب الرسائل التسويقية']]],
     ['المتجر و Google', [['STORE_URL', 'رابط المتجر الذي يُلحق برسائل واتساب'], ['GOOGLE_CLIENT_ID', 'Google Client ID (لتسجيل الدخول بجوجل)']]],
+    ['الذكاء الاصطناعي للدعم (اختياري)', [['ANTHROPIC_API_KEY', 'مفتاح Anthropic (Claude API)', 1], ['AI_MODEL', 'اسم النموذج (اتركه فارغاً للافتراضي)'], ['AI_ON', 'تشغيل الرد الآلي (اكتب 0 لإيقافه، وأي قيمة أخرى للتشغيل)'], ['AI_PROMPT', 'تعليمات إضافية للمساعد (نبرة الكلام، سياسات المتجر، ما لا يجيب عنه)']]],
     ['تلجرام (إشعار طلباتك)', [['BOT_TOKEN', 'توكن البوت', 1], ['CHAT_ID', 'معرّف المحادثة (Chat ID)']]]];
   TB.ig = () => { setTimeout(loadIg, 0); return `<div id="igb"><p class="em">جارٍ التحميل…</p></div>`; };
   async function loadIg() {
@@ -155,6 +158,17 @@
   H.igf = async (v) => { try { await J('/adm/integrations', { method: 'POST', body: JSON.stringify(v) }); toast('تم الحفظ'); loadIg(); } catch (e) { toast(e.message || 'تعذر الحفظ'); } };
   H.igt = async (v) => { try { await J('/adm/integrations/test', { method: 'POST', body: JSON.stringify({ kind: 'wa', ph: v.ph.trim() }) }); toast('✅ أُرسلت رسالة الاختبار'); } catch (e) { toast(e.message || 'فشل الاختبار'); } };
   A.igtg = async () => { try { await J('/adm/integrations/test', { method: 'POST', body: JSON.stringify({ kind: 'telegram' }) }); toast('✅ وصلت رسالة تلجرام'); } catch (e) { toast(e.message || 'فشل الاختبار'); } };
+
+  /* ---------- الموظفون ---------- */
+  let est = [], esid = 0;
+  TB.sf = () => { setTimeout(loadStaff, 0); return `<p class="em">أنشئ حساباً لكل موظف. يدخل من الرابط <b dir="ltr">/#staff</b> ويرد على الزبائن باسمه، ولا يرى بقية لوحة التحكم.</p><div id="sfl"><p class="em">جارٍ التحميل…</p></div>`
+    + `<form id="sff" class="fm" style="margin-top:14px"><input name="name" placeholder="اسم الموظف" required><input name="username" dir="ltr" placeholder="اسم المستخدم (إنجليزي)" required><input name="pw" type="password" placeholder="كلمة السر (6+ أحرف)" autocomplete="new-password"><button class="btn">إضافة موظف</button></form>`; };
+  async function loadStaff() { const el = $('#sfl'); if (!el) return; try { est = (await J('/adm/staff')).staff; } catch (e) { el.innerHTML = '<p class="em">تعذر التحميل</p>'; return; }
+    el.innerHTML = est.length ? `<table class="tb"><tr><th>الاسم</th><th>المستخدم</th><th>الحالة</th><th></th></tr>${est.map(s => `<tr><td>${esc(s.name)}</td><td dir="ltr">${esc(s.username)}</td><td>${s.active ? 'فعّال' : 'معطّل'}</td><td><button class="btn g" data-a="sft" data-c="${s.id}">${s.active ? 'تعطيل' : 'تفعيل'}</button> <button class="btn g" data-a="sfp" data-c="${s.id}">كلمة سر جديدة</button> <button class="btn g" data-a="sfd" data-c="${s.id}">حذف</button></td></tr>`).join('')}</table>` : '<p class="em">لا موظفين بعد</p>'; }
+  H.sff = async (v, f) => { try { await J('/adm/staff', { method: 'POST', body: JSON.stringify(v) }); toast('تمت الإضافة'); f.reset(); loadStaff(); } catch (e) { toast(e.message); } };
+  A.sft = async c => { const s = est.find(x => x.id == c); await J('/adm/staff', { method: 'POST', body: JSON.stringify({ id: s.id, name: s.name, username: s.username, active: !s.active }) }); loadStaff(); };
+  A.sfp = async c => { const s = est.find(x => x.id == c), pw = prompt('كلمة السر الجديدة للموظف ' + s.name + ' (6 أحرف على الأقل)'); if (!pw) return; try { await J('/adm/staff', { method: 'POST', body: JSON.stringify({ id: s.id, name: s.name, username: s.username, active: !!s.active, pw }) }); toast('تم تغيير كلمة السر'); } catch (e) { toast(e.message); } };
+  A.sfd = async c => { if (!ask('sf' + c)) return; await J('/adm/staff?id=' + c, { method: 'DELETE' }); loadStaff(); };
 
   /* ---------- الدفع والتوصيل ---------- */
   TB.pm = () => { const pm = (S.pm && S.pm.length ? S.pm : [{ id: 'cod', n: 'الدفع عند الاستلام', on: 1, d: '' }]);

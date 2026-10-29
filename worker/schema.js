@@ -15,5 +15,9 @@ export const MIGRATIONS = [
  [
   "0004_media_chunks.sql",
   "CREATE TABLE IF NOT EXISTS media_chunks (key TEXT NOT NULL, idx INTEGER NOT NULL, data TEXT NOT NULL, PRIMARY KEY(key, idx));\n"
+ ],
+ [
+  "0005_staff_bot.sql",
+  "ALTER TABLE chat_messages ADD COLUMN author TEXT NOT NULL DEFAULT '';\nALTER TABLE chat_messages ADD COLUMN meta TEXT NOT NULL DEFAULT '';\nALTER TABLE chats ADD COLUMN mode TEXT NOT NULL DEFAULT 'bot';\nALTER TABLE chats ADD COLUMN assigned_to INTEGER;\nALTER TABLE chats ADD COLUMN topic TEXT NOT NULL DEFAULT '';\nALTER TABLE reviews ADD COLUMN staff_id INTEGER;\nCREATE TABLE IF NOT EXISTS staff (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, username TEXT NOT NULL UNIQUE, pw_hash TEXT NOT NULL, pw_salt TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1, created_at INTEGER NOT NULL);\nCREATE TABLE IF NOT EXISTS staff_sessions (token_hash TEXT PRIMARY KEY, staff_id INTEGER NOT NULL, expires_at INTEGER NOT NULL);\n"
  ]
 ];

@@ -37,8 +37,8 @@ export function ensureSchema(env) {
 }
 
 /* مفاتيح الربط المحفوظة من لوحة التحكم (تتقدّم على أسرار Cloudflare) */
-export const IG_KEYS = ['WA_TOKEN', 'WA_PHONE_ID', 'WA_LANG', 'WA_TPL_OTP', 'WA_TPL_WELCOME', 'WA_TPL_ORDER', 'WA_TPL_PROMO', 'STORE_URL', 'GOOGLE_CLIENT_ID', 'BOT_TOKEN', 'CHAT_ID'];
-export const IG_SECRET = ['WA_TOKEN', 'BOT_TOKEN'];
+export const IG_KEYS = ['WA_TOKEN', 'WA_PHONE_ID', 'WA_LANG', 'WA_TPL_OTP', 'WA_TPL_WELCOME', 'WA_TPL_ORDER', 'WA_TPL_PROMO', 'STORE_URL', 'GOOGLE_CLIENT_ID', 'BOT_TOKEN', 'CHAT_ID', 'ANTHROPIC_API_KEY', 'AI_MODEL', 'AI_ON', 'AI_PROMPT'];
+export const IG_SECRET = ['WA_TOKEN', 'BOT_TOKEN', 'ANTHROPIC_API_KEY'];
 let igCache = null, igAt = 0, igDb = null;
 export const resetIg = () => { igCache = null; };
 export async function readIg(env) {

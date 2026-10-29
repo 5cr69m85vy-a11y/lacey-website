@@ -5,7 +5,7 @@
   const E = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const num = n => Number(n || 0).toLocaleString('en-US');
   const ls = { get: k => { try { return localStorage.getItem(k) } catch (e) { return null } }, set: (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v) } catch (e) {} } };
-  let tok = ls.get('lc_ct') || '', me = null, tab = 'p', mode = 'ph', sub = 'login', cfg = null, step = 0, sPh = '', busy = false, lastN = +ls.get('lc_ln') || 0;
+  let pollT = 0, tok = ls.get('lc_ct') || '', me = null, tab = 'p', mode = 'ph', sub = 'login', cfg = null, step = 0, sPh = '', busy = false, lastN = +ls.get('lc_ln') || 0;
   try { me = JSON.parse(ls.get('lc_me') || 'null') } catch (e) {}
   window.custAuth = () => tok ? { Authorization: 'Bearer ' + tok } : {};
   window.custMe = () => me;
@@ -20,7 +20,7 @@
   function setSession(t, c) {
     tok = t || ''; me = c || null; ls.set('lc_ct', tok || null); ls.set('lc_me', me ? JSON.stringify(me) : null);
     if (me && typeof ff != 'undefined') ff = { name: me.name || '', ph: me.ph || '', ci: me.city || '', ae: me.area || '', lm: me.lm || '' };
-    btn(); }
+    btn(); bellDraw([]); }
   function btn() { const b = document.getElementById('accb'); if (b) b.title = me ? me.name || me.email || me.ph : T('تسجيل الدخول', 'Sign in'), b.classList.toggle('on', !!me) }
 
   /* ---------- الهيكل ---------- */
@@ -30,6 +30,12 @@
   hb.innerHTML = '<svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/></svg>';
   const bag = document.querySelector('header .cb2'); bag ? bag.parentNode.insertBefore(hb, bag) : document.querySelector('header .w').appendChild(hb);
   hb.addEventListener('click', () => open());
+  const bell = document.createElement('button'); bell.id = 'bellb'; bell.className = 'cb2'; bell.setAttribute('aria-label', 'Notifications'); bell.style.display = 'none';
+  bell.innerHTML = '<svg class="ic" viewBox="0 0 24 24"><path d="M6 17V11a6 6 0 0112 0v6l2 2H4z"/><path d="M10 21h4"/></svg><i id="belln">0</i>'; hb.parentNode.insertBefore(bell, hb);
+  bell.addEventListener('click', () => { open('n'); });
+  let bellSeen = +ls.get('lc_bell') || 0;
+  function bellDraw(items) { bell.style.display = me ? '' : 'none'; if (!me) return; const n = (items || []).filter(i => i.t > bellSeen).length, b = document.getElementById('belln'); if (b) { b.textContent = n > 9 ? '9+' : n; b.style.display = n ? 'flex' : 'none'; } }
+  window.bellDraw = bellDraw;
   const body = () => document.getElementById('acb');
   const open = t => { if (t) tab = t; ov.classList.add('on'); draw(); if (me) refresh(); };
   const close = () => ov.classList.remove('on');
@@ -59,7 +65,7 @@
     } catch (x) { if (er) er.textContent = x.message; }
     busy = false;
   });
-  function done(j) { setSession(j.token, j.customer); step = 0; tab = 'p'; toast(T('أهلاً ' + (j.customer.name || ''), 'Welcome ' + (j.customer.name || ''))); draw(); load(); }
+  function done(j) { setSession(j.token, j.customer); if (!pollT) pollT = setInterval(poll, 30000); poll(); step = 0; tab = 'p'; toast(T('أهلاً ' + (j.customer.name || ''), 'Welcome ' + (j.customer.name || ''))); draw(); load(); }
 
   /* ---------- العرض ---------- */
   const err = '<small class="er"></small>';
@@ -103,7 +109,7 @@
       } else if (tab == 'n') {
         const j = await call('/me/notifications');
         el.innerHTML = j.items.length ? j.items.map(n => `<div class="aco"><div>${E(n.text)}</div><small>${dt(n.t)}</small></div>`).join('') : `<p class="em">${T('لا إشعارات', 'No notifications')}</p>`;
-        if (j.items[0]) { lastN = Math.max(lastN, j.items[0].t); ls.set('lc_ln', lastN); }
+        if (j.items[0]) { lastN = Math.max(lastN, j.items[0].t); ls.set('lc_ln', lastN); bellSeen = Date.now(); ls.set('lc_bell', String(bellSeen)); bellDraw([]); }
       }
     } catch (x) { el.innerHTML = `<p class="em">${E(x.message)}</p>`; }
   }
@@ -122,11 +128,12 @@
     if (!tok) return;
     try {
       const j = await call('/me/notifications');
-      const fresh = j.items.filter(n => n.t > lastN && n.tpl === 'order_status');
+      bellDraw(j.items);
+      const fresh = j.items.filter(n => n.t > lastN && (n.tpl === 'order_status' || n.tpl === 'chat_reply'));
       if (lastN && fresh.length) toast(fresh[0].text);
       if (j.items[0]) { lastN = Math.max(lastN, j.items[0].t); ls.set('lc_ln', lastN); }
     } catch (e) {}
   }
-  (async () => { try { cfg = await call('/auth/config'); } catch (e) { cfg = {}; } btn(); if (tok) { refresh(); poll(); setInterval(poll, 45000); } })();
+  (async () => { try { cfg = await call('/auth/config'); } catch (e) { cfg = {}; } btn(); if (tok) { refresh(); poll(); pollT = setInterval(poll, 30000); } })();
   btn();
 })();

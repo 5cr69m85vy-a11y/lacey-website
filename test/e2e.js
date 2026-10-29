@@ -102,13 +102,25 @@ const assert = require('assert');
   await v3.waitForSelector('.m.admin', { timeout: 8000 }); await v3.waitForSelector('.stars', { timeout: 8000 }); ok('admin reply appears, closing shows the rating form');
   await v3.click('.stars button >> nth=3'); await v3.fill('#chc', 'ممتاز'); await v3.click('[data-c=rate]'); await v3.waitForTimeout(500);
   assert.deepStrictEqual({ ...db.prepare('select rating,comment from reviews').get() }, { rating: 4, comment: 'ممتاز' }); ok('rating saved (4 stars + comment)');
+  /* --- smart support: reason buttons, staff takes over by name, bell notification --- */
+  const sp = await mk(); await sp.goto(base + '/'); await sp.click('#chfab'); await sp.waitForSelector('.chips button');
+  await sp.fill('#scn', 'نور'); await sp.click('.chips button[data-k=track]'); await sp.waitForSelector('#chp .m.customer + .m.bot', { timeout: 8000 }); ok('reason buttons ("أين طلبي؟") get an automatic answer');
+  await sp.click('.chips button[data-k=human]'); await sp.waitForFunction(() => document.querySelector('#chp .chh small').textContent.includes('بانتظار'), null, { timeout: 8000 }); ok('"الاتصال بموظف" hands the chat to a human');
+  await adm.evaluate(async () => { await apiJ('/adm/staff', { method: 'POST', body: JSON.stringify({ name: 'سارة', username: 'sara', pw: 'sara1234' }) }); });
+  const st = await mk(); await st.goto(base + '/#staff'); await st.waitForSelector('#stl'); await st.fill('#stl [name=username]', 'sara'); await st.fill('#stl [name=pw]', 'sara1234'); await st.click('#stl button');
+  await st.waitForSelector('#stc .row'); await st.click('#stc .row >> nth=0'); await st.waitForSelector('#str input'); await st.click('[data-s=claim]'); await st.fill('#str input', 'أهلاً نور، أنا سارة'); await st.click('#str .btn >> nth=0');
+  await sp.waitForFunction(() => document.querySelector('#chp .chh small').textContent.includes('سارة') && document.querySelector('#chp .m.staff .au')?.textContent === 'سارة', null, { timeout: 9000 }); ok('employee replies under her name; customer sees who is answering');
+  assert.strictEqual(await st.$eval('#stm .chhd', e => e.textContent.includes('نور')), true); ok('staff console shows the customer name');
+  /* --- bell --- */
+  await adm.evaluate(async () => { await apiJ('/status', { method: 'POST', body: JSON.stringify({ code: 'LC-ACCT01', s: 3 }) }); });
+  await cu.reload(); await cu.waitForSelector('#bellb', { state: 'visible', timeout: 8000 }); await cu.waitForFunction(() => document.getElementById('belln').style.display == 'flex', null, { timeout: 10000 }); ok('bell shows an in-site notification badge for the logged-in customer');
   /* PWA */
   const man = await v3.evaluate(async () => (await fetch('/manifest.json')).json()); assert(man.name && man.icons.length >= 3 && man.display == 'standalone'); ok('manifest.json served with icons and theme');
   assert((await v3.request.get(base + '/sw.js')).ok() && (await v3.request.get(base + '/icons/icon-512.png')).ok()); ok('service worker + brand icons are served');
   /* admin tabs render */
-  for (const t of ['st', 'cp', 'bx', 'hr', 'wm', 'ch', 'pm', 'ig']) { await adm.evaluate(t => A.tab(t), t); await adm.waitForTimeout(500); assert((await adm.$eval('#ab', e => e.textContent)).length > 20, t); }
+  for (const t of ['st', 'cp', 'bx', 'hr', 'wm', 'ch', 'pm', 'ig', 'sf']) { await adm.evaluate(t => A.tab(t), t); await adm.waitForTimeout(500); assert((await adm.$eval('#ab', e => e.textContent)).length > 20, t); }
   ok('all new admin tabs render (stats, codes, boxes, hero, WhatsApp, support, payment)');
 
-  for (const p of [adm, vis, cu, v3]) assert.deepStrictEqual(p.errs, [], 'page errors: ' + p.errs);
+  for (const [i, p] of [adm, vis, cu, v3, sp, st].entries()) assert.deepStrictEqual(p.errs, [], 'page ' + i + ' errors: ' + p.errs);
   console.log(`\n${n} e2e checks passed`); await browser.close(); srv.close();
 })().catch(e => { console.error('FAIL', e); process.exit(1); });

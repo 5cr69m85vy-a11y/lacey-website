@@ -6,12 +6,12 @@ const SESSION_MS = 90 * 864e5;
 const OTP_MS = 10 * 60 * 1000;
 const PHONE = /^07\d{9}$/, EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
 
-async function pbkdf2(pw, saltHex) {
+export async function pbkdf2(pw, saltHex) {
   const salt = new Uint8Array(saltHex.match(/../g).map(h => parseInt(h, 16)));
   const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(pw), 'PBKDF2', false, ['deriveBits']);
   return hex(await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt, iterations: 100000 }, key, 256));
 }
-const eq = (a, b) => { let d = a.length ^ b.length; for (let i = 0; i < Math.max(a.length, b.length); i++) d |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0); return d === 0; };
+export const eq = (a, b) => { let d = a.length ^ b.length; for (let i = 0; i < Math.max(a.length, b.length); i++) d |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0); return d === 0; };
 
 export async function newSession(env, cid) {
   const tok = 'c.' + randHex(32);
@@ -172,7 +172,7 @@ export async function authRoutes(c) {
     }
     if (p === '/me/notifications' && M === 'GET') {
       const rows = (await env.DB.prepare('SELECT * FROM notifications WHERE customer_id=? ORDER BY id DESC LIMIT 50').bind(me.id).all()).results;
-      const txt = r => { const d = jp(r.payload, {}); return r.template === 'order_received' ? `تم استلام طلبك ${d.code}` : r.template === 'order_status' ? `${d.code}: ${d.text}` : r.template === 'welcome' ? 'أهلاً بك في لاسي 🌸' : d.text || ''; };
+      const txt = r => { const d = jp(r.payload, {}); return r.template === 'order_received' ? `تم استلام طلبك ${d.code}` : r.template === 'order_status' ? `${d.code}: ${d.text}` : r.template === 'welcome' ? 'أهلاً بك في لاسي 🌸' : r.template === 'chat_reply' ? `${d.name}: ${d.text}` : d.text || ''; };
       return J({ items: rows.filter(r => r.template !== 'otp').map(r => ({ t: r.created_at, text: txt(r), tpl: r.template })) });
     }
   }
