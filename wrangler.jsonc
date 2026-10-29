@@ -15,7 +15,8 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_name": "lacey-store"
+      "database_name": "laceyskin",
+      "database_id": "beea3c39-7bc1-4d10-a754-0737b7e9baf4"
     }
   ],
   "triggers": { "crons": ["* * * * *"] }
