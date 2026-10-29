@@ -235,7 +235,7 @@ export default {
       if (p === '/login' && M === 'POST') {
         if (!env.ADMIN_PASS) return J({ error: 'ADMIN_PASS is not set' }, 503);
         const { pw } = await body();
-        if (pw && pw === env.ADMIN_PASS) return J({ token });
+        if (pw && String(pw).trim() === String(env.ADMIN_PASS).trim()) return J({ token });
         return J({ error: 'wrong password' }, 401);
       }
 
