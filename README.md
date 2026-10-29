@@ -39,7 +39,7 @@ npm test      # يتطلب Node 22
 ## الأسرار والمفاتيح (Settings ← Variables and Secrets على Cloudflare)
 | الاسم | مطلوب؟ | الوظيفة |
 |---|---|---|
-| `ADMIN_PASS` | نعم | كلمة مرور لوحة التحكم |
+| `ADMIN_PASS` | نعم | كلمة مرور لوحة التحكم (السر الوحيد المطلوب من Cloudflare؛ كل المفاتيح الأخرى تُدخلها من لوحة التحكم ← «الربط والمفاتيح») |
 | `STORE_URL` | يُنصح | رابط المتجر الذي يُلحق برسائل واتساب |
 | `WA_TOKEN` + `WA_PHONE_ID` | لواتساب | توكن دائم ومعرّف رقم الهاتف من Meta WhatsApp Cloud API |
 | `WA_TPL_OTP` `WA_TPL_WELCOME` `WA_TPL_ORDER` `WA_TPL_PROMO` | لواتساب | أسماء القوالب المعتمدة (انظر أدناه) و`WA_LANG` (افتراضي ar) |

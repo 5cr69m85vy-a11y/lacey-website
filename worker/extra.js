@@ -1,5 +1,6 @@
 /* extra.js — دردشة الدعم، التقييمات، الحملات التسويقية، الإحصائيات، رفع الوسائط، manifest */
-import { J, CORS, now, jp, rnd, randHex, sha256, today, cfgOf } from './lib.js';
+import { J, CORS, now, jp, rnd, randHex, sha256, today, cfgOf, IG_KEYS, IG_SECRET, readIg, resetIg } from './lib.js';
+import { waSend, waOn } from './wa.js';
 import { processQueue } from './wa.js';
 
 const TZ = 3 * 3600;                                    // بغداد UTC+3
@@ -23,6 +24,38 @@ const msgs = async (env, id, after) => (await env.DB.prepare('SELECT id,sender,b
 export async function extraRoutes(c) {
   const { env, request, url, p, M, body, authed, sess, ctx, tg } = c;
   const adm = () => authed ? null : J({ error: 'unauthorized' }, 401);
+
+  /* ---------- الربط والمفاتيح (تُحفظ في القاعدة بدل أسرار Cloudflare) ---------- */
+  if (p === '/adm/integrations' && M === 'GET') {
+    const a = adm(); if (a) return a;
+    const v = await readIg(env), out = {};
+    for (const k of IG_KEYS) { const val = v[k] || ''; out[k] = IG_SECRET.includes(k) ? { set: !!val, hint: val ? '••••' + val.slice(-4) : '' } : { set: !!val, value: val }; }
+    out._active = { wa: waOn(env), google: !!env.GOOGLE_CLIENT_ID, telegram: !!(env.BOT_TOKEN && env.CHAT_ID) };
+    return J(out);
+  }
+  if (p === '/adm/integrations' && M === 'POST') {
+    const a = adm(); if (a) return a;
+    const b = await body(), cur = { ...(await readIg(env)) };
+    for (const k of IG_KEYS) {
+      if (!(k in b)) continue;
+      const val = String(b[k] ?? '').trim().slice(0, 600);
+      if (val === '__clear__') delete cur[k]; else if (val) cur[k] = val;      // الفارغ = إبقاء القيمة الحالية
+    }
+    await env.DB.prepare("INSERT INTO settings(key,value,updated_at) VALUES('integrations',?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at").bind(JSON.stringify(cur), now()).run();
+    resetIg(); return J({ ok: true });
+  }
+  if (p === '/adm/integrations/test' && M === 'POST') {
+    const a = adm(); if (a) return a;
+    const b = await body();
+    if (b.kind === 'telegram') {
+      if (!env.BOT_TOKEN || !env.CHAT_ID) return J({ error: 'أدخل BOT_TOKEN و CHAT_ID أولاً' }, 400);
+      try { const r = await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendMessage`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: env.CHAT_ID, text: '✅ اختبار الربط من لوحة تحكم لاسي' }) }); const j = await r.json().catch(() => ({})); return r.ok ? J({ ok: true }) : J({ error: j.description || 'فشل تلجرام' }, 502); }
+      catch (e) { return J({ error: 'تعذر الاتصال بتلجرام' }, 502); }
+    }
+    if (!/^07\d{9}$/.test(String(b.ph || ''))) return J({ error: 'اكتب رقماً عراقياً صحيحاً 07XXXXXXXXX' }, 400);
+    const r = await waSend(env, b.ph, 'promo', ['✅ اختبار الربط من لوحة تحكم لاسي'], '✅ اختبار الربط من لوحة تحكم لاسي');
+    return r.ok ? J({ ok: true }) : J({ error: r.error === 'wa_not_configured' ? 'أدخل WA_TOKEN و WA_PHONE_ID أولاً' : r.error }, 502);
+  }
 
   /* ---------- manifest ديناميكي ---------- */
   if (p === '/manifest.json') {

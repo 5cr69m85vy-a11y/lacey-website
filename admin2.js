@@ -6,14 +6,14 @@
   const up = (tag, html) => `<div class="cd" style="margin-bottom:14px"><h3>${tag}</h3>${html}</div>`;
   const prodChecks = (name, sel = [], withQty = false) => `<div class="pck">${S.P.map(p => { const on = sel.find(x => (x.c || x) == p.c); return `<label><input type="checkbox" name="${name}" value="${esc(p.c)}" ${on ? 'checked' : ''}> ${esc(p.n)}${withQty ? ` <input type="number" min="1" max="20" name="q_${esc(p.c)}" value="${on && on.q || 1}" style="width:54px">` : ''}</label>`; }).join('')}</div>`;
   const act = () => document.querySelector('#ab');
-  const J = async (u, o) => apiJ(u, o);
+  const J = async (u, o) => { const r = await apiJ(u, o); if (r && r.error) throw new Error(r.error); return r; };
   const barSvg = (rows, key, color) => {
     if (!rows.length) return '<p class="em">لا توجد بيانات بعد</p>';
     const max = Math.max(...rows.map(r => r[key] || 0), 1), w = 26, h = 120;
     return `<div class="chw"><svg viewBox="0 0 ${rows.length * w + 10} ${h + 30}" role="img" style="min-width:${rows.length * 22}px;height:160px">${rows.map((r, i) => { const v = r[key] || 0, bh = Math.round(v / max * h); return `<g><rect x="${i * w + 6}" y="${h - bh + 4}" width="${w - 6}" height="${bh}" rx="3" fill="${color}"><title>${esc(r.k)}: ${N(v)}</title></rect><text x="${i * w + 6 + (w - 6) / 2}" y="${h - bh}" font-size="9" text-anchor="middle" fill="currentColor">${v || ''}</text><text x="${i * w + 6 + (w - 6) / 2}" y="${h + 18}" font-size="8" text-anchor="middle" fill="currentColor" transform="rotate(-40 ${i * w + 6 + (w - 6) / 2} ${h + 18})">${esc(String(r.k).slice(-5))}</text></g>`; }).join('')}</svg></div>`;
   };
   const add = (id, name) => { if (!TABS.find(t => t[0] === id)) TABS.push([id, name]); };
-  ['cp:أكواد الخصم', 'bx:البوكسات', 'hr:الواجهة والوصف', 'st:الإحصائيات', 'wm:رسائل واتساب', 'ch:الدعم والتقييم', 'pm:الدفع والتوصيل'].forEach(s => { const [a, b] = s.split(':'); add(a, b); });
+  ['cp:أكواد الخصم', 'bx:البوكسات', 'hr:الواجهة والوصف', 'st:الإحصائيات', 'wm:رسائل واتساب', 'ch:الدعم والتقييم', 'pm:الدفع والتوصيل', 'ig:الربط والمفاتيح'].forEach(s => { const [a, b] = s.split(':'); add(a, b); });
   TABS.unshift(...TABS.splice(TABS.findIndex(t => t[0] === 'st'), 1));      // الإحصائيات أولاً
 
   /* ---------- أكواد الخصم ---------- */
@@ -137,6 +137,24 @@
   H.chf = async v => { await J(chc == 'admin' ? '/adm/inquiry' : '/adm/chat/reply', { method: 'POST', body: JSON.stringify(chc == 'admin' ? { product: (await J('/adm/chats?channel=admin')).chats.find(c => c.id == chId).product, text: v.text } : { id: chId, text: v.text }) }); openChat(chId); };
   H.chq = async (v, f) => { const r = await J('/adm/inquiry', { method: 'POST', body: JSON.stringify(v) }); f.reset(); chId = r.id; loadChats(); };
   A.chx = async () => { await J('/adm/chat/close', { method: 'POST', body: JSON.stringify({ id: chId }) }); toast('أُنهيت المحادثة وسيظهر للزبون نموذج التقييم'); loadChats(); };
+
+  /* ---------- الربط والمفاتيح ---------- */
+  const IGF = [['واتساب (Meta Cloud API)', [['WA_TOKEN', 'التوكن الدائم (Access Token)', 1], ['WA_PHONE_ID', 'معرّف رقم الهاتف (Phone Number ID)'], ['WA_LANG', 'لغة القوالب (مثل ar)'], ['WA_TPL_OTP', 'اسم قالب رمز التحقق'], ['WA_TPL_WELCOME', 'اسم قالب الترحيب'], ['WA_TPL_ORDER', 'اسم قالب حالة الطلب'], ['WA_TPL_PROMO', 'اسم قالب الرسائل التسويقية']]],
+    ['المتجر و Google', [['STORE_URL', 'رابط المتجر الذي يُلحق برسائل واتساب'], ['GOOGLE_CLIENT_ID', 'Google Client ID (لتسجيل الدخول بجوجل)']]],
+    ['تلجرام (إشعار طلباتك)', [['BOT_TOKEN', 'توكن البوت', 1], ['CHAT_ID', 'معرّف المحادثة (Chat ID)']]]];
+  TB.ig = () => { setTimeout(loadIg, 0); return `<div id="igb"><p class="em">جارٍ التحميل…</p></div>`; };
+  async function loadIg() {
+    const el = $('#igb'); if (!el) return; let v;
+    try { v = await J('/adm/integrations'); } catch (e) { el.innerHTML = '<p class="em">سجّل الدخول أولاً</p>'; return; }
+    const act = v._active;
+    el.innerHTML = `<p class="em">القيم تُحفظ مباشرة في قاعدة البيانات ولا تحتاج Cloudflare. اترك الحقل فارغاً للإبقاء على القيمة الحالية، واكتب <b>__clear__</b> لحذفها.<br>الحالة: واتساب ${act.wa ? '✅ مفعّل' : '⛔ غير مفعّل'} · Google ${act.google ? '✅' : '⛔'} · تلجرام ${act.telegram ? '✅' : '⛔'}</p>
+    <form id="igf" class="fm">${IGF.map(([t, fs]) => `<h3 class="full" style="margin:10px 0 0">${t}</h3>${fs.map(([k, l, sec]) => `<label>${l} <small dir="ltr">${k}</small><input name="${k}" ${sec ? 'type="password" autocomplete="off"' : ''} dir="ltr" placeholder="${sec ? (v[k].set ? 'محفوظ ' + v[k].hint + ' — اتركه للإبقاء' : 'غير مضبوط') : ''}" value="${sec ? '' : esc(v[k].value || '')}"></label>`).join('')}`).join('')}
+    <button class="btn">حفظ</button></form>
+    <div class="cd"><h3>اختبار الربط</h3><form id="igt" class="fm"><input name="ph" dir="ltr" placeholder="رقم لإرسال رسالة اختبار 07XXXXXXXXX"><button class="btn">اختبار واتساب</button><button type="button" class="btn g" data-a="igtg">اختبار تلجرام</button></form></div>`;
+  }
+  H.igf = async (v) => { try { await J('/adm/integrations', { method: 'POST', body: JSON.stringify(v) }); toast('تم الحفظ'); loadIg(); } catch (e) { toast(e.message || 'تعذر الحفظ'); } };
+  H.igt = async (v) => { try { await J('/adm/integrations/test', { method: 'POST', body: JSON.stringify({ kind: 'wa', ph: v.ph.trim() }) }); toast('✅ أُرسلت رسالة الاختبار'); } catch (e) { toast(e.message || 'فشل الاختبار'); } };
+  A.igtg = async () => { try { await J('/adm/integrations/test', { method: 'POST', body: JSON.stringify({ kind: 'telegram' }) }); toast('✅ وصلت رسالة تلجرام'); } catch (e) { toast(e.message || 'فشل الاختبار'); } };
 
   /* ---------- الدفع والتوصيل ---------- */
   TB.pm = () => { const pm = (S.pm && S.pm.length ? S.pm : [{ id: 'cod', n: 'الدفع عند الاستلام', on: 1, d: '' }]);

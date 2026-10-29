@@ -106,7 +106,7 @@ const assert = require('assert');
   const man = await v3.evaluate(async () => (await fetch('/manifest.json')).json()); assert(man.name && man.icons.length >= 3 && man.display == 'standalone'); ok('manifest.json served with icons and theme');
   assert((await v3.request.get(base + '/sw.js')).ok() && (await v3.request.get(base + '/icons/icon-512.png')).ok()); ok('service worker + brand icons are served');
   /* admin tabs render */
-  for (const t of ['st', 'cp', 'bx', 'hr', 'wm', 'ch', 'pm']) { await adm.evaluate(t => A.tab(t), t); await adm.waitForTimeout(500); assert((await adm.$eval('#ab', e => e.textContent)).length > 20, t); }
+  for (const t of ['st', 'cp', 'bx', 'hr', 'wm', 'ch', 'pm', 'ig']) { await adm.evaluate(t => A.tab(t), t); await adm.waitForTimeout(500); assert((await adm.$eval('#ab', e => e.textContent)).length > 20, t); }
   ok('all new admin tabs render (stats, codes, boxes, hero, WhatsApp, support, payment)');
 
   for (const p of [adm, vis, cu, v3]) assert.deepStrictEqual(p.errs, [], 'page errors: ' + p.errs);

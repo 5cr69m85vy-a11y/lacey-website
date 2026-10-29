@@ -17,7 +17,7 @@ import { authRoutes, sessionCustomer } from './auth.js';
 import { processQueue } from './wa.js';
 import { quote, shopRoutes } from './shop.js';
 import { extraRoutes } from './extra.js';
-import { ensureSchema } from './lib.js';
+import { ensureSchema, withIntegrations } from './lib.js';
 
 const CANCEL_WINDOW_MS = 10 * 60 * 1000;
 
@@ -213,9 +213,10 @@ async function createOrder(env, b, sess) {
 
 /* ================================================================ */
 export default {
-  async fetch(request, env, ctx) {
-    if (!env.DB) return J({ error: 'D1 binding DB missing' }, 500);
-    if (request.method !== 'OPTIONS') await ensureSchema(env);
+  async fetch(request, rawEnv, ctx) {
+    if (!rawEnv.DB) return J({ error: 'D1 binding DB missing' }, 500);
+    if (request.method !== 'OPTIONS') await ensureSchema(rawEnv);
+    const env = request.method === 'OPTIONS' ? rawEnv : await withIntegrations(rawEnv);
     if (request.method === 'OPTIONS') return new Response(null, { headers: CORS });
 
     const url = new URL(request.url), p = url.pathname, M = request.method;
@@ -364,5 +365,5 @@ export default {
     return J({ error: 'not found' }, 404);
   },
 
-  async scheduled(event, env) { await ensureSchema(env); await sweep(env); await processQueue(env, 50); },
+  async scheduled(event, rawEnv) { await ensureSchema(rawEnv); const env = await withIntegrations(rawEnv); await sweep(env); await processQueue(env, 50); },
 };

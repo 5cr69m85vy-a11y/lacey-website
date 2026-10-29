@@ -35,3 +35,21 @@ export function ensureSchema(env) {
     }
   })().catch(e => { ready = null; throw e; });
 }
+
+/* مفاتيح الربط المحفوظة من لوحة التحكم (تتقدّم على أسرار Cloudflare) */
+export const IG_KEYS = ['WA_TOKEN', 'WA_PHONE_ID', 'WA_LANG', 'WA_TPL_OTP', 'WA_TPL_WELCOME', 'WA_TPL_ORDER', 'WA_TPL_PROMO', 'STORE_URL', 'GOOGLE_CLIENT_ID', 'BOT_TOKEN', 'CHAT_ID'];
+export const IG_SECRET = ['WA_TOKEN', 'BOT_TOKEN'];
+let igCache = null, igAt = 0, igDb = null;
+export const resetIg = () => { igCache = null; };
+export async function readIg(env) {
+  if (!igCache || igDb !== env.DB || Date.now() - igAt > 15000) {
+    const row = await env.DB.prepare("SELECT value FROM settings WHERE key='integrations'").first();
+    igCache = jp(row && row.value, {}) || {}; igAt = Date.now(); igDb = env.DB;
+  }
+  return igCache;
+}
+export async function withIntegrations(env) {
+  const v = await readIg(env), o = { ...env };
+  for (const k of IG_KEYS) if (v[k]) o[k] = v[k];
+  return o;
+}

@@ -74,5 +74,20 @@ const { makeDB } = require('./d1shim');
     await post('/settings', { data: { P: [], nm: 'Lacey Skincare', ac: '#123456' } }, H);
     const m = await get('/manifest.json', {}); assert.strictEqual(m.theme_color, '#123456'); assert(m.icons.length >= 3);
   });
+  await ok('integrations saved from the admin panel activate WhatsApp without Cloudflare secrets', async () => {
+    const env2 = { DB: makeDB(), ADMIN_PASS: 'secret', ASSETS: env.ASSETS };
+    const c2 = (path, init = {}) => W.fetch(new Request('https://x.dev' + path, init), env2, { waitUntil: p => p });
+    const H2 = { Authorization: 'Bearer ' + (await (await c2('/login', { method: 'POST', body: '{"pw":"secret"}' })).json()).token, 'content-type': 'application/json' };
+    assert.strictEqual((await c2('/auth/otp/send', { method: 'POST', body: '{"ph":"07705550077"}' })).status, 503);
+    assert.strictEqual((await c2('/adm/integrations')).status, 401);
+    assert.strictEqual((await c2('/adm/integrations', { method: 'POST', headers: H2, body: JSON.stringify({ WA_TOKEN: 'tok123456', WA_PHONE_ID: '999', STORE_URL: 'https://s.test' }) })).status, 200);
+    const g = await (await c2('/adm/integrations', { headers: H2 })).json();
+    assert.deepStrictEqual([g.WA_TOKEN.hint, g.WA_PHONE_ID.value, g._active.wa], ['••••3456', '999', true]); assert(!JSON.stringify(g).includes('tok123456'), 'token never returned');
+    wa.length = 0; assert.strictEqual((await c2('/auth/otp/send', { method: 'POST', body: '{"ph":"07705550077"}' })).status, 200); assert.strictEqual(wa.at(-1).to, '9647705550077');
+    await c2('/adm/integrations', { method: 'POST', headers: H2, body: JSON.stringify({ WA_PHONE_ID: '' }) });          // فارغ = إبقاء
+    assert.strictEqual((await (await c2('/adm/integrations', { headers: H2 })).json()).WA_PHONE_ID.value, '999');
+    assert.strictEqual((await c2('/adm/integrations/test', { method: 'POST', headers: H2, body: '{"ph":"07705550077"}' })).status, 200);
+    assert(!JSON.stringify(await (await c2('/catalog')).json()).includes('tok123456'), 'never in public catalog');
+  });
   console.log(n + ' extra tests passed');
 })().catch(e => { console.error('FAIL', e); process.exit(1); });
