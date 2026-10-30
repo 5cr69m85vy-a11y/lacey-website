@@ -175,3 +175,23 @@ section h2{display:flex;align-items:center;gap:16px;font-size:34px}section h2::a
 #stf .stg{display:grid;grid-template-columns:minmax(160px,1fr) 2fr;gap:12px;padding:14px;max-width:1100px;margin:0 auto}#stf .row{display:grid;grid-template-columns:1fr auto;padding:10px;border-bottom:1px solid #e3eeee;cursor:pointer;background:#fff}#stf .row.sel{background:var(--mist)}#stf #stm{background:#fff;border-radius:16px;padding:14px;min-height:300px}
 #stf .fm input{padding:10px 12px;border:1px solid #d9e3e3;border-radius:12px;font:inherit}#stf .msgs{max-height:55vh}
 @media(max-width:700px){#stf .stg{grid-template-columns:1fr}}
+
+/* أفتار الزبون */
+.avs{width:30px;height:30px;border-radius:50%;display:block}
+#accb.on{padding:0;overflow:hidden}#accb .avs{width:100%;height:100%}
+.avl{width:72px;height:72px;border-radius:50%;flex:none}
+.avp{margin:6px 0}.avprev{display:flex;align-items:center;gap:12px;margin-bottom:8px}
+.avg{display:grid;grid-template-columns:repeat(6,1fr);gap:8px}
+.av{padding:0;border:2px solid transparent;border-radius:50%;background:none;cursor:pointer;aspect-ratio:1;overflow:hidden;min-width:44px;min-height:44px}
+.av .avs{width:100%;height:100%}.av.on{border-color:var(--b,#c2185b);box-shadow:0 0 0 2px #fff inset}.av:focus-visible{outline:2px solid var(--b,#c2185b);outline-offset:2px}
+
+/* تنقل لوحة التحكم المجمّع */
+.ad nav.gn{flex-wrap:nowrap;overflow-x:auto;gap:6px;margin:14px 0 6px;padding-bottom:4px;scrollbar-width:thin}
+.ad nav.gn button{white-space:nowrap;position:relative;min-height:44px;font-weight:600}
+.ad nav.sn{flex-wrap:wrap;margin:0 0 14px;padding:6px;background:var(--mist);border-radius:16px}
+.ad nav.sn button{background:transparent;padding:8px 14px;min-height:40px}.ad nav.sn .on{background:var(--ink);color:#fff}
+.bd{display:inline-block;min-width:20px;padding:1px 6px;margin-inline-start:6px;border-radius:99px;background:#c62828;color:#fff;font:700 11px/18px system-ui;text-align:center;font-style:normal}.bd[hidden]{display:none}
+.dbg{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.dbc{display:flex;flex-direction:column;gap:6px;align-items:flex-start;padding:18px;border-radius:18px;border:1px solid var(--mist);background:#fff;cursor:pointer;text-align:start;min-height:88px}
+.dbc b{font-size:28px}.dbc small{color:#6b5e57}
+@media(min-width:900px){.ad nav.gn{flex-wrap:wrap;overflow:visible}}

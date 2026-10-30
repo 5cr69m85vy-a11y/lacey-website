@@ -6,7 +6,7 @@ async function start(port, extraEnv = {}) {
   const W = (await import('../worker/worker.js')).default;
   const root = path.join(__dirname, '..');
   const env = {
-    DB: makeDB(), ADMIN_PASS: 'secret', ...extraEnv,
+    DB: makeDB(), RL_SCALE: '1000', ADMIN_PASS: 'secret', ...extraEnv,
     ASSETS: { fetch: async req => {
       let p = new URL(req.url).pathname; if (p === '/') p = '/index.html';
       const f = path.join(root, p);

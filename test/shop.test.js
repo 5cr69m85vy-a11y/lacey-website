@@ -3,9 +3,10 @@ const { makeDB } = require('./d1shim');
 (async () => {
   const W = (await import('../worker/worker.js')).default;
   let n = 0; const ok = async (name, fn) => { await fn(); n++; console.log('✓', name); };
-  const env = { DB: makeDB(), ADMIN_PASS: 'secret', ASSETS: { fetch: async () => new Response('a') } };
+  const env = { DB: makeDB(), RL_SCALE: '1000', ADMIN_PASS: 'secret', ASSETS: { fetch: async () => new Response('a') } };
   const call = (path, init = {}) => W.fetch(new Request('https://x.dev' + path, init), env, { waitUntil: p => p });
-  const post = (path, body, h = {}) => call(path, { method: 'POST', headers: { 'content-type': 'application/json', ...h }, body: JSON.stringify(body) });
+  const authFor = require('./sess');
+  const post = async (path, body, h = {}) => { if (path === '/order' && !h.Authorization && body && /^07\d{9}$/.test(body.ph || '')) h = { ...h, ...(await authFor(env, body.ph)) }; return call(path, { method: 'POST', headers: { 'content-type': 'application/json', ...h }, body: JSON.stringify(body) }); };
   const H = { Authorization: 'Bearer ' + (await (await post('/login', { pw: 'secret' })).json()).token };
   const P = [{ c: 'A1', n: 'Cleanser', p: 10000 }, { c: 'B2', n: 'Serum', p: 30000 }];
   await post('/settings', { data: { P, sf: 5000, pm: [{ id: 'cod', n: 'COD', on: 1 }, { id: 'zain', n: 'Zain', on: 1 }, { id: 'off', n: 'Off', on: 0 }] } }, H);

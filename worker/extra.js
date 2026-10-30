@@ -4,6 +4,7 @@ import { waSend, waOn } from './wa.js';
 import { botReply, BOT, MAIN } from './bot.js';
 import { pbkdf2, eq } from './auth.js';
 import { processQueue } from './wa.js';
+import { limit, audit, ipOf } from './guard.js';
 
 const TZ = 3 * 3600;                                    // بغداد UTC+3
 const MEDIA_TYPES = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif', 'video/mp4': 'mp4', 'video/webm': 'webm' };
@@ -28,6 +29,23 @@ export async function extraRoutes(c) {
   const adm = () => authed ? null : J({ error: 'unauthorized' }, 401);
 
   /* ---------- الربط والمفاتيح (تُحفظ في القاعدة بدل أسرار Cloudflare) ---------- */
+  if (p === '/adm/audit' && M === 'GET') {
+    const a = adm(); if (a) return a;
+    const rows = (await env.DB.prepare('SELECT id,at,actor,action,entity,before,after,ip FROM audit_log ORDER BY id DESC LIMIT 200').all()).results;
+    return J({ items: rows });
+  }
+  if (p === '/adm/dashboard' && M === 'GET') {
+    const a = adm(); if (a) return a;
+    const day = Math.floor((now() + TZ * 1000) / 864e5) * 864e5 - TZ * 1000;
+    const q = async (sql, ...b) => (await env.DB.prepare(sql).bind(...b).first()) || {};
+    const [nw, od, sup, sales] = await Promise.all([
+      q('SELECT COUNT(*) n FROM orders WHERE status=1'),
+      q('SELECT COUNT(*) n FROM orders WHERE status IN (2,3) AND created_at<?', now() - 2 * 864e5),
+      q("SELECT COUNT(*) n FROM chats WHERE status='open' AND mode='human' AND assigned_to IS NULL"),
+      q('SELECT COUNT(*) n, COALESCE(SUM(total),0) s FROM orders WHERE status<>0 AND created_at>=?', day),
+    ]);
+    return J({ new_orders: nw.n || 0, overdue: od.n || 0, unread_support: sup.n || 0, today_orders: sales.n || 0, today_sales: sales.s || 0 });
+  }
   if (p === '/adm/integrations' && M === 'GET') {
     const a = adm(); if (a) return a;
     const v = await readIg(env), out = {};
@@ -38,6 +56,7 @@ export async function extraRoutes(c) {
   if (p === '/adm/integrations' && M === 'POST') {
     const a = adm(); if (a) return a;
     const b = await body(), cur = { ...(await readIg(env)) };
+    await audit(env, request, 'admin', 'integrations_save', '', null, Object.keys(b).filter(k => IG_KEYS.includes(k) && String(b[k] ?? '').trim()));   // أسماء الحقول فقط، لا قيم
     for (const k of IG_KEYS) {
       if (!(k in b)) continue;
       const val = String(b[k] ?? "").trim().slice(0, k === "AI_PROMPT" ? 1500 : 600);
@@ -119,6 +138,7 @@ export async function extraRoutes(c) {
   const staffName = async ch => ch.assigned_to ? ((await env.DB.prepare('SELECT name FROM staff WHERE id=?').bind(ch.assigned_to).first()) || {}).name || '' : '';
   const MAINCH = MAIN;
   if (p === '/chat/send' && M === 'POST') {
+    { const lim = await limit(env, request, 'chat-send', 40, 10 * 60e3); if (lim) return lim; }
     const b = await body(); const quick = ({ track: 'where', edit: 'modify', cancel: 'cancel', human: 'human' })[String(b.intent || '')] || String(b.quick || '').slice(0, 60);
     const label = quick ? ((MAINCH.find(x => x.k === quick) || {}).t || (quick.startsWith('cancel_yes') ? 'نعم، ألغِ الطلب' : quick === 'no' ? 'لا' : quick)) : '';
     const text = String(b.text || label || '').trim().slice(0, 1000);
@@ -143,6 +163,7 @@ export async function extraRoutes(c) {
     return J({ ok: true, token: ch._tk || b.token || '', chat: ch.id });
   }
   if (p === '/chat/poll' && M === 'GET') {
+    { const lim = await limit(env, request, 'chat-poll', 400, 10 * 60e3); if (lim) return lim; }
     const ch = await guestChat(env, url.searchParams.get('token') || '', false, sess);
     if (!ch) return J({ chat: null, messages: [] });
     const rated = await env.DB.prepare('SELECT 1 x FROM reviews WHERE chat_id=?').bind(ch.id).first();
@@ -169,11 +190,13 @@ export async function extraRoutes(c) {
   /* ---------- الموظفون: دخول + إدارة ---------- */
   if (p === '/staff/login' && M === 'POST') {
     const b = await body();
+    { const lim = (await limit(env, request, 'staff-login', 20, 15 * 60e3)) || (await limit(env, request, 'staff-login-u', 8, 15 * 60e3, String(b.username || b.u || '').toLowerCase().slice(0, 40))); if (lim) return lim; }
     const row = await env.DB.prepare('SELECT * FROM staff WHERE username=? AND active=1').bind(String(b.username || b.u || '').trim().toLowerCase()).first();
     const h = await pbkdf2(String(b.pw || ''), row ? row.pw_salt : '00'.repeat(16));
     if (!row || !eq(h, row.pw_hash)) return J({ error: 'اسم المستخدم أو كلمة السر غير صحيحة' }, 401);
     const tok = 's.' + randHex(32);
     await env.DB.prepare('INSERT INTO staff_sessions(token_hash,staff_id,expires_at) VALUES(?,?,?)').bind(await sha256(tok), row.id, now() + 30 * 864e5).run();
+    await audit(env, request, 'staff:' + row.username, 'staff_login');
     return J({ token: tok, name: row.name });
   }
   const bearer = (request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
@@ -208,6 +231,7 @@ export async function extraRoutes(c) {
   }
   if (p === '/adm/staff' && M === 'DELETE') {
     const a = adm(); if (a) return a;
+    await audit(env, request, 'admin', 'staff_delete', String(url.searchParams.get('id')));
     const id = +url.searchParams.get('id'); await env.DB.batch([env.DB.prepare('DELETE FROM staff_sessions WHERE staff_id=?').bind(id), env.DB.prepare('UPDATE chats SET assigned_to=NULL WHERE assigned_to=?').bind(id), env.DB.prepare('DELETE FROM staff WHERE id=?').bind(id)]); return J({ ok: true });
   }
 
@@ -282,7 +306,7 @@ export async function extraRoutes(c) {
   /* ---------- الحملات التسويقية عبر واتساب ---------- */
   if (p === '/adm/campaign' && M === 'POST') {
     const a = adm(); if (a) return a;
-    const b = await body(); const text = String(b.body || '').trim().slice(0, 900);
+    const b = await body(); if (!b.dry) await audit(env, request, 'admin', 'campaign_send', '', null, { aud: (b.audience || {}).type }); const text = String(b.body || '').trim().slice(0, 900);
     if (!text) return J({ error: 'اكتب نص الرسالة' }, 400);
     const au = b.audience || {}; let rows = [];
     if (au.type === 'phones') {

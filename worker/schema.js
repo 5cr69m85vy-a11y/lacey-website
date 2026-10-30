@@ -19,5 +19,9 @@ export const MIGRATIONS = [
  [
   "0005_staff_bot.sql",
   "ALTER TABLE chat_messages ADD COLUMN author TEXT NOT NULL DEFAULT '';\nALTER TABLE chat_messages ADD COLUMN meta TEXT NOT NULL DEFAULT '';\nALTER TABLE chats ADD COLUMN mode TEXT NOT NULL DEFAULT 'bot';\nALTER TABLE chats ADD COLUMN assigned_to INTEGER;\nALTER TABLE chats ADD COLUMN topic TEXT NOT NULL DEFAULT '';\nALTER TABLE reviews ADD COLUMN staff_id INTEGER;\nCREATE TABLE IF NOT EXISTS staff (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, username TEXT NOT NULL UNIQUE, pw_hash TEXT NOT NULL, pw_salt TEXT NOT NULL, active INTEGER NOT NULL DEFAULT 1, created_at INTEGER NOT NULL);\nCREATE TABLE IF NOT EXISTS staff_sessions (token_hash TEXT PRIMARY KEY, staff_id INTEGER NOT NULL, expires_at INTEGER NOT NULL);\n"
+ ],
+ [
+  "0006_security_audit.sql",
+  "-- 0006: حدود المحاولات، سجل التدقيق، أفتار الزبون\nCREATE TABLE IF NOT EXISTS rate_limits (k TEXT PRIMARY KEY, n INTEGER NOT NULL DEFAULT 0, reset_at INTEGER NOT NULL);\nCREATE INDEX IF NOT EXISTS idx_rate_reset ON rate_limits(reset_at);\nCREATE TABLE IF NOT EXISTS audit_log (id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, actor TEXT NOT NULL, action TEXT NOT NULL, entity TEXT NOT NULL DEFAULT '', before TEXT, after TEXT, ip TEXT NOT NULL DEFAULT '');\nCREATE INDEX IF NOT EXISTS idx_audit_at ON audit_log(at);\nALTER TABLE customers ADD COLUMN avatar TEXT NOT NULL DEFAULT '';\nCREATE INDEX IF NOT EXISTS idx_orders_customer ON orders(customer_id, created_at);\nCREATE INDEX IF NOT EXISTS idx_sessions_exp ON sessions(expires_at);\n"
  ]
 ];

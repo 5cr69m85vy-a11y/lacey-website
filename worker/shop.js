@@ -1,4 +1,5 @@
 /* shop.js — تسعير السلة على الخادم: منتجات + بوكسات + أكواد خصم متعددة + توصيل مجاني */
+import { audit, limit } from './guard.js';
 import { J, now, jp, cfgOf } from './lib.js';
 
 export async function priceLines(env, raw) {
@@ -60,8 +61,10 @@ export async function quote(env, b) {
 
 /* مسارات: /quote (عام) و /codes (أدمن) */
 export async function shopRoutes(c, authed) {
+  const request = c.request;
   const { env, p, M, body, url } = c;
   if (p === '/quote' && M === 'POST') {
+    if (request) { const lim = await limit(c.env, request, 'quote', 120, 10 * 60e3); if (lim) return lim; }
     const b = await body(); const q = await quote(env, b);
     if (q.error) return J({ error: q.error }, 400);
     return J({ subtotal: q.subtotal, applied: q.applied, rejected: q.rejected, discount: q.discount, shipping: q.shipping, freeShip: q.freeShip, total: q.total });
@@ -72,6 +75,7 @@ export async function shopRoutes(c, authed) {
       .map(d => ({ code: d.code, kind: d.kind, value: d.value, min: d.min_cart, prods: d.product_codes ? jp(d.product_codes, []) : [], exp: d.expires_at, max: d.max_uses, used: d.used, active: !!d.active, stack: !!d.stackable, ph: d.phone || '', t: d.created_at })) });
     if (M === 'POST') {
       const b = await body(); const code = String(b.code || '').trim().toUpperCase();
+      await audit(env, request, 'admin', 'code_save', code, null, { kind: b.kind, value: b.value });
       if (!/^[A-Z0-9_-]{3,24}$/.test(code)) return J({ error: 'الكود: 3–24 حرفاً إنجليزياً/أرقاماً' }, 400);
       if (!['percent', 'amount', 'free_shipping'].includes(b.kind)) return J({ error: 'نوع غير صحيح' }, 400);
       const value = Math.max(0, Math.round(+b.value || 0));
@@ -82,7 +86,7 @@ export async function shopRoutes(c, authed) {
         .bind(code, b.kind, value, Math.max(0, Math.round(+b.min || 0)), prods, b.exp ? +b.exp : null, b.max ? +b.max : null, b.active === false ? 0 : 1, b.stack ? 1 : 0, b.ph || null, now()).run();
       return J({ ok: true, code });
     }
-    if (M === 'DELETE') { await env.DB.prepare('DELETE FROM discount_codes WHERE code=?').bind((url.searchParams.get('code') || '').toUpperCase()).run(); return J({ ok: true }); }
+    if (M === 'DELETE') { await audit(env, request, 'admin', 'code_delete', url.searchParams.get('code') || ''); await env.DB.prepare('DELETE FROM discount_codes WHERE code=?').bind((url.searchParams.get('code') || '').toUpperCase()).run(); return J({ ok: true }); }
   }
   return null;
 }

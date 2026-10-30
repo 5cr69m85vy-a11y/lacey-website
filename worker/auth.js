@@ -1,6 +1,9 @@
 /* auth.js — حسابات الزبائن: هاتف (OTP واتساب) · بريد+كلمة سر · Google */
 import { J, now, jp, rnd, sha256, hex, randHex } from './lib.js';
 import { waOn, processQueue } from './wa.js';
+import { limit, hit, tooMany, audit } from './guard.js';
+
+export const AVATAR = /^av(?:[1-9]|1\d|2[0-4])$/;   // 24 شخصية جاهزة
 
 const SESSION_MS = 90 * 864e5;
 const OTP_MS = 10 * 60 * 1000;
@@ -27,7 +30,7 @@ export async function sessionCustomer(env, request) {
   if (row) env.DB.prepare('UPDATE customers SET last_seen_at=? WHERE id=?').bind(now(), row.id).run().catch(() => {});
   return row || null;
 }
-const pub = c => ({ id: c.id, name: c.name, ph: c.phone || '', email: c.email || '', city: c.city, area: c.area, lm: c.landmark, wa: !!c.wa_verified, pw: !!c.pw_hash, google: !!c.google_sub, orders: c.orders_count });
+const pub = c => ({ id: c.id, name: c.name, ph: c.phone || '', email: c.email || '', city: c.city, area: c.area, lm: c.landmark, wa: !!c.wa_verified, pw: !!c.pw_hash, google: !!c.google_sub, orders: c.orders_count, avatar: c.avatar || '' });
 
 async function welcomeOnce(env, c, origin, ctx) {
   if (c.welcomed || !c.phone) return;
@@ -73,6 +76,7 @@ export async function authRoutes(c) {
   if (p === '/auth/otp/send' && M === 'POST') {
     const { ph } = await body();
     if (!PHONE.test(String(ph || ''))) return J({ error: 'رقم الهاتف غير صحيح' }, 400);
+    { const lim = await limit(env, request, 'otp-send', 10, 3600e3); if (lim) return lim; }
     if (!waOn(env) && env.WA_DEV !== '1') return J({ error: 'واتساب غير مُفعّل بعد' }, 503);
     const recent = await env.DB.prepare('SELECT COUNT(*) n FROM otp_codes WHERE phone=? AND created_at>?').bind(ph, now() - OTP_MS).first();
     if (recent.n >= 3) return J({ error: 'محاولات كثيرة، انتظر بضع دقائق' }, 429);
@@ -88,6 +92,7 @@ export async function authRoutes(c) {
   if (p === '/auth/otp/verify' && M === 'POST') {
     const { ph, code, name } = await body();
     if (!PHONE.test(String(ph || '')) || !/^\d{6}$/.test(String(code || ''))) return J({ error: 'رمز غير صحيح' }, 400);
+    { const lim = await limit(env, request, 'otp-verify', 30, 15 * 60e3); if (lim) return lim; }
     const o = await env.DB.prepare('SELECT * FROM otp_codes WHERE phone=? AND expires_at>? ORDER BY id DESC LIMIT 1').bind(ph, now()).first();
     if (!o || o.attempts >= 5) return J({ error: 'انتهت صلاحية الرمز، اطلب رمزاً جديداً' }, 410);
     if (!eq(o.code_hash, await sha256(ph + ':' + code))) {
@@ -111,18 +116,21 @@ export async function authRoutes(c) {
 
   /* --- بريد + كلمة سر --- */
   if (p === '/auth/register' && M === 'POST') {
+    { const lim = await limit(env, request, 'register', 10, 3600e3); if (lim) return lim; }
     const b = await body();
     const email = String(b.email || '').trim().toLowerCase(), name = String(b.name || '').trim().slice(0, 80), pw = String(b.pw || '');
     if (!EMAIL.test(email)) return J({ error: 'البريد الإلكتروني غير صحيح' }, 400);
-    if (pw.length < 8) return J({ error: 'كلمة السر 8 أحرف على الأقل' }, 400);
+    if (pw.length < 8 || pw.length > 128) return J({ error: 'كلمة السر بين 8 و128 حرفاً' }, 400);
+    if (/^(\d+|(.)\2+|password|12345678|qwertyui)$/i.test(pw)) return J({ error: 'كلمة السر ضعيفة جداً' }, 400);
     if (name.length < 2) return J({ error: 'الاسم مطلوب' }, 400);
     if (await env.DB.prepare('SELECT 1 x FROM customers WHERE email=?').bind(email).first()) return J({ error: 'هذا البريد مسجّل مسبقاً' }, 409);
     const salt = randHex(16), h = await pbkdf2(pw, salt);
-    const id = (await env.DB.prepare('INSERT INTO customers(email,name,pw_hash,pw_salt,created_at,last_seen_at) VALUES(?,?,?,?,?,?) RETURNING id').bind(email, name, h, salt, now(), now()).first()).id;
+    const id = (await env.DB.prepare('INSERT INTO customers(email,name,pw_hash,pw_salt,avatar,created_at,last_seen_at) VALUES(?,?,?,?,?,?,?) RETURNING id').bind(email, name, h, salt, AVATAR.test(String(b.avatar || '')) ? b.avatar : '', now(), now()).first()).id;
     return done(id);
   }
   if (p === '/auth/login' && M === 'POST') {
     const b = await body();
+    { const lim = (await limit(env, request, 'login', 20, 15 * 60e3)) || (await limit(env, request, 'login-e', 8, 15 * 60e3, String(b.email || '').toLowerCase().slice(0, 100))); if (lim) return lim; }
     const row = await env.DB.prepare('SELECT * FROM customers WHERE email=?').bind(String(b.email || '').trim().toLowerCase()).first();
     const salt = row && row.pw_salt || '00'.repeat(16);
     const h = await pbkdf2(String(b.pw || ''), salt);
@@ -133,6 +141,7 @@ export async function authRoutes(c) {
   /* --- Google --- */
   if (p === '/auth/google' && M === 'POST') {
     if (!env.GOOGLE_CLIENT_ID) return J({ error: 'Google غير مُفعّل بعد' }, 503);
+    { const lim = await limit(env, request, 'google', 20, 15 * 60e3); if (lim) return lim; }
     const { credential } = await body();
     const r = await fetch('https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(String(credential || '')));
     const g = r.ok ? await r.json() : null;
@@ -149,6 +158,10 @@ export async function authRoutes(c) {
     if (t.startsWith('c.')) await env.DB.prepare('DELETE FROM sessions WHERE token_hash=?').bind(await sha256(t)).run();
     return J({ ok: true });
   }
+  if (p === '/auth/logout-all' && M === 'POST') {
+    const me = await sessionCustomer(env, request); if (!me) return J({ error: 'unauthorized' }, 401);
+    await env.DB.prepare('DELETE FROM sessions WHERE customer_id=?').bind(me.id).run(); return J({ ok: true });
+  }
   if (p === '/auth/config' && M === 'GET') return J({ google: env.GOOGLE_CLIENT_ID || '', wa: waOn(env) || env.WA_DEV === '1' });
 
   /* --- الحساب --- */
@@ -158,8 +171,9 @@ export async function authRoutes(c) {
     if (p === '/me' && M === 'GET') return J({ customer: pub(me) });
     if (p === '/me' && M === 'POST') {
       const b = await body();
-      await env.DB.prepare('UPDATE customers SET name=?,city=?,area=?,landmark=? WHERE id=?')
-        .bind(String(b.name ?? me.name).slice(0, 80), String(b.city ?? me.city).slice(0, 80), String(b.area ?? me.area).slice(0, 120), String(b.lm ?? me.landmark).slice(0, 160), me.id).run();
+      if (b.avatar !== undefined && b.avatar !== '' && !AVATAR.test(String(b.avatar))) return J({ error: 'شخصية غير صالحة' }, 400);
+      await env.DB.prepare('UPDATE customers SET name=?,city=?,area=?,landmark=?,avatar=? WHERE id=?')
+        .bind(String(b.name ?? me.name).trim().slice(0, 80), String(b.city ?? me.city).slice(0, 80), String(b.area ?? me.area).slice(0, 120), String(b.lm ?? me.landmark).slice(0, 160), b.avatar === undefined ? (me.avatar || '') : String(b.avatar), me.id).run();
       return J({ ok: true });
     }
     if (p === '/me/orders' && M === 'GET') {

@@ -18,6 +18,7 @@ import { processQueue } from './wa.js';
 import { quote, shopRoutes } from './shop.js';
 import { extraRoutes } from './extra.js';
 import { ensureSchema, withIntegrations } from './lib.js';
+import { limit, hit, tooMany, audit, gc, ipOf } from './guard.js';
 
 const CANCEL_WINDOW_MS = 10 * 60 * 1000;
 
@@ -27,7 +28,7 @@ const CORS = {
   'Access-Control-Allow-Methods': 'GET,POST,DELETE,OPTIONS',
 };
 const J = (d, s = 200, h = {}) => new Response(JSON.stringify(d), {
-  status: s, headers: { ...CORS, 'Content-Type': 'application/json; charset=utf-8', ...h },
+  status: s, headers: { ...CORS, 'Content-Type': 'application/json; charset=utf-8', 'X-Content-Type-Options': 'nosniff', ...h },
 });
 
 /* حقول الإعدادات التي لا تظهر للزوار أبداً */
@@ -48,6 +49,8 @@ async function adminToken(env) {
   const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode('lacey-admin'));
   return [...new Uint8Array(sig)].map(b => b.toString(16).padStart(2, '0')).join('');
 }
+
+const safeEq = (a, b) => { a = String(a); b = String(b); let d = a.length ^ b.length; for (let i = 0; i < Math.max(a.length, b.length); i++) d |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0); return d === 0; };
 
 async function tgNotify(env, text) {
   if (!env.BOT_TOKEN || !env.CHAT_ID) return;
@@ -175,25 +178,14 @@ async function createOrder(env, b, sess) {
   const seq = await env.DB.prepare("UPDATE counters SET value=value+1 WHERE name='order_seq' RETURNING value").first();
   const id = seq.value, t = now();
 
-  /* العميل: إنشاء/تحديث */
-  let cust = await env.DB.prepare('SELECT id,orders_count FROM customers WHERE phone=?').bind(phone).first();
-  if (!cust && sess && !sess.phone) {            // زبون مسجّل بالبريد/Google: نربط رقمه بحسابه
-    await env.DB.prepare('UPDATE customers SET phone=? WHERE id=?').bind(phone, sess.id).run();
-    cust = { id: sess.id, orders_count: sess.orders_count };
-  }
-  const firstOrder = !cust || cust.orders_count === 0;
-  let customerId = cust ? cust.id : null, welcome = '';
-  if (cust) {
-    await env.DB.prepare('UPDATE customers SET name=?,city=?,area=?,landmark=?,orders_count=orders_count+1,spent=spent+?,last_order_at=?,last_seen_at=? WHERE id=?')
-      .bind(name, city, area, lm, total, t, t, cust.id).run();
-    if (firstOrder) { welcome = 'WEL' + rnd(5); await env.DB.prepare("INSERT INTO discount_codes(code,kind,value,phone,auto,created_at) VALUES(?,'percent',10,?,1,?)").bind(welcome, phone, t).run(); }
-  } else {
-    const ins = await env.DB.prepare('INSERT INTO customers(phone,name,city,area,landmark,orders_count,spent,created_at,last_seen_at,first_order_at,last_order_at) VALUES(?,?,?,?,?,1,?,?,?,?,?) RETURNING id')
-      .bind(phone, name, city, area, lm, total, t, t, t, t).first();
-    customerId = ins.id;
-    welcome = 'WEL' + rnd(5);
-    await env.DB.prepare("INSERT INTO discount_codes(code,kind,value,phone,auto,created_at) VALUES(?,'percent',10,?,1,?)").bind(welcome, phone, t).run();
-  }
+  /* العميل = صاحب الجلسة دائماً (لا طلب بلا حساب). الهاتف يُربط بالحساب إن كان حراً */
+  const other = await env.DB.prepare('SELECT * FROM customers WHERE phone=? AND id<>?').bind(phone, sess.id).first();
+  if (other) return J({ error: 'هذا الرقم مرتبط بحساب آخر. سجّل الدخول عبر الهاتف (واتساب) بهذا الرقم' }, 409);
+  const firstOrder = !sess.orders_count;
+  const customerId = sess.id; let welcome = '';
+  await env.DB.prepare('UPDATE customers SET phone=COALESCE(NULLIF(phone,\'\'),?),name=?,city=?,area=?,landmark=?,orders_count=orders_count+1,spent=spent+?,last_order_at=?,last_seen_at=?,first_order_at=COALESCE(first_order_at,?) WHERE id=?')
+    .bind(phone, name, city, area, lm, total, t, t, t, sess.id).run();
+  if (firstOrder) { welcome = 'WEL' + rnd(5); await env.DB.prepare("INSERT INTO discount_codes(code,kind,value,phone,auto,created_at) VALUES(?,'percent',10,?,1,?)").bind(welcome, phone, t).run(); }
 
   await env.DB.batch([
     env.DB.prepare(`INSERT INTO orders(code,id,customer_id,name,phone,city,area,landmark,items,subtotal,discount,total,discount_codes,pay_method,status,created_at)
@@ -212,8 +204,28 @@ async function createOrder(env, b, sess) {
 }
 
 /* ================================================================ */
+/* CORS مقيّد: يُسمح فقط لنفس الأصل أو STORE_URL */
+function corsFilter(request, env, res) {
+  const o = request.headers.get('Origin');
+  if (!o) return res;
+  let ok = false;
+  try { ok = o === new URL(request.url).origin || (env.STORE_URL && o === new URL(env.STORE_URL).origin); } catch (e) {}
+  const h = new Headers(res.headers);
+  if (ok) { h.set('Access-Control-Allow-Origin', o); h.append('Vary', 'Origin'); } else h.delete('Access-Control-Allow-Origin');
+  return new Response(res.body, { status: res.status, statusText: res.statusText, headers: h });
+}
+
 export default {
   async fetch(request, rawEnv, ctx) {
+    const res = await handle(request, rawEnv, ctx);
+    let env = rawEnv; try { env = request.method === 'OPTIONS' ? rawEnv : await withIntegrations(rawEnv); } catch (e) {}
+    return corsFilter(request, env, res);
+  },
+  async scheduled(event, rawEnv) { await ensureSchema(rawEnv); const env = await withIntegrations(rawEnv); await sweep(env); await processQueue(env, 50); if (new Date().getMinutes() % 30 === 0) await gc(env); },
+};
+
+async function handle(request, rawEnv, ctx) {
+  {
     if (!rawEnv.DB) return J({ error: 'D1 binding DB missing' }, 500);
     if (request.method !== 'OPTIONS') await ensureSchema(rawEnv);
     const env = request.method === 'OPTIONS' ? rawEnv : await withIntegrations(rawEnv);
@@ -222,20 +234,23 @@ export default {
     const url = new URL(request.url), p = url.pathname, M = request.method;
     const token = await adminToken(env);
     const bearer = (request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
-    const authed = (!!env.ADMIN_KEY && request.headers.get('x-admin') === env.ADMIN_KEY) || (token !== '' && bearer === token);
+    const authed = (!!env.ADMIN_KEY && request.headers.get('x-admin') === env.ADMIN_KEY) || (token !== '' && safeEq(bearer, token));
     const needAuth = () => authed ? null : J({ error: 'unauthorized' }, 401);
+    const audited = (action, entity, before, after) => audit(env, request, 'admin', action, entity, before, after);
     const body = async () => { try { return await request.json(); } catch (e) { return {}; } };
 
     try {
       { const er = await extraRoutes({ env, request, url, p, M, body, authed, ctx, tg: t => tgNotify(env, t), sess: (p.startsWith('/chat/') ? await sessionCustomer(env, request) : null) }); if (er) return er; }
-      { const sr = await shopRoutes({ env, p, M, body, url }, authed); if (sr) return sr; }
+      { const sr = await shopRoutes({ env, request, p, M, body, url }, authed); if (sr) return sr; }
       { const ar = await authRoutes({ env, request, url, p, M, body, ctx }); if (ar) return ar; }
 
       /* ---------- دخول الأدمن ---------- */
       if (p === '/login' && M === 'POST') {
         if (!env.ADMIN_PASS) return J({ error: 'ADMIN_PASS is not set' }, 503);
+        const lim = await limit(env, request, 'adm-login', 8, 15 * 60e3); if (lim) return lim;
         const { pw } = await body();
-        if (pw && String(pw).trim() === String(env.ADMIN_PASS).trim()) return J({ token });
+        if (pw && safeEq(String(pw).trim(), String(env.ADMIN_PASS).trim())) { await audit(env, request, 'admin', 'login'); return J({ token }); }
+        await audit(env, request, 'unknown', 'login_failed');
         return J({ error: 'wrong password' }, 401);
       }
 
@@ -248,13 +263,14 @@ export default {
         const a = needAuth(); if (a) return a;
         const { data } = await body();
         if (!data || typeof data !== 'object') return J({ error: 'no data' }, 400);
-        try { return J({ ok: true, ...(await saveCatalog(env, data)) }); }
+        try { const r = await saveCatalog(env, data); await audited('settings_save', 'catalog', null, { products: (data.P || []).length }); return J({ ok: true, ...r }); }
         catch (e) { return J({ error: e.message }, e.status || 500); }
       }
 
       /* ---------- كود خصم (تحقق عام) ---------- */
       if (p === '/code' && M === 'GET') {
-        const c = (url.searchParams.get('c') || '').trim().toUpperCase();
+        const lim = await limit(env, request, 'code', 30, 10 * 60e3); if (lim) return lim;
+        const c = (url.searchParams.get('c') || '').trim().toUpperCase().slice(0, 40);
         const r = await env.DB.prepare("SELECT code,value,phone,expires_at,max_uses,used FROM discount_codes WHERE code=? AND active=1 AND kind='percent'").bind(c).first();
         if (!r || (r.expires_at && r.expires_at < now()) || (r.max_uses && r.used >= r.max_uses)) return J({ error: 'invalid' }, 404);
         return J({ c: r.code, v: r.value });
@@ -273,15 +289,21 @@ export default {
 
       /* ---------- الطلبات ---------- */
       if (p === '/order' && M === 'POST') {
-        const r = await createOrder(env, await body(), await sessionCustomer(env, request));
+        const sess = await sessionCustomer(env, request);
+        if (!sess) return J({ error: 'سجّل الدخول أو أنشئ حساباً لإتمام الطلب', login: true }, 401);
+        if (!(await hit(env, 'order:' + sess.id, Number(env.ORDER_RL) || 8, 3600e3))) return tooMany('طلبات كثيرة خلال وقت قصير');
+        const r = await createOrder(env, await body(), sess);
         if (ctx && ctx.waitUntil) ctx.waitUntil(processQueue(env)); else await processQueue(env);
         return r;
       }
 
       if (p === '/order/cancel' && M === 'POST') {
+        const lim = await limit(env, request, 'cancel', 20, 10 * 60e3); if (lim) return lim;
         const { code, ph } = await body();
-        const o = await env.DB.prepare('SELECT * FROM orders WHERE code=?').bind(String(code || '').toUpperCase()).first();
-        if (!o || o.phone !== String(ph || '')) return J({ error: 'not found' }, 404);
+        const o = await env.DB.prepare('SELECT * FROM orders WHERE code=?').bind(String(code || '').toUpperCase().slice(0, 12)).first();
+        const sc = await sessionCustomer(env, request);
+        const mine = o && sc && o.customer_id === sc.id;
+        if (!o || !(mine || (o.phone && o.phone === String(ph || '')))) return J({ error: 'not found' }, 404);
         if (o.status === 0) return J({ ok: true, s: 0 });
         if (o.status !== 1 || now() - o.created_at >= CANCEL_WINDOW_MS) return J({ error: 'انتهت مهلة الإلغاء (10 دقائق)' }, 409);
         await setStatus(env, o, 0, 'customer', 'ألغاه الزبون');
@@ -290,6 +312,7 @@ export default {
       }
 
       if (p === '/track' && M === 'GET') {
+        const lim = await limit(env, request, 'track', 300, 10 * 60e3); if (lim) return lim;
         await sweep(env);
         const code = (url.searchParams.get('code') || '').toUpperCase();
         const o = await env.DB.prepare('SELECT * FROM orders WHERE code=?').bind(code).first();
@@ -317,6 +340,7 @@ export default {
         const o = await env.DB.prepare('SELECT * FROM orders WHERE code=?').bind(String(code || '').toUpperCase()).first();
         if (!o) return J({ error: 'not found' }, 404);
         await setStatus(env, o, n, 'admin');
+        await audited('order_status', o.code, o.status, n);
         if (ctx && ctx.waitUntil) ctx.waitUntil(processQueue(env)); else await processQueue(env);
         return J({ ok: true });
       }
@@ -340,6 +364,7 @@ export default {
       if (p === '/customer' && M === 'DELETE') {
         const a = needAuth(); if (a) return a;
         await env.DB.prepare('DELETE FROM customers WHERE phone=?').bind(url.searchParams.get('ph') || '').run();
+        await audited('customer_delete', url.searchParams.get('ph') || '');
         return J({ ok: true });
       }
 
@@ -363,7 +388,5 @@ export default {
 
     if (env.ASSETS) return env.ASSETS.fetch(request);
     return J({ error: 'not found' }, 404);
-  },
-
-  async scheduled(event, rawEnv) { await ensureSchema(rawEnv); const env = await withIntegrations(rawEnv); await sweep(env); await processQueue(env, 50); },
-};
+  }
+}

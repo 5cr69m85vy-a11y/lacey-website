@@ -4,9 +4,10 @@ const { makeDB } = require('./d1shim');
   const W = (await import('../worker/worker.js')).default;
   let n = 0; const ok = async (name, fn) => { await fn(); n++; console.log('✓', name); };
   const wa = []; let aiText = 'مناسب للبشرة الحساسة'; const aiCalls = []; global.fetch = async (u, i) => { if (String(u).includes('graph.facebook')) wa.push(JSON.parse(i.body)); if (String(u).includes('anthropic')) { aiCalls.push(JSON.parse(i.body)); return { ok: true, json: async () => ({ content: [{ text: aiText }] }) }; } return { ok: true, json: async () => ({}) }; };
-  const env = { DB: makeDB(), ADMIN_PASS: 'secret', WA_TOKEN: 't', WA_PHONE_ID: '1', STORE_URL: 'https://shop.test', ASSETS: { fetch: async () => new Response('a') } };
+  const env = { DB: makeDB(), RL_SCALE: '1000', ADMIN_PASS: 'secret', WA_TOKEN: 't', WA_PHONE_ID: '1', STORE_URL: 'https://shop.test', ASSETS: { fetch: async () => new Response('a') } };
   const call = (path, init = {}) => W.fetch(new Request('https://x.dev' + path, init), env, { waitUntil: p => p });
-  const post = (path, body, h = {}) => call(path, { method: 'POST', headers: { 'content-type': 'application/json', ...h }, body: JSON.stringify(body) });
+  const authFor = require('./sess');
+  const post = async (path, body, h = {}) => { if (path === '/order' && !h.Authorization && body && /^07\d{9}$/.test(body.ph || '')) h = { ...h, ...(await authFor(env, body.ph)) }; return call(path, { method: 'POST', headers: { 'content-type': 'application/json', ...h }, body: JSON.stringify(body) }); };
   const H = { Authorization: 'Bearer ' + (await (await post('/login', { pw: 'secret' })).json()).token };
   const get = async (p, h = H) => (await call(p, { headers: h })).json();
 
@@ -75,7 +76,7 @@ const { makeDB } = require('./d1shim');
     const m = await get('/manifest.json', {}); assert.strictEqual(m.theme_color, '#123456'); assert(m.icons.length >= 3);
   });
   await ok('integrations saved from the admin panel activate WhatsApp without Cloudflare secrets', async () => {
-    const env2 = { DB: makeDB(), ADMIN_PASS: 'secret', ASSETS: env.ASSETS };
+    const env2 = { DB: makeDB(), RL_SCALE: '1000', ADMIN_PASS: 'secret', ASSETS: env.ASSETS };
     const c2 = (path, init = {}) => W.fetch(new Request('https://x.dev' + path, init), env2, { waitUntil: p => p });
     const H2 = { Authorization: 'Bearer ' + (await (await c2('/login', { method: 'POST', body: '{"pw":"secret"}' })).json()).token, 'content-type': 'application/json' };
     assert.strictEqual((await c2('/auth/otp/send', { method: 'POST', body: '{"ph":"07705550077"}' })).status, 503);

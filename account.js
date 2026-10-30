@@ -21,13 +21,33 @@
     tok = t || ''; me = c || null; ls.set('lc_ct', tok || null); ls.set('lc_me', me ? JSON.stringify(me) : null);
     if (me && typeof ff != 'undefined') ff = { name: me.name || '', ph: me.ph || '', ci: me.city || '', ae: me.area || '', lm: me.lm || '' };
     btn(); bellDraw([]); }
-  function btn() { const b = document.getElementById('accb'); if (b) b.title = me ? me.name || me.email || me.ph : T('تسجيل الدخول', 'Sign in'), b.classList.toggle('on', !!me) }
+
+  /* ---------- الأفتارات: 24 شخصية أصلية (SVG مولَّد، نخزّن المعرّف فقط) ---------- */
+  const SK = ['#f7d9c4', '#ecc19c', '#d9a073', '#bb7c4f', '#8f5a3a', '#5f3b28'], HC = ['#2a1a12', '#6a3d1c', '#c48a38', '#a63e2c', '#3b4b8c', '#7a5c8e'], BG = ['#fde4ec', '#e4f0ff', '#e6f7ea', '#fff1d6', '#efe6ff', '#ffe6dc'], OF = ['#e88aa4', '#6aa6e8', '#6fcf97', '#f2b441', '#9b7be0', '#f08a5d'];
+  function avSvg(id, cls) {
+    const m = /^av(\d+)$/.exec(id || ''); const n = m ? +m[1] - 1 : -1;
+    if (n < 0 || n > 23) return '<svg class="' + (cls || 'avs') + '" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" fill="#eadfd6"/><circle cx="32" cy="26" r="11" fill="#c9b8aa"/><path d="M10 64c2-16 12-22 22-22s20 6 22 22z" fill="#c9b8aa"/></svg>';
+    const sk = SK[n % 6], hc = HC[(n * 5 + (n / 6 | 0)) % 6], bg = BG[(n + (n / 6 | 0)) % 6], of = OF[(n * 7 + 2) % 6], st = n / 6 | 0, ac = n % 3;
+    let back = '', front = '';
+    if (st == 1) back = `<path d="M17 30c0-16 6-22 15-22s15 6 15 22v18H38V32H26v16H17z" fill="${hc}"/>`;
+    if (st == 2) back = `<circle cx="32" cy="9" r="6" fill="${hc}"/>`;
+    if (st == 3) back = `<circle cx="32" cy="24" r="19" fill="${hc}"/>`;
+    front = st == 0 ? `<path d="M21 24c0-9 5-13 11-13s11 4 11 13c-4-4-7-5-11-5s-8 1-11 5z" fill="${hc}"/>`
+      : st == 1 ? `<path d="M21 25c1-9 6-12 11-12s10 3 11 12c-5-1-8-4-11-7-3 3-6 6-11 7z" fill="${hc}"/>`
+      : st == 2 ? `<path d="M21 24c0-8 5-12 11-12s11 4 11 12c-5-3-7-4-11-4s-6 1-11 4z" fill="${hc}"/>`
+      : `<path d="M20 25c0-9 5-13 12-13s12 4 12 13c-4-3-8-4-12-4s-8 1-12 4z" fill="${hc}"/>`;
+    const acc = ac == 1 ? '<g fill="none" stroke="#3a2a22" stroke-width="1.6"><circle cx="27" cy="29" r="4"/><circle cx="37" cy="29" r="4"/><path d="M31 29h2"/></g>' : ac == 2 ? `<circle cx="42" cy="17" r="3.4" fill="#fff"/><circle cx="42" cy="17" r="1.4" fill="#f2b441"/>` : '';
+    return `<svg class="${cls || 'avs'}" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" fill="${bg}"/>${back}<path d="M10 64c2-15 12-21 22-21s20 6 22 21z" fill="${of}"/><rect x="28" y="38" width="8" height="8" rx="3" fill="${sk}"/><ellipse cx="32" cy="29" rx="11" ry="12" fill="${sk}"/>${front}<circle cx="27.5" cy="30" r="1.3" fill="#2a1a12"/><circle cx="36.5" cy="30" r="1.3" fill="#2a1a12"/><path d="M28.5 35c2 2 5 2 7 0" stroke="#a04a4a" stroke-width="1.5" fill="none" stroke-linecap="round"/>${acc}</svg>`;
+  }
+  const avPick = sel => `<div class="avp" role="radiogroup" aria-label="${T('اختر شخصيتك', 'Choose your character')}"><div class="avprev">${avSvg(sel, 'avl')}<small>${T('اختياري — يمكنك تغييرها لاحقاً', 'Optional — you can change it later')}</small></div><div class="avg">${Array.from({ length: 24 }, (_, i) => { const id = 'av' + (i + 1); return `<button type="button" class="av${id == sel ? ' on' : ''}" data-v="${id}" role="radio" aria-checked="${id == sel}" aria-label="${T('شخصية', 'Character')} ${i + 1}">${avSvg(id)}</button>` }).join('')}</div><input type="hidden" name="avatar" value="${E(sel || '')}"></div>`;
+  const GUEST = '<svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/></svg>';
+  function btn() { const b = document.getElementById('accb'); if (!b) return; b.title = me ? me.name || me.email || me.ph : T('تسجيل الدخول', 'Sign in'); b.classList.toggle('on', !!me); b.innerHTML = me ? avSvg(me.avatar) : GUEST; if (me) b.querySelector('svg').classList.add('avs') }
 
   /* ---------- الهيكل ---------- */
   const ov = document.createElement('div'); ov.className = 'ov'; ov.id = 'acv';
   ov.innerHTML = '<div class="acb" id="acb"></div>'; document.body.appendChild(ov);
   const hb = document.createElement('button'); hb.id = 'accb'; hb.className = 'cb2'; hb.setAttribute('aria-label', 'Account');
-  hb.innerHTML = '<svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/></svg>';
+  hb.innerHTML = GUEST;
   const bag = document.querySelector('header .cb2'); bag ? bag.parentNode.insertBefore(hb, bag) : document.querySelector('header .w').appendChild(hb);
   hb.addEventListener('click', () => open());
   const bell = document.createElement('button'); bell.id = 'bellb'; bell.className = 'cb2'; bell.setAttribute('aria-label', 'Notifications'); bell.style.display = 'none';
@@ -42,6 +62,7 @@
   window.openAccount = open;
   ov.addEventListener('click', async e => {
     if (e.target === ov) return close();
+    const av = e.target.closest('.av'); if (av) { const w = av.closest('.avp'); w.querySelectorAll('.av').forEach(b => { b.classList.toggle('on', b === av); b.setAttribute('aria-checked', b === av) }); w.querySelector('[name=avatar]').value = av.dataset.v; w.querySelector('.avl').outerHTML = avSvg(av.dataset.v, 'avl'); return; }
     const el = e.target.closest('[data-x]'); if (!el) return;
     const x = el.dataset.x, v = el.dataset.v;
     if (x === 'close') return close();
@@ -58,14 +79,14 @@
     try {
       if (f.id === 'af-otps') { await call('/auth/otp/send', { ph: v.ph }); sPh = v.ph; step = 1; draw(); }
       else if (f.id === 'af-otpv') { const j = await call('/auth/otp/verify', { ph: sPh, code: v.code, name: v.name }); done(j); }
-      else if (f.id === 'af-reg') { done(await call('/auth/register', { email: v.email, pw: v.pw, name: v.name })); }
+      else if (f.id === 'af-reg') { done(await call('/auth/register', { email: v.email, pw: v.pw, name: v.name, avatar: v.avatar || '' })); }
       else if (f.id === 'af-log') { done(await call('/auth/login', { email: v.email, pw: v.pw })); }
-      else if (f.id === 'af-prof') { await call('/me', { name: v.name, city: v.city, area: v.area, lm: v.lm }); me = { ...me, name: v.name, city: v.city, area: v.area, lm: v.lm }; setSession(tok, me); toast(T('تم الحفظ', 'Saved')); }
+      else if (f.id === 'af-prof') { await call('/me', { name: v.name, city: v.city, area: v.area, lm: v.lm, avatar: v.avatar || '' }); me = { ...me, name: v.name, city: v.city, area: v.area, lm: v.lm, avatar: v.avatar || '' }; setSession(tok, me); toast(T('تم الحفظ', 'Saved')); }
       else if (f.id === 'af-ph') { await call('/auth/otp/send', { ph: v.ph }); sPh = v.ph; step = 1; draw(); }
     } catch (x) { if (er) er.textContent = x.message; }
     busy = false;
   });
-  function done(j) { setSession(j.token, j.customer); if (!pollT) pollT = setInterval(poll, 30000); poll(); step = 0; tab = 'p'; toast(T('أهلاً ' + (j.customer.name || ''), 'Welcome ' + (j.customer.name || ''))); draw(); load(); }
+  function done(j) { const co = window.__co; window.__co = 0; setSession(j.token, j.customer); if (co) { close(); try { A.bag(); view = 'form'; rc(); } catch (e) {} } if (!pollT) pollT = setInterval(poll, 30000); poll(); step = 0; tab = 'p'; toast(T('أهلاً ' + (j.customer.name || ''), 'Welcome ' + (j.customer.name || ''))); draw(); load(); }
 
   /* ---------- العرض ---------- */
   const err = '<small class="er"></small>';
@@ -80,7 +101,7 @@
         : `<form id="af-otpv"><p>${T('أدخل الرمز المرسل إلى ' + E(sPh), 'Enter the code sent to ' + E(sPh))}</p><input name="code" inputmode="numeric" maxlength="6" placeholder="000000" required autocomplete="one-time-code"><input name="name" placeholder="${T('اسمك (للحسابات الجديدة)', 'Your name (new accounts)')}"><button class="btn">${T('تحقق ودخول', 'Verify & sign in')}</button><button type="button" class="ln" data-x="mode" data-v="ph">${T('تغيير الرقم', 'Change number')}</button>${err}</form>`;
       else if (mode == 'em') f = sub == 'login'
         ? `<form id="af-log"><input name="email" type="email" placeholder="${T('البريد الإلكتروني', 'Email')}" required><input name="pw" type="password" placeholder="${T('كلمة السر', 'Password')}" required><button class="btn">${T('دخول', 'Sign in')}</button><button type="button" class="ln" data-x="sub" data-v="reg">${T('إنشاء حساب جديد', 'Create an account')}</button>${err}</form>`
-        : `<form id="af-reg"><input name="name" placeholder="${T('الاسم', 'Name')}" required><input name="email" type="email" placeholder="${T('البريد الإلكتروني', 'Email')}" required><input name="pw" type="password" minlength="8" placeholder="${T('كلمة السر (8 أحرف على الأقل)', 'Password (min 8 chars)')}" required><button class="btn">${T('إنشاء الحساب', 'Create account')}</button><button type="button" class="ln" data-x="sub" data-v="login">${T('لدي حساب', 'I have an account')}</button>${err}</form>`;
+        : `<form id="af-reg"><input name="name" placeholder="${T('الاسم', 'Name')}" required><input name="email" type="email" placeholder="${T('البريد الإلكتروني', 'Email')}" required><input name="pw" type="password" minlength="8" placeholder="${T('كلمة السر (8 أحرف على الأقل)', 'Password (min 8 chars)')}" required>${avPick('')}<button class="btn">${T('إنشاء الحساب', 'Create account')}</button><button type="button" class="ln" data-x="sub" data-v="login">${T('لدي حساب', 'I have an account')}</button>${err}</form>`;
       else f = `<div id="gbtn" class="gb">${cfg && cfg.google ? '' : T('تسجيل Google غير مُفعّل بعد', 'Google sign-in is not enabled yet')}</div>${err}`;
       b.innerHTML = `${head}<h3>${T('أهلاً بك في لاسي', 'Welcome to Lacey')}</h3><div class="act">${tabs}</div>${f}`;
       if (mode == 'gg') gsi();
@@ -88,7 +109,7 @@
     }
     const tabs = [['p', T('حسابي', 'Profile')], ['o', T('طلباتي', 'Orders')], ['r', T('الإيصالات', 'Receipts')], ['n', T('الإشعارات', 'Alerts')]].map(([k, n]) => `<button data-x="tab" data-v="${k}" class="${tab == k ? 'on' : ''}">${n}</button>`).join('');
     let c = '';
-    if (tab == 'p') c = `<form id="af-prof"><input name="name" value="${E(me.name)}" placeholder="${T('الاسم', 'Name')}" required><input name="city" value="${E(me.city)}" placeholder="${T('المحافظة', 'City')}"><input name="area" value="${E(me.area)}" placeholder="${T('المنطقة', 'Area')}"><input name="lm" value="${E(me.lm)}" placeholder="${T('أقرب نقطة دالة', 'Landmark')}"><small>${E(me.ph || '')} ${E(me.email || '')}${me.ph ? '' : ' — ' + T('لم يُربط رقم واتساب بعد', 'no WhatsApp number linked')}</small><button class="btn">${T('حفظ', 'Save')}</button>${err}</form>${me.ph ? '' : phoneForm()}<button class="ln" data-x="out">${T('تسجيل الخروج', 'Sign out')}</button>`;
+    if (tab == 'p') c = `<form id="af-prof">${avPick(me.avatar || '')}<input name="name" value="${E(me.name)}" placeholder="${T('الاسم', 'Name')}" required><input name="city" value="${E(me.city)}" placeholder="${T('المحافظة', 'City')}"><input name="area" value="${E(me.area)}" placeholder="${T('المنطقة', 'Area')}"><input name="lm" value="${E(me.lm)}" placeholder="${T('أقرب نقطة دالة', 'Landmark')}"><small>${E(me.ph || '')} ${E(me.email || '')}${me.ph ? '' : ' — ' + T('لم يُربط رقم واتساب بعد', 'no WhatsApp number linked')}</small><button class="btn">${T('حفظ', 'Save')}</button>${err}</form>${me.ph ? '' : phoneForm()}<button class="ln" data-x="out">${T('تسجيل الخروج', 'Sign out')}</button>`;
     else c = `<div id="acl"><p class="em">…</p></div>`;
     b.innerHTML = `${head}<h3>${E(me.name || me.email || me.ph)}</h3><div class="act">${tabs}</div>${c}`;
   }

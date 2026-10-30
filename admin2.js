@@ -16,6 +16,50 @@
   ['cp:أكواد الخصم', 'bx:البوكسات', 'hr:الواجهة والوصف', 'st:الإحصائيات', 'wm:رسائل واتساب', 'ch:الدعم والتقييم', 'pm:الدفع والتوصيل', 'ig:الربط والمفاتيح', 'sf:الموظفون'].forEach(s => { const [a, b] = s.split(':'); add(a, b); });
   TABS.unshift(...TABS.splice(TABS.findIndex(t => t[0] === 'st'), 1));      // الإحصائيات أولاً
 
+  /* ---------- تنظيم الأقسام في مجموعات (صفحة مستقلة لكل مجموعة) ---------- */
+  add('db', 'اللوحة'); add('au', 'سجل النشاط');
+  const GROUPS = [
+    ['home', 'الرئيسية', ['db', 'st']],
+    ['orders', 'الطلبات', ['or']],
+    ['catalog', 'الكتالوج', ['p', 'g', 'sb', 'br', 'bx']],
+    ['customers', 'العملاء', ['cu', 'dc']],
+    ['marketing', 'التسويق', ['a', 'cp', 'wm']],
+    ['support', 'الدعم والموظفون', ['ch', 'sf']],
+    ['settings', 'إعدادات المتجر', ['s', 'l', 'hr', 'pm', 'lg', 'gd']],
+    ['system', 'الأمان والنظام', ['ig', 'au', 'u']],
+  ];
+  const tl = k => (TABS.find(t => t[0] === k) || [k, k])[1];
+  window.navHTML = () => {
+    const gi = Math.max(0, GROUPS.findIndex(g => g[2].includes(at))), g = GROUPS[gi];
+    return '<nav class="gn" aria-label="الأقسام">' + GROUPS.map((x, i) => `<button data-a="grp" data-c="${i}" class="${i == gi ? 'on' : ''}">${x[1]}<i class="bd" data-g="${x[0]}" hidden></i></button>`).join('') + '</nav>'
+      + (g[2].length > 1 ? '<nav class="sn">' + g[2].map(k => `<button data-a="tab" data-c="${k}" class="${at == k ? 'on' : ''}">${tl(k)}</button>`).join('') + '</nav>' : '');
+  };
+  A.grp = c => { const g = GROUPS[+c]; if (!g) return; at = g[2][0]; ed = null; ea = null; es = null; upl = ''; ups = []; ra(); };
+  window.loadBadges = async () => {
+    try {
+      const d = await J('/adm/dashboard'), set = (g, n) => { const e = document.querySelector(`.bd[data-g=${g}]`); if (e) { e.textContent = n > 99 ? '99+' : n; e.hidden = !n; } };
+      set('orders', d.new_orders); set('support', d.unread_support);
+    } catch (e) {}
+  };
+  TB.db = () => { setTimeout(loadDb, 0); return '<div id="dbb"><p class="em">جارٍ التحميل…</p></div>'; };
+  async function loadDb() {
+    const el = $('#dbb'); if (!el) return;
+    try {
+      const d = await J('/adm/dashboard');
+      const cards = [['طلبات جديدة', d.new_orders, 'or'], ['طلبات متأخرة', d.overdue, 'or'], ['دعم بانتظار موظف', d.unread_support, 'ch'], ['طلبات اليوم', d.today_orders, 'or'], ['مبيعات اليوم', fm(d.today_sales), 'st']];
+      el.innerHTML = '<div class="dbg">' + cards.map(([l, n, t]) => `<button class="dbc" data-a="tab" data-c="${t}"><small>${l}</small><b>${esc(String(n))}</b></button>`).join('') + '</div>';
+    } catch (e) { el.innerHTML = '<p class="em">تعذر التحميل</p>'; }
+  }
+  TB.au = () => { setTimeout(loadAu, 0); return '<p class="em">آخر 200 عملية إدارية (لا تُسجَّل كلمات السر ولا المفاتيح).</p><div id="aub"><p class="em">جارٍ التحميل…</p></div>'; };
+  async function loadAu() {
+    const el = $('#aub'); if (!el) return;
+    try {
+      const r = (await J('/adm/audit')).items;
+      el.innerHTML = r.length ? `<div class="chw"><table class="tb"><tr><th>الوقت</th><th>المنفّذ</th><th>العملية</th><th>العنصر</th><th>IP</th></tr>${r.map(x => `<tr><td>${esc(new Date(x.at).toLocaleString('ar-IQ'))}</td><td>${esc(x.actor)}</td><td>${esc(x.action)}</td><td dir="ltr">${esc(x.entity)}</td><td dir="ltr">${esc(x.ip)}</td></tr>`).join('')}</table></div>` : '<p class="em">لا توجد عمليات بعد</p>';
+    } catch (e) { el.innerHTML = '<p class="em">تعذر التحميل</p>'; }
+  }
+  at = 'db';
+
   /* ---------- أكواد الخصم ---------- */
   let codes = [];
   TB.cp = () => { setTimeout(loadCodes, 0); return `<div id="cpl"><p class="em">جارٍ التحميل…</p></div>` + up('إنشاء / تعديل كود', `<form id="cpf" class="fm">

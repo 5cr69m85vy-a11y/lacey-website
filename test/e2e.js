@@ -32,6 +32,11 @@ const assert = require('assert');
 
   /* --- checkout: 10 s countdown, skip, tracker --- */
   await vis.click('.cb2[data-a=bag]'); await vis.click('[data-a=vf]');
+  /* guest is stopped at checkout and must sign in; the bag survives and checkout resumes */
+  await vis.waitForSelector('#acv.on'); assert.strictEqual(await vis.$('#of'), null); ok('guest at checkout is asked to sign in (no order form)');
+  await vis.click('#acv [data-x=mode][data-v=em]'); await vis.click('#acv [data-x=sub][data-v=reg]');
+  await vis.fill('#af-reg [name=name]', 'علي'); await vis.fill('#af-reg [name=email]', 'ali@example.com'); await vis.fill('#af-reg [name=pw]', 'Str0ng-pass1'); await vis.click('#af-reg .av[data-v=av5]'); await vis.click('#af-reg button.btn');
+  await vis.waitForSelector('#of'); assert.strictEqual(await vis.textContent('#cn'), '1'); assert(await vis.$('#accb .avs')); ok('after sign-up checkout resumes, bag kept, avatar in header');
   await vis.fill('#of [name=name]', 'علي'); await vis.fill('#of [name=ph]', '07701234567'); await vis.selectOption('#of [name=ci]', { index: 1 }); await vis.fill('#of [name=ae]', 'الكرادة'); await vis.fill('#of [name=lm]', 'قرب المدرسة');
   await vis.click('#of [type=submit]'); await vis.waitForSelector('#c10n');
   assert.strictEqual(db.prepare('select count(*) n from orders').get().n, 0, 'nothing is sent during the countdown'); ok('countdown shown, order not yet sent');
@@ -89,6 +94,8 @@ const assert = require('assert');
   await v3.fill('#cd input', 'freeship'); await v3.click('#cd button'); await v3.waitForFunction(() => /FREESHIP/.test(document.querySelector('#cb').textContent));
   const tot = await v3.$eval('#cb .tt.b', e => e.textContent.replace(/[^0-9]/g, '')); assert.strictEqual(tot, '8100'); ok('two codes stack (10% + free shipping): 9000 − 900 = 8100');
   await v3.click('[data-a=rmc][data-c=FREESHIP]'); await v3.waitForFunction(() => { const t = document.querySelector('#cb').textContent; return !/FREESHIP/.test(t) && /SAVE10/.test(t); }); assert.strictEqual(await v3.$eval('#cb .tt.b', e => e.textContent.replace(/[^0-9]/g, '')), '13100'); ok('removing free-shipping code restores the 5000 fee');
+  await v3.evaluate(async () => { const r = await (await fetch('/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'mona@example.com', pw: 'Str0ng-pass2', name: 'منى' }) })).json(); localStorage.setItem('lc_ct', r.token); localStorage.setItem('lc_me', JSON.stringify(r.customer)); });
+  const cartSave = await v3.evaluate(() => JSON.stringify(cart)); await v3.reload(); await v3.waitForSelector('#accb.on'); await v3.evaluate(c => { cart = JSON.parse(c); save(); rcount(); }, cartSave); await v3.click('.cb2[data-a=bag]'); await v3.fill('#cd input', 'save10'); await v3.click('#cd button'); await v3.waitForFunction(() => document.querySelector('#cb').textContent.includes('SAVE10'));
   await v3.click('[data-a=vf]'); assert.strictEqual(await v3.$$eval('#of [name=pay] option', o => o.length), 2); assert.strictEqual(await v3.$eval('#of [name=pay]', s => s.value), 'cod'); ok('payment method defaults to cash on delivery, extra method offered');
   await v3.fill('#of [name=name]', 'منى'); await v3.fill('#of [name=ph]', '07702223333'); await v3.selectOption('#of [name=ci]', { index: 1 }); await v3.fill('#of [name=ae]', 'x'); await v3.fill('#of [name=lm]', 'y');
   await v3.selectOption('#of [name=pay]', 'zain'); assert.strictEqual(await v3.inputValue('#of [name=name]'), 'منى'); await v3.click('#of [type=submit]'); await v3.click('[data-a=c10s]'); await v3.waitForSelector('#trkbox .tl', { timeout: 8000 });
@@ -108,7 +115,7 @@ const assert = require('assert');
   await sp.click('.chips button[data-k=human]'); await sp.waitForFunction(() => document.querySelector('#chp .chh small').textContent.includes('بانتظار'), null, { timeout: 8000 }); ok('"الاتصال بموظف" hands the chat to a human');
   await adm.evaluate(async () => { await apiJ('/adm/staff', { method: 'POST', body: JSON.stringify({ name: 'سارة', username: 'sara', pw: 'sara1234' }) }); });
   const st = await mk(); await st.goto(base + '/#staff'); await st.waitForSelector('#stl'); await st.fill('#stl [name=username]', 'sara'); await st.fill('#stl [name=pw]', 'sara1234'); await st.click('#stl button');
-  await st.waitForSelector('#stc .row'); await st.click('#stc .row >> nth=0'); await st.waitForSelector('#str input'); await st.click('[data-s=claim]'); await st.fill('#str input', 'أهلاً نور، أنا سارة'); await st.click('#str .btn >> nth=0');
+  await st.waitForSelector('#stc .row'); await st.click('#stc .row >> nth=0'); await st.waitForSelector('#str input'); await st.click('[data-s=claim]'); await st.waitForFunction(() => document.querySelector('#stm').textContent.includes('سارة') || true); await new Promise(r => setTimeout(r, 1200)); await st.fill('#str input', 'أهلاً نور، أنا سارة'); await st.click('#str .btn >> nth=0');
   await sp.waitForFunction(() => document.querySelector('#chp .chh small').textContent.includes('سارة') && document.querySelector('#chp .m.staff .au')?.textContent === 'سارة', null, { timeout: 9000 }); ok('employee replies under her name; customer sees who is answering');
   assert.strictEqual(await st.$eval('#stm .chhd', e => e.textContent.includes('نور')), true); ok('staff console shows the customer name');
   /* --- bell --- */
@@ -118,7 +125,8 @@ const assert = require('assert');
   const man = await v3.evaluate(async () => (await fetch('/manifest.json')).json()); assert(man.name && man.icons.length >= 3 && man.display == 'standalone'); ok('manifest.json served with icons and theme');
   assert((await v3.request.get(base + '/sw.js')).ok() && (await v3.request.get(base + '/icons/icon-512.png')).ok()); ok('service worker + brand icons are served');
   /* admin tabs render */
-  for (const t of ['st', 'cp', 'bx', 'hr', 'wm', 'ch', 'pm', 'ig', 'sf']) { await adm.evaluate(t => A.tab(t), t); await adm.waitForTimeout(500); assert((await adm.$eval('#ab', e => e.textContent)).length > 20, t); }
+  for (const t of ['db', 'au', 'st', 'cp', 'bx', 'hr', 'wm', 'ch', 'pm', 'ig', 'sf']) { await adm.evaluate(t => A.tab(t), t); await adm.waitForTimeout(500); assert((await adm.$eval('#ab', e => e.textContent)).length > 20, t); }
+  assert.strictEqual(await adm.$$eval('nav.gn button', e => e.length), 8); await adm.click('nav.gn button >> nth=6'); assert((await adm.$$eval('nav.sn button', e => e.length)) >= 5); ok('settings grouped: 8 groups, sub-tabs inside the group');
   ok('all new admin tabs render (stats, codes, boxes, hero, WhatsApp, support, payment)');
 
   for (const [i, p] of [adm, vis, cu, v3, sp, st].entries()) assert.deepStrictEqual(p.errs, [], 'page ' + i + ' errors: ' + p.errs);
