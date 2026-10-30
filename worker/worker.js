@@ -52,6 +52,15 @@ async function adminToken(env) {
 
 const safeEq = (a, b) => { a = String(a); b = String(b); let d = a.length ^ b.length; for (let i = 0; i < Math.max(a.length, b.length); i++) d |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0); return d === 0; };
 
+async function tgPhoto(env, buf, caption) {
+  if (!env.BOT_TOKEN || !env.CHAT_ID) return false;
+  try {
+    const fd = new FormData(); fd.append('chat_id', String(env.CHAT_ID)); fd.append('caption', caption.slice(0, 200));
+    fd.append('photo', new Blob([buf], { type: 'image/png' }), 'receipt.png');
+    const r = await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/sendPhoto`, { method: 'POST', body: fd });
+    return r.ok;
+  } catch (e) { return false; }
+}
 async function tgNotify(env, text) {
   if (!env.BOT_TOKEN || !env.CHAT_ID) return;
   try {
@@ -295,6 +304,21 @@ async function handle(request, rawEnv, ctx) {
         const r = await createOrder(env, await body(), sess);
         if (ctx && ctx.waitUntil) ctx.waitUntil(processQueue(env)); else await processQueue(env);
         return r;
+      }
+
+      /* صورة الوصل: يرسمها متصفح الزبون ويرفعها؛ تُرسل إلى تلجرام كصورة (مرة واحدة لكل طلب، لصاحب الطلب فقط) */
+      if (p === '/order/receipt' && M === 'POST') {
+        const sess = await sessionCustomer(env, request);
+        if (!sess) return J({ error: 'unauthorized' }, 401);
+        const code = String(request.headers.get('x-order') || '').toUpperCase().slice(0, 12);
+        const o = await env.DB.prepare('SELECT code,id,name,total,customer_id,created_at FROM orders WHERE code=?').bind(code).first();
+        if (!o || o.customer_id !== sess.id || now() - o.created_at > 30 * 60e3) return J({ error: 'not found' }, 404);
+        const buf = await request.arrayBuffer();
+        const u8 = new Uint8Array(buf.slice(0, 8));
+        if (buf.byteLength < 500 || buf.byteLength > 2e6 || u8[0] !== 0x89 || u8[1] !== 0x50 || u8[2] !== 0x4e || u8[3] !== 0x47) return J({ error: 'bad image' }, 400);
+        if (!(await hit(env, 'rcpt:' + code, 1, 24 * 3600e3))) return J({ ok: true, duplicate: true });
+        const sent = await tgPhoto(env, buf, `🛍 طلب جديد #${o.id} — ${o.code}`);
+        return J({ ok: true, sent });
       }
 
       if (p === '/order/cancel' && M === 'POST') {

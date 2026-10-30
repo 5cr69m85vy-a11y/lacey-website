@@ -23,21 +23,29 @@
     btn(); bellDraw([]); }
 
   /* ---------- الأفتارات: 24 شخصية أصلية (SVG مولَّد، نخزّن المعرّف فقط) ---------- */
-  const SK = ['#f7d9c4', '#ecc19c', '#d9a073', '#bb7c4f', '#8f5a3a', '#5f3b28'], HC = ['#2a1a12', '#6a3d1c', '#c48a38', '#a63e2c', '#3b4b8c', '#7a5c8e'], BG = ['#fde4ec', '#e4f0ff', '#e6f7ea', '#fff1d6', '#efe6ff', '#ffe6dc'], OF = ['#e88aa4', '#6aa6e8', '#6fcf97', '#f2b441', '#9b7be0', '#f08a5d'];
+  const SKN = ['#fbdcc8', '#efc09b', '#d29a6e', '#9c6643'], HCL = [['#2b1a14', '#5a3a2a'], ['#8a4b2a', '#c0793f'], ['#1f2a44', '#3c4d7a'], ['#b9566f', '#e08aa0']], BGS = ['#ffe3ec', '#e3efff', '#e9f8ea', '#fff0d3', '#efe6ff', '#ffe5da'], OFS = ['#f08ca8', '#7bb0f0', '#79d39a', '#f6b94a', '#a58be8', '#f4946a'];
   function avSvg(id, cls) {
-    const m = /^av(\d+)$/.exec(id || ''); const n = m ? +m[1] - 1 : -1;
+    const m = /^av(\d+)$/.exec(id || ''), n = m ? +m[1] - 1 : -1;
     if (n < 0 || n > 23) return '<svg class="' + (cls || 'avs') + '" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" fill="#eadfd6"/><circle cx="32" cy="26" r="11" fill="#c9b8aa"/><path d="M10 64c2-16 12-22 22-22s20 6 22 22z" fill="#c9b8aa"/></svg>';
-    const sk = SK[n % 6], hc = HC[(n * 5 + (n / 6 | 0)) % 6], bg = BG[(n + (n / 6 | 0)) % 6], of = OF[(n * 7 + 2) % 6], st = n / 6 | 0, ac = n % 3;
-    let back = '', front = '';
-    if (st == 1) back = `<path d="M17 30c0-16 6-22 15-22s15 6 15 22v18H38V32H26v16H17z" fill="${hc}"/>`;
-    if (st == 2) back = `<circle cx="32" cy="9" r="6" fill="${hc}"/>`;
-    if (st == 3) back = `<circle cx="32" cy="24" r="19" fill="${hc}"/>`;
-    front = st == 0 ? `<path d="M21 24c0-9 5-13 11-13s11 4 11 13c-4-4-7-5-11-5s-8 1-11 5z" fill="${hc}"/>`
-      : st == 1 ? `<path d="M21 25c1-9 6-12 11-12s10 3 11 12c-5-1-8-4-11-7-3 3-6 6-11 7z" fill="${hc}"/>`
-      : st == 2 ? `<path d="M21 24c0-8 5-12 11-12s11 4 11 12c-5-3-7-4-11-4s-6 1-11 4z" fill="${hc}"/>`
-      : `<path d="M20 25c0-9 5-13 12-13s12 4 12 13c-4-3-8-4-12-4s-8 1-12 4z" fill="${hc}"/>`;
-    const acc = ac == 1 ? '<g fill="none" stroke="#3a2a22" stroke-width="1.6"><circle cx="27" cy="29" r="4"/><circle cx="37" cy="29" r="4"/><path d="M31 29h2"/></g>' : ac == 2 ? `<circle cx="42" cy="17" r="3.4" fill="#fff"/><circle cx="42" cy="17" r="1.4" fill="#f2b441"/>` : '';
-    return `<svg class="${cls || 'avs'}" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" fill="${bg}"/>${back}<path d="M10 64c2-15 12-21 22-21s20 6 22 21z" fill="${of}"/><rect x="28" y="38" width="8" height="8" rx="3" fill="${sk}"/><ellipse cx="32" cy="29" rx="11" ry="12" fill="${sk}"/>${front}<circle cx="27.5" cy="30" r="1.3" fill="#2a1a12"/><circle cx="36.5" cy="30" r="1.3" fill="#2a1a12"/><path d="M28.5 35c2 2 5 2 7 0" stroke="#a04a4a" stroke-width="1.5" fill="none" stroke-linecap="round"/>${acc}</svg>`;
+    const st = n % 6, v = n / 6 | 0, sk = SKN[(v + st) % 4], [h1, h2] = HCL[(v * 2 + st) % 4], bg = BGS[(n * 5 + v) % 6], of = OFS[(n * 7 + 1) % 6], cl = ['#f8c9d4', '#fff'][0];
+    const id2 = 'g' + n; let back = '', front = '', top = '';
+    const hair = (d, extra = '') => `<path d="${d}" fill="url(#${id2})" ${extra}/>`;
+    if (st == 0) back = hair('M14 34C12 14 22 6 32 6s20 8 18 28c-1 9 2 14 4 17-6 1-10-1-12-4V30H24v17c-2 3-6 5-12 4 2-3 3-8 2-17z');
+    if (st == 1) back = `<circle cx="16" cy="14" r="8" fill="url(#${id2})"/><circle cx="48" cy="14" r="8" fill="url(#${id2})"/>`;
+    if (st == 2) back = `<circle cx="32" cy="27" r="24" fill="url(#${id2})"/><circle cx="14" cy="38" r="8" fill="url(#${id2})"/><circle cx="50" cy="38" r="8" fill="url(#${id2})"/>`;
+    if (st == 3) back = hair('M14 22c0-11 8-16 18-16s18 5 18 16v18c0 3-3 5-6 4V28H20v16c-3 1-6-1-6-4z');
+    if (st == 4) back = `<path d="M10 64C8 36 14 10 32 10s24 26 22 54z" fill="${of}"/><path d="M10 64C8 36 14 10 32 10s24 26 22 54z" fill="url(#hj${n})" opacity=".35"/>`;
+    if (st == 5) back = `<path d="M44 12c12 0 14 14 8 28-2-8-5-12-10-14z" fill="url(#${id2})"/>`;
+    const fringe = st == 4 ? '' : st == 1 ? `<path d="M20 25c0-8 5-12 12-12s12 4 12 12c-4-4-8-6-12-6s-8 2-12 6z" fill="url(#${id2})"/>`
+      : st == 2 ? `<path d="M19 26c0-10 6-14 13-14s13 4 13 14c-4-3-8-5-13-5s-9 2-13 5z" fill="url(#${id2})"/>`
+      : st == 3 ? `<path d="M19 28c0-11 6-16 13-16s13 5 13 16c-3-5-8-7-13-7s-10 2-13 7z" fill="url(#${id2})"/>`
+      : `<path d="M19 28c1-10 6-16 13-16s12 6 13 16c-5-2-8-6-10-10-3 5-8 9-16 10z" fill="url(#${id2})"/>`;
+    if (st == 4) front = `<path d="M18 33c0-12 6-19 14-19s14 7 14 19c0 7-6 13-14 13s-14-6-14-13z" fill="${sk}"/><path d="M14 36C12 16 22 8 32 8s20 8 18 28c-4-6-8-10-18-10s-14 4-18 10z" fill="${of}"/><path d="M14 36C12 16 22 8 32 8s20 8 18 28c-4-6-8-10-18-10s-14 4-18 10z" fill="url(#hj${n})" opacity=".35"/>`;
+    top = st == 3 ? `<path d="M38 11l7-4 2 7z M38 11l-1 8 8-1z" fill="${of}" transform="translate(2 1)"/><circle cx="40.5" cy="12.5" r="2" fill="#fff"/>` : st == 1 ? `<circle cx="16" cy="14" r="2.6" fill="${of}"/><circle cx="48" cy="14" r="2.6" fill="${of}"/>` : st == 5 ? `<rect x="40" y="13" width="6" height="4" rx="2" fill="${of}"/>` : st == 0 ? `<circle cx="22" cy="14" r="2.2" fill="#fff"/><circle cx="22" cy="14" r="1" fill="#f6b94a"/>` : '';
+    const face = st == 4 ? '' : `<ellipse cx="32" cy="32" rx="13.5" ry="14.5" fill="${sk}"/>`;
+    const eyes = `<g><ellipse cx="26.5" cy="33" rx="2.4" ry="3.1" fill="#2a1a14"/><ellipse cx="37.5" cy="33" rx="2.4" ry="3.1" fill="#2a1a14"/><circle cx="27.3" cy="31.8" r=".9" fill="#fff"/><circle cx="38.3" cy="31.8" r=".9" fill="#fff"/><circle cx="25.8" cy="34.2" r=".45" fill="#fff"/><circle cx="36.8" cy="34.2" r=".45" fill="#fff"/><path d="M23.6 30.6q2.6-2 5.2-.2M35.2 30.4q2.6-1.8 5.2.2" stroke="#2a1a14" stroke-width="1" fill="none" stroke-linecap="round"/></g>`;
+    const mouth = `<path d="M29.4 39q2.6 2.4 5.2 0" stroke="#b5495a" stroke-width="1.4" fill="none" stroke-linecap="round"/><circle cx="22.2" cy="37.6" r="2.4" fill="#ff8aa0" opacity=".35"/><circle cx="41.8" cy="37.6" r="2.4" fill="#ff8aa0" opacity=".35"/>`;
+    return `<svg class="${cls || 'avs'}" viewBox="0 0 64 64" aria-hidden="true"><defs><linearGradient id="${id2}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${h2}"/><stop offset="1" stop-color="${h1}"/></linearGradient><linearGradient id="hj${n}" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#000"/></linearGradient></defs><rect width="64" height="64" fill="${bg}"/><circle cx="50" cy="12" r="10" fill="#fff" opacity=".35"/>${back}<path d="M8 64c2-14 12-19 24-19s22 5 24 19z" fill="${of}"/><path d="M26 45q6 6 12 0" stroke="#fff" stroke-width="1.6" fill="none" opacity=".6"/>${st == 4 ? '' : `<rect x="28" y="40" width="8" height="7" rx="3" fill="${sk}"/>`}${face}${front}${fringe}${top}${eyes}${mouth}</svg>`;
   }
   const avPick = sel => `<div class="avp" role="radiogroup" aria-label="${T('اختر شخصيتك', 'Choose your character')}"><div class="avprev">${avSvg(sel, 'avl')}<small>${T('اختياري — يمكنك تغييرها لاحقاً', 'Optional — you can change it later')}</small></div><div class="avg">${Array.from({ length: 24 }, (_, i) => { const id = 'av' + (i + 1); return `<button type="button" class="av${id == sel ? ' on' : ''}" data-v="${id}" role="radio" aria-checked="${id == sel}" aria-label="${T('شخصية', 'Character')} ${i + 1}">${avSvg(id)}</button>` }).join('')}</div><input type="hidden" name="avatar" value="${E(sel || '')}"></div>`;
   const GUEST = '<svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-7 8-7s8 3 8 7"/></svg>';
