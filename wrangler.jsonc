@@ -9,7 +9,7 @@
       "/login", "/catalog", "/settings", "/code", "/visit", "/stats",
       "/order", "/order/*", "/orders", "/status", "/track",
       "/customers", "/customer", "/discount", "/discounts",
-      "/auth/*", "/staff/*", "/chat/*", "/staff/*", "/adm/*", "/media", "/media/*", "/manifest.json", "/quote", "/codes", "/me", "/me/*"
+      "/auth/*", "/staff/*", "/chat/*", "/adm/*", "/media", "/media/*", "/manifest.json", "/quote", "/codes", "/me", "/me/*"
     ]
   },
   "d1_databases": [

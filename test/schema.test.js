@@ -9,3 +9,6 @@ const assert = require('assert'); const { makeDB } = require('./d1shim');
   assert.strictEqual(env.DB.raw.prepare('select value from counters').get().value, 1000);
   console.log('✓ blank database builds its own schema on first request');
 })().catch(e => { console.error('FAIL', e); process.exit(1); });
+/* wrangler: run_worker_first rules must be unique (Cloudflare rejects duplicates) */
+{ const j = JSON.parse(require('fs').readFileSync(require('path').join(__dirname, '../wrangler.jsonc'), 'utf8').replace(/\/\/.*$/gm, '')), r = j.assets.run_worker_first;
+  if (new Set(r).size !== r.length) { console.error('FAIL duplicate run_worker_first rule'); process.exit(1); } console.log('✓ run_worker_first rules are unique'); }
