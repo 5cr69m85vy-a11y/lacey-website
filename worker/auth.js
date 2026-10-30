@@ -3,7 +3,7 @@ import { J, now, jp, rnd, sha256, hex, randHex } from './lib.js';
 import { waOn, processQueue } from './wa.js';
 import { limit, hit, tooMany, audit } from './guard.js';
 
-export const AVATAR = /^av(?:[1-9]|1\d|2[0-4])$/;   // 24 شخصية جاهزة
+export const AVATAR = /^av(?:[1-9]|[12]\d|3[0-6])$/;   // 36 شخصية جاهزة
 
 const SESSION_MS = 90 * 864e5;
 const OTP_MS = 10 * 60 * 1000;
