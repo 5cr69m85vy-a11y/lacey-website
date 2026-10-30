@@ -133,5 +133,11 @@ const { makeDB } = require('./d1shim');
     await post('/adm/integrations', { ANTHROPIC_API_KEY: '__clear__' }, H);
     const r2 = await (await post('/chat/send', { token: '', text: 'سؤال غريب' })).json(); p = await get('/chat/poll?token=' + r2.token, {}); assert(/اختر من الخيارات/.test(p.messages.at(-1).body));
   });
+  await ok('live dashboard + health checklist (admin only, no secrets)', async () => {
+    assert.strictEqual((await call('/adm/live')).status, 401);
+    const lv = await (await call('/adm/live', { headers: H })).json();
+    assert.strictEqual(lv.days.length, 14); assert.strictEqual(lv.hours.length, 24); assert(lv.kpi && Array.isArray(lv.recent));
+    const hl = await (await call('/adm/health', { headers: H })).json(); assert.strictEqual(typeof hl.wa, 'boolean'); assert(!JSON.stringify(hl).includes('TOKEN'));
+  });
   console.log(n + ' extra tests passed');
 })().catch(e => { console.error('FAIL', e); process.exit(1); });

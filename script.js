@@ -292,7 +292,7 @@ var ST_AR=['ملغى','تم الاستلام','تم التأكيد','تم الش
 TB.or=()=>{setTimeout(loadOr,0);return `<p class="em">جارٍ تحميل الطلبات…</p><div id="orl"></div>`};
 async function loadOr(){const el=$('#orl');if(!el)return;let list;
   try{list=((await apiJ('/orders')).orders||[]).slice().reverse()}catch(e){if(el.isConnected)el.innerHTML='<p class="em">تعذر تحميل الطلبات. تأكد من تسجيل الدخول ومن تشغيل الخادم.</p>';return}
-  const shown=list.filter(o=>orF===''||String(o.st)===String(orF));
+  const oq=String(window.orQ||'').trim().toLowerCase(),shown=list.filter(o=>(orF===''||String(o.st)===String(orF))&&(!oq||[o.name,o.ph,o.code,o.ad,String(o.id)].some(x=>String(x||'').toLowerCase().includes(oq))));
   const sel=o=>`<select data-ost="${esc(o.code)}">${ST_AR.map((t,i)=>`<option value="${i}" ${o.st===i?'selected':''}>${t}</option>`).join('')}</select>`;
   el.innerHTML=`<div class="cd"><h3>الطلبات (${list.length})</h3><div class="chips">${[['','الكل'],[1,'جديدة'],[2,'مؤكدة'],[3,'مشحونة'],[4,'في الطريق'],[5,'مسلّمة'],[0,'ملغاة']].map(([v,l])=>`<button data-a="orf" data-c="${v}" class="${String(orF)===String(v)?'on':''}">${l}${v===''?'':` (${list.filter(o=>o.st===v).length})`}</button>`).join('')}</div>
   ${shown.map(o=>`<div class="cd" style="margin:8px 0"><div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap"><b>#${o.id} · ${esc(o.code)}</b><span>${new Date(o.d).toLocaleString('ar-IQ')}</span></div>

@@ -126,6 +126,17 @@ const assert = require('assert');
   assert((await v3.request.get(base + '/sw.js')).ok() && (await v3.request.get(base + '/icons/icon-512.png')).ok()); ok('service worker + brand icons are served');
   /* admin tabs render */
   for (const t of ['db', 'au', 'st', 'cp', 'bx', 'hr', 'wm', 'ch', 'pm', 'ig', 'sf']) { await adm.evaluate(t => A.tab(t), t); await adm.waitForTimeout(500); assert((await adm.$eval('#ab', e => e.textContent)).length > 20, t); }
+  /* live dashboard charts + confirmation of settings changes */
+  await adm.evaluate(() => A.grp(0)); await adm.waitForSelector('#lvb .kg .kc', { timeout: 8000 }); assert((await adm.$$eval('#lvb svg', e => e.length)) >= 6); ok('live dashboard: KPI cards with sparklines + charts render');
+  await adm.evaluate(() => A.tab('hl')); await adm.waitForSelector('#hlb .ck', { timeout: 8000 }); assert((await adm.$$eval('#hlb .ck', e => e.length)) >= 10); ok('store readiness checklist renders');
+  await adm.evaluate(() => A.tab('s')); await adm.waitForSelector('#sf');
+  await adm.click('#sf .btn >> nth=0'); await adm.waitForFunction(() => document.querySelector('.toast, #toast') ? true : true); 
+  assert.strictEqual(await adm.$('.cfv'), null, 'no dialog without changes'); ok('settings save with no change shows no dialog');
+  await adm.fill('#sf input[name=n]', 'لاسي الجديد'); await adm.click('#sf .btn >> nth=0'); await adm.waitForSelector('.cfv .cfr');
+  assert((await adm.textContent('.cfv .cfr .n')).includes('لاسي الجديد')); assert.notStrictEqual(await adm.$eval('#sf input[name=n]', e => e.defaultValue), 'لاسي الجديد');
+  await adm.click('.cfv [data-k=n]'); await new Promise(r => setTimeout(r, 600)); assert.notStrictEqual(db.prepare("select value from settings where key='config'").get()?.value?.includes('لاسي الجديد'), true); ok('settings: before→after confirmation; "back" saves nothing');
+  await adm.click('#sf .btn >> nth=0'); await adm.waitForSelector('.cfv [data-k=y]'); await adm.click('.cfv [data-k=y]'); await adm.waitForFunction(() => !document.querySelector('.cfv')); await new Promise(r => setTimeout(r, 1500));
+  assert(JSON.stringify(db.prepare("select value from settings").all()).includes('لاسي الجديد')); ok('settings: confirm → saved');
   assert.strictEqual(await adm.$$eval('nav.gn button', e => e.length), 8); await adm.click('nav.gn button >> nth=6'); assert((await adm.$$eval('nav.sn button', e => e.length)) >= 5); ok('settings grouped: 8 groups, sub-tabs inside the group');
   ok('all new admin tabs render (stats, codes, boxes, hero, WhatsApp, support, payment)');
 

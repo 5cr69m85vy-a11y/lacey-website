@@ -355,6 +355,44 @@ export async function extraRoutes(c) {
   }
 
   /* ---------- إحصائيات ---------- */
+  /* لوحة مباشرة: مؤشرات + سلاسل زمنية (تُحدَّث تلقائياً من الواجهة) */
+  if (p === '/adm/live' && M === 'GET') {
+    const a = adm(); if (a) return a;
+    const t = now(), D = 864e5, day0 = Math.floor((t + TZ * 1000) / D) * D - TZ * 1000, N = 14;
+    const lbl = ms => new Date(ms + TZ * 1000).toISOString().slice(5, 10);
+    const q = async (sql, ...b) => (await env.DB.prepare(sql).bind(...b).all()).results;
+    const since = day0 - (N - 1) * D;
+    const ords = await q('SELECT created_at c, total, status s, city, pay_method pm FROM orders WHERE created_at>=?', since - 0);
+    const days = Array.from({ length: N }, (_, i) => ({ k: lbl(since + i * D), t: since + i * D, orders: 0, rev: 0, cancelled: 0, visits: 0, customers: 0 }));
+    const hours = Array(24).fill(0), status = {}, cities = {}, pay = {};
+    for (const o of ords) {
+      const i = Math.floor((o.c - since) / D); if (i < 0 || i >= N) continue;
+      if (o.s === 0) { days[i].cancelled++; continue; }
+      days[i].orders++; days[i].rev += o.total || 0;
+      if (i === N - 1) hours[new Date(o.c + TZ * 1000).getUTCHours()]++;
+      cities[o.city || '—'] = (cities[o.city || '—'] || 0) + 1; pay[o.pm || 'cod'] = (pay[o.pm || 'cod'] || 0) + 1;
+    }
+    for (const r of await q('SELECT status s, COUNT(*) n FROM orders GROUP BY status')) status[r.s] = r.n;
+    const dkey = d => new Date(d.t + TZ * 1000).toISOString().slice(0, 10);
+    for (const v of await q('SELECT day, count FROM visits WHERE day>=?', dkey(days[0]))) { const d = days.find(x => dkey(x) === v.day); if (d) d.visits = v.count; }
+    for (const c of await q('SELECT created_at c FROM customers WHERE created_at>=?', since)) { const i = Math.floor((c.c - since) / D); if (days[i]) days[i].customers++; }
+    const one = async (sql, ...b) => (await env.DB.prepare(sql).bind(...b).first()) || {};
+    const rep = await one('SELECT SUM(CASE WHEN orders_count>1 THEN 1 ELSE 0 END) r, COUNT(*) n FROM customers WHERE orders_count>0');
+    const recent = (await q('SELECT id,code,name,total,status s,created_at c FROM orders ORDER BY created_at DESC LIMIT 8'));
+    const tot = days.reduce((m, d) => (m.o += d.orders, m.r += d.rev, m.c += d.cancelled, m.v += d.visits, m), { o: 0, r: 0, c: 0, v: 0 });
+    return J({ at: t, days, hours, status, cities: Object.entries(cities).sort((x, y) => y[1] - x[1]).slice(0, 6), pay,
+      kpi: { aov: tot.o ? Math.round(tot.r / tot.o) : 0, cancelRate: tot.o + tot.c ? Math.round(tot.c / (tot.o + tot.c) * 100) : 0, conv: tot.v ? Math.round(tot.o / tot.v * 1000) / 10 : 0, repeat: rep.n ? Math.round((rep.r || 0) / rep.n * 100) : 0 }, recent });
+  }
+  /* جاهزية المتجر: قائمة تحقق (أسماء فقط، لا أسرار) */
+  if (p === '/adm/health' && M === 'GET') {
+    const a = adm(); if (a) return a;
+    const ig = await readIg(env), n = async sql => ((await env.DB.prepare(sql).first()) || {}).n || 0;
+    return J({
+      wa: !!(ig.WA_TOKEN && ig.WA_PHONE_ID), telegram: !!(ig.BOT_TOKEN && ig.CHAT_ID), google: !!ig.GOOGLE_CLIENT_ID, ai: !!(ig.ANTHROPIC_API_KEY && ig.AI_ON !== '0'), storeUrl: !!ig.STORE_URL,
+      products: await n('SELECT COUNT(*) n FROM products'), codes: await n('SELECT COUNT(*) n FROM discount_codes WHERE active=1'), staff: await n('SELECT COUNT(*) n FROM staff'),
+      orders: await n('SELECT COUNT(*) n FROM orders'), customers: await n('SELECT COUNT(*) n FROM customers'), adminPass: !!env.ADMIN_PASS,
+    });
+  }
   if (p === '/adm/stats2' && M === 'GET') {
     const a = adm(); if (a) return a;
     const range = ['day', 'week', 'month'].includes(url.searchParams.get('range')) ? url.searchParams.get('range') : 'day';
