@@ -296,3 +296,5 @@ body[data-pg=help] #hlp,body[data-pg=routine] #hlp{background:var(--ac);color:#f
 
 header #accb{width:40px;height:40px;border-radius:50%;overflow:hidden;padding:0;display:inline-flex;align-items:center;justify-content:center;background:var(--mist);border:0}header #accb .avs,header #accb img{width:100%;height:100%;object-fit:cover}header #accb.cur{box-shadow:0 0 0 2px var(--ac)}
 header #accb small{display:none}header #accb .bni{width:100%;height:100%;border-radius:50%;display:flex;align-items:center;justify-content:center;background:transparent;box-shadow:none;transform:none;position:static}header #accb .bni svg{width:24px;height:24px}header #accb .avs{width:100%;height:100%}
+
+.ico{width:1.15em;height:1.15em;vertical-align:-.2em;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}.tiles2 a b .ico{width:22px;height:22px;vertical-align:-5px;color:var(--ac);margin-inline-end:4px}.rh h2 .ico{width:1em;height:1em;color:var(--ac)}.rt-warn .ico,.rt-ok .ico{vertical-align:-.25em}

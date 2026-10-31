@@ -35,7 +35,7 @@
     el.innerHTML = `<div class="chh"><div><b>${T(DEPT[d].ar, DEPT[d].en)}</b><small id="chw"></small></div><span><button data-c="end" title="${T('إنهاء المحادثة', 'End chat')}" aria-label="End">✓</button><button data-c="x" aria-label="Close">×</button></span></div>
       <div class="msgs" id="chmsgs" aria-live="polite"></div><div id="chtyp" class="typ" hidden>${T('الموظف يكتب…', 'Agent is typing…')}<i></i><i></i><i></i></div><div id="chcp"></div><div id="chrt"></div>
       <div id="chin">${!me && !s.all.length ? `<input id="scn" placeholder="${T('اسمك (اختياري)', 'Your name (optional)')}" value="${E(ls.get('lc_cn') || '')}">` : ''}
-      <form id="scf"><button type="button" class="pk" data-c="pick" title="${T('مشاركة منتج', 'Share a product')}" aria-label="Share product">📦</button><input name="text" autocomplete="off" maxlength="600" placeholder="${T('اكتب رسالة…', 'Type a message…')}" required><button class="btn" aria-label="Send">➤</button></form></div>`;
+      <form id="scf"><button type="button" class="pk" data-c="pick" title="${T('مشاركة منتج', 'Share a product')}" aria-label="Share product">${window.lcIco ? lcIco('box') : '+'}</button><input name="text" autocomplete="off" maxlength="600" placeholder="${T('اكتب رسالة…', 'Type a message…')}" required><button class="btn" aria-label="Send">➤</button></form></div>`;
   }
   function paint(d) {
     const s = get(d); if (!el || cur != d) return;

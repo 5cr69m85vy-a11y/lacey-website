@@ -80,7 +80,7 @@
     const ls0 = $1('#lsw'); if (ls0) ls0.addEventListener('change', () => setTimeout(() => { langBar(); if (cur === 'routine') renderRoutine(rsub, null, true); }, 50));
     const pm = $1('#pm'); if (pm) new MutationObserver(() => {
       const md = pm.querySelector('.md'), add = md && md.querySelector('[data-a=add]');
-      if (add && !md.querySelector('.rtq')) add.insertAdjacentHTML('afterend', `<button class="rtq" data-a="rtn" data-c="${E(add.dataset.c)}">🌸 ${T('روتين — اسأل عن هذا المنتج', 'Routine — ask about this product')}</button>`);
+      if (add && !md.querySelector('.rtq')) add.insertAdjacentHTML('afterend', `<button class="rtq" data-a="rtn" data-c="${E(add.dataset.c)}">${lcIco('flower')} ${T('روتين — اسأل عن هذا المنتج', 'Routine — ask about this product')}</button>`);
     }).observe(pm, { childList: true, subtree: true });
   }
 
@@ -149,11 +149,11 @@
       const rec = recommend(), show1 = (w) => rec.filter(s => w === 'am' ? true : s.when !== 'am');
       const blk = (title, steps) => `<div class="rt-c"><h3>${title}</h3>${steps.map((s, i) => `<div class="rt-step"><b>${i + 1}</b><div><b>${T(s.ar, s.en)}</b>${s.items.length ? s.items.map(p => pcard(p, true)).join('') : `<p class="em">${T('لا يوجد منتج مناسب حالياً — اسألي مختصاً.', 'No matching product yet — ask a specialist.')}</p>`}</div></div>`).join('')}</div>`;
       const sk = SKINS.find(x => x[0] === rq.skin);
-      out += `<div class="rt-c"><h3>✨ ${T('روتينك للبشرة ' + sk[1], 'Your routine for ' + sk[2] + ' skin')}</h3><p class="em">${E(TIPS[rq.skin])}</p></div>`;
+      out += `<div class="rt-c"><h3>${lcIco('flower')} ${T('روتينك للبشرة ' + sk[1], 'Your routine for ' + sk[2] + ' skin')}</h3><p class="em">${E(TIPS[rq.skin])}</p></div>`;
       const pick = w => (w === 'am' ? rec : rec.filter(s => s.when !== 'am')).map(s => s.items[0]).filter(Boolean);
-      const warn = w => conflicts(actsOf(pick(w))).map(x => `<p class="rt-warn">⚠️ ${E(x)}</p>`).join('');
-      if (rq.when !== 'pm') out += blk('☀️ ' + T('الصباح', 'Morning'), show1('am')) + warn('am');
-      if (rq.when !== 'am') out += blk('🌙 ' + T('المساء', 'Evening'), show1('pm')) + warn('pm');
+      const warn = w => conflicts(actsOf(pick(w))).map(x => `<p class="rt-warn">${lcIco('warn')} ${E(x)}</p>`).join('');
+      if (rq.when !== 'pm') out += blk(lcIco('sun') + ' ' + T('الصباح', 'Morning'), show1('am')) + warn('am');
+      if (rq.when !== 'am') out += blk(lcIco('moon') + ' ' + T('المساء', 'Evening'), show1('pm')) + warn('pm');
       out += `<div class="rt-c"><button class="btn" data-rt="send">${T('أرسلي روتيني إلى مختصة', 'Send my routine to a specialist')}</button> <button class="btn g" data-rt="saveR">${T('احفظي روتيني', 'Save my routine')}</button> <button class="btn g" data-rt="addall">${T('أضيفي الكل للسلة', 'Add all to bag')}</button></div>`;
     }
     return out;
@@ -162,17 +162,17 @@
     const sr = savedR(); if (!sr || !(sr.am && sr.am.length || sr.pm && sr.pm.length)) return '';
     const d = daily(), line = (w, codes) => codes.map(c => { const pr = prodBy(c); return pr ? `<label class="rt-chk${d[w].includes(c) ? ' done' : ''}"><input type="checkbox" data-rt="tick" data-w="${w}" data-c="${E(c)}" ${d[w].includes(c) ? 'checked' : ''}><div class="th" style="width:40px;height:40px;border-radius:10px;background:#eee center/cover;${pr.i ? `background-image:url('${E(pr.i)}')` : ''}"></div><span><b>${E(pr.n)}</b><small> ${E(pr.c)}</small></span></label>` : ''; }).join('');
     const total = (sr.am || []).length + (sr.pm || []).length, got = d.am.length + d.pm.length;
-    return `<div class="rt-c"><h3>📋 ${T('روتيني اليوم', 'My routine today')}</h3><div class="rt-str"><span>🔥 ${T('أيام متتالية: ', 'Streak: ')}${d.streak}</span><span>${got}/${total} ${T('خطوات اليوم', 'steps today')}</span></div>
-      ${(sr.am || []).length ? `<h4>☀️ ${T('الصباح', 'Morning')}</h4>${line('am', sr.am)}` : ''}${(sr.pm || []).length ? `<h4>🌙 ${T('المساء', 'Evening')}</h4>${line('pm', sr.pm)}` : ''}
+    return `<div class="rt-c"><h3>${lcIco('list')} ${T('روتيني اليوم', 'My routine today')}</h3><div class="rt-str"><span>${lcIco('flame')} ${T('أيام متتالية: ', 'Streak: ')}${d.streak}</span><span>${got}/${total} ${T('خطوات اليوم', 'steps today')}</span></div>
+      ${(sr.am || []).length ? `<h4>${lcIco('sun')} ${T('الصباح', 'Morning')}</h4>${line('am', sr.am)}` : ''}${(sr.pm || []).length ? `<h4>${lcIco('moon')} ${T('المساء', 'Evening')}</h4>${line('pm', sr.pm)}` : ''}
       <p class="em">${T('علّمي الخطوات التي أنجزتِها اليوم لتحافظي على سلسلة التزامك.', 'Tick the steps you did today to keep your streak.')}</p></div>`;
   }
   function guideHTML() {
     const q = ingQ.trim().toLowerCase(), list = ING.filter(i => !q || (i[1] + ' ' + i[2]).toLowerCase().includes(q));
     const sel = ING.filter(i => ingSel.includes(i[0])), cf = sel.length > 1 ? CONFLICT.filter(c => ingSel.includes(c[0]) && ingSel.includes(c[1])) : [];
-    return `<div class="rt-c"><h3>🧪 ${T('دليل المكونات', 'Ingredient guide')}</h3><input id="rt-iq" type="search" placeholder="${T('ابحثي عن مكوّن…', 'Search an ingredient…')}" value="${E(ingQ)}" style="width:100%;padding:12px 14px;border:1px solid #d9cfe8;border-radius:14px;font:inherit">
-      ${list.map(i => `<div class="rt-ing"><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" data-rt="ing" data-v="${i[0]}" ${ingSel.includes(i[0]) ? 'checked' : ''}><b>${T(i[1], i[2])}</b></label><small>${T(i[3], i[4])}</small><small>${i[5].includes('am') ? '☀️ ' : ''}${i[5].includes('pm') ? '🌙 ' : ''}${i[6] === 'avoid' ? T('· لا يناسب الحمل', '· not for pregnancy') : i[6] === 'limit' ? T('· باعتدال', '· use in moderation') : ''}</small></div>`).join('') || `<p class="em">${T('لا نتائج', 'No results')}</p>`}</div>
-      <div class="rt-c"><h3>⚖️ ${T('هل يمكن الجمع بينها؟', 'Can I combine them?')}</h3><p class="em">${T('علّمي مكوّنين أو أكثر من القائمة لنخبرك.', 'Tick two or more ingredients above.')}</p>
-      ${sel.length > 1 ? (cf.length ? cf.map(c => `<p class="rt-warn">⚠️ ${T(c[2], c[3])}</p>`).join('') : `<p class="rt-ok">✅ ${T('لا تعارض معروف بين هذه المكوّنات.', 'No known conflict between these.')}</p>`) : ''}</div>`;
+    return `<div class="rt-c"><h3>${lcIco('flask')} ${T('دليل المكونات', 'Ingredient guide')}</h3><input id="rt-iq" type="search" placeholder="${T('ابحثي عن مكوّن…', 'Search an ingredient…')}" value="${E(ingQ)}" style="width:100%;padding:12px 14px;border:1px solid #d9cfe8;border-radius:14px;font:inherit">
+      ${list.map(i => `<div class="rt-ing"><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" data-rt="ing" data-v="${i[0]}" ${ingSel.includes(i[0]) ? 'checked' : ''}><b>${T(i[1], i[2])}</b></label><small>${T(i[3], i[4])}</small><small>${i[5].includes('am') ? lcIco('sun') : ''}${i[5].includes('pm') ? lcIco('moon') : ''}${i[6] === 'avoid' ? T('· لا يناسب الحمل', '· not for pregnancy') : i[6] === 'limit' ? T('· باعتدال', '· use in moderation') : ''}</small></div>`).join('') || `<p class="em">${T('لا نتائج', 'No results')}</p>`}</div>
+      <div class="rt-c"><h3>${lcIco('scale')} ${T('هل يمكن الجمع بينها؟', 'Can I combine them?')}</h3><p class="em">${T('علّمي مكوّنين أو أكثر من القائمة لنخبرك.', 'Tick two or more ingredients above.')}</p>
+      ${sel.length > 1 ? (cf.length ? cf.map(c => `<p class="rt-warn">${lcIco('warn')} ${T(c[2], c[3])}</p>`).join('') : `<p class="rt-ok">${lcIco('check')} ${T('لا تعارض معروف بين هذه المكوّنات.', 'No known conflict between these.')}</p>`) : ''}</div>`;
   }
   function askHTML() {
     const p = askP && prodBy(askP);
@@ -193,7 +193,7 @@
     if (u && u.searchParams.get('p')) { askP = u.searchParams.get('p'); }
     if (tab !== 'support' && window.LCChat) LCChat.unmount();
     const tabs = [['quiz', '/routine', T('روتيني', 'My routine')], ['guide', '/routine/guide', T('دليل المكونات', 'Ingredients')], ['ask', '/routine/ask', T('اسألي عن منتج', 'Ask about a product')], ['support', '/routine/support', T('الدعم', 'Support')]];
-    el.innerHTML = `<div class="w"><div class="rh"><h2>🌸 ${T('روتين', 'Routine')}</h2><p>${T('مستشارتك الشخصية للعناية بالبشرة: تحليل بشرتك، اقتراح منتجات، وتحدّثي مع فريقنا.', 'Your personal skincare advisor: analyse your skin, get product picks, and chat with our team.')}</p></div>
+    el.innerHTML = `<div class="w"><div class="rh"><h2>${lcIco('flower')} ${T('روتين', 'Routine')}</h2><p>${T('مستشارتك الشخصية للعناية بالبشرة: تحليل بشرتك، اقتراح منتجات، وتحدّثي مع فريقنا.', 'Your personal skincare advisor: analyse your skin, get product picks, and chat with our team.')}</p></div>
       <nav class="rt-tabs" aria-label="Routine">${tabs.map(([k, h, n]) => `<a href="${h}" class="${tab === k ? 'on' : ''}">${n}</a>`).join('')}</nav>
       <div id="rtb">${tab === 'quiz' ? quizHTML() : tab === 'ask' ? askHTML() : tab === 'guide' ? guideHTML() : `<div id="rt-chat"></div>`}</div></div>`;
     if (tab === 'support' && window.LCChat) LCChat.mount(document.getElementById('rt-chat'), 'routine');
@@ -262,8 +262,8 @@
   ];
   function renderHelp() {
     const el = $1('#hlpg'); if (!el) return;
-    el.innerHTML = `<div class="w"><div class="rh"><h2>🎧 ${T('مركز المساعدة', 'Help centre')}</h2><p>${T('تحدّثي مع فريق خدمة الزبائن أو ابحثي في الأسئلة الشائعة.', 'Chat with customer service or browse the FAQ.')}</p></div>
-      <div class="hg"><div><div class="tiles2"><a href="/tracking"><b>📦 ${T('تتبع الطلب', 'Track order')}</b><small>${T('برمز الطلب', 'By order code')}</small></a><a href="/routine/support"><b>🌸 ${T('دعم روتين', 'Routine support')}</b><small>${T('استشارة بشرة', 'Skin advice')}</small></a><a href="/account/orders"><b>🧾 ${T('طلباتي', 'My orders')}</b><small>${T('وإيصالاتي', 'and receipts')}</small></a></div>
+    el.innerHTML = `<div class="w"><div class="rh"><h2>${lcIco('headset')} ${T('مركز المساعدة', 'Help centre')}</h2><p>${T('تحدّثي مع فريق خدمة الزبائن أو ابحثي في الأسئلة الشائعة.', 'Chat with customer service or browse the FAQ.')}</p></div>
+      <div class="hg"><div><div class="tiles2"><a href="/tracking"><b>${lcIco('box')} ${T('تتبع الطلب', 'Track order')}</b><small>${T('برمز الطلب', 'By order code')}</small></a><a href="/routine/support"><b>${lcIco('flower')} ${T('دعم روتين', 'Routine support')}</b><small>${T('استشارة بشرة', 'Skin advice')}</small></a><a href="/account/orders"><b>${lcIco('receipt')} ${T('طلباتي', 'My orders')}</b><small>${T('وإيصالاتي', 'and receipts')}</small></a></div>
       <h3>${T('أسئلة شائعة', 'FAQ')}</h3><div class="faq">${FAQ.map(f => `<details><summary>${T(f[0], f[1])}</summary><p>${T(f[2], f[3])}</p></details>`).join('')}</div></div>
       <div id="hl-chat"></div></div></div>`;
     if (window.LCChat) LCChat.mount($1('#hl-chat'), 'service');
@@ -275,7 +275,7 @@
   }
   function renderPrefs() {
     const el = $1('#prf'); if (!el) return; const me = typeof custMe == 'function' ? custMe() : null;
-    el.innerHTML = `<div class="w"><div class="rh"><h2>⚙️ ${T('الإعدادات', 'Settings')}</h2></div>
+    el.innerHTML = `<div class="w"><div class="rh"><h2>${lcIco('gear')} ${T('الإعدادات', 'Settings')}</h2></div>
       <div class="prf-c"><b>${T('اللغة', 'Language')}</b><select id="pf-l"><option value="ar" ${lang == 'ar' ? 'selected' : ''}>العربية</option><option value="en" ${lang == 'en' ? 'selected' : ''}>English</option></select></div>
       ${me ? `<div class="prf-c"><b>${T('الخصوصية والإشعارات', 'Privacy & notifications')}</b><label><input type="checkbox" id="pf-m" ${me.mkt ? 'checked' : ''}> ${T('أرغب باستلام العروض والأكواد', 'Send me offers and codes')}</label><small>${T('الرسائل المتعلقة بطلباتك تصلك دائماً.', 'Messages about your orders are always sent.')}</small></div>
       <div class="prf-c"><b>${E(me.name || me.email || me.ph || '')}</b><div class="row2" style="display:flex;gap:8px;flex-wrap:wrap"><a class="btn g" href="/account">${T('ملفي الشخصي', 'My profile')}</a><button class="btn g" data-pf="out">${T('تسجيل الخروج', 'Sign out')}</button><button class="btn g" data-pf="outall">${T('الخروج من كل الأجهزة', 'Sign out everywhere')}</button></div></div>`
