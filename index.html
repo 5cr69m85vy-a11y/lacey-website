@@ -2,7 +2,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Playfair+Display&family=Marcellus&family=Jost:wght@300;400;500&family=Inter:wght@400;500&family=Manrope:wght@400;500&family=Cairo:wght@400;500;600&family=DM+Serif+Display&family=Lora&family=Poppins:wght@400;500&family=Montserrat:wght@400;500&family=Tajawal:wght@400;500&family=Almarai&display=swap" rel="stylesheet">
 <link rel="manifest" href="/manifest.json"><meta name="theme-color" content="#86b3bf"><link rel="apple-touch-icon" href="/icons/apple-touch-icon.png"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Lacey"><link rel="stylesheet" href="/style.css"></head><body>
 <div id="ann"></div>
-<header><div class="w"><div class="lg"></div><nav id="nv"></nav><select id="lsw" aria-label="Language"><option value="ar">العربية</option><option value="en">English</option></select></div></header>
+<header><div class="w"><div class="lg"></div><nav id="nv"></nav><a id="hlp" href="/help" aria-label="Help" title="Help"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 14v-2a8 8 0 0116 0v2"/><rect x="3" y="14" width="4" height="6" rx="1.500"/><rect x="17" y="14" width="4" height="6" rx="1.500"/><path d="M19 20c0 1.500-2 2-5 2"/></svg></a><select id="lsw" aria-label="Language"><option value="ar">العربية</option><option value="en">English</option></select></div></header>
 <div class="sbar" data-pg="home categories"><div class="w"><div class="srch"><svg class="ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input id="sq" type="search" placeholder="Search by product name or code" autocomplete="off"><div id="sg"></div></div></div></div>
 <main id="top">
 <div class="hero" data-pg="home"><div class="w"><div><h1 id="ht"></h1><p id="hs"></p><button class="btn" id="hb" data-a="go" data-c="shop">Shop now</button></div><div class="disc" id="hd"></div></div></div>
@@ -18,8 +18,10 @@
 <section id="how" data-pg="home" style="background:var(--w)"><div class="w"><h2>How to order</h2><p class="sub">No account needed. It takes a minute.</p><div class="st"><div><b>1</b><p>Browse and add products to your bag.</p></div><div><b>2</b><p>Open your bag and apply a discount code if you have one.</p></div><div><b>3</b><p>Enter your name, phone number and address.</p></div><div><b>4</b><p>Place the order. We confirm it by phone.</p></div></div></div></section>
 <section id="reviews" data-pg="home"><div class="w"><h2>Customer reviews</h2><p class="sub">What our customers say.</p><div class="rv" id="rv"></div></div></section>
 </main>
-<section id="trk" style="display:none"><div class="w"><h3>Track your order</h3><form id="tkf" class="tkf"><input name="code" placeholder="Order code (LC-XXXXXX)" required><button class="btn">Track</button></form><div id="tkr"></div></div></section>
+<section id="trk" data-pg="tracking"><div class="w"><h2>Track your order</h2><p class="sub" id="tks">Enter the order code from your receipt (LC-XXXXXX).</p><form id="tkf" class="tkf"><input name="code" placeholder="Order code (LC-XXXXXX)" required><button class="btn">Track</button></form><div id="tkr"></div></div></section>
 <section id="rtn" data-pg="routine" aria-live="polite"></section>
+<section id="hlpg" data-pg="help" aria-live="polite"></section>
+<section id="prf" data-pg="preferences"></section>
 <footer data-pg="home categories offers"><div id="ct"></div><span id="ft"></span></footer>
 <div class="ov" id="cv" data-a="xo"><aside class="dr"><div class="dh"><h2 id="ch">Your bag</h2><button data-a="x" aria-label="Close">✕</button></div><div id="cb"></div></aside></div>
 <div class="ov" id="pm" data-a="xo"><div class="md"></div></div>
@@ -34,5 +36,6 @@
 <script src="/admin2.js"></script>
 <script src="/admin3.js"></script>
 <script src="/store2.js"></script>
+<script src="/chat.js"></script>
 <script src="/staff.js"></script>
 <script src="/pages.js"></script></body></html>

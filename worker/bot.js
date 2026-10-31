@@ -6,6 +6,17 @@ const CANCEL_WINDOW_MS = 10 * 60 * 1000;
 const ST = ['ملغى', 'تم الاستلام', 'تم التأكيد', 'تم الشحن', 'في الطريق إليك', 'تم التوصيل'];
 export const MAIN = [{ k: 'where', t: 'أين طلبي؟' }, { k: 'change', t: 'تغيير طلبي' }, { k: 'modify', t: 'تعديل طلبي' }, { k: 'cancel', t: 'إلغاء طلبي' }, { k: 'human', t: 'الاتصال بموظف' }];
 const HUMAN = { k: 'human', t: 'الاتصال بموظف' };
+/* قسم روتين: استشارات البشرة والمنتجات (h = رابط داخل المتجر) */
+export const ROUTINE = [{ k: 'skin', t: 'اعرفي نوع بشرتي' }, { k: 'plan', t: 'اقترحوا لي روتين' }, { k: 'ingr', t: 'دليل المكونات' }, { k: 'prod', t: 'سؤال عن منتج' }, { k: 'human', t: 'تحدثي مع مختصة' }];
+const detectR = t => {
+  t = String(t || '');
+  if (/(مختص|موظف|بشري|human|agent)/i.test(t)) return 'human';
+  if (/(نوع بشرت|بشرتي دهن|بشرتي جاف|بشرتي حساس|اختبار)/.test(t)) return 'skin';
+  if (/(روتين|خطوات|صباح|مساء)/.test(t)) return 'plan';
+  if (/(مكون|ريتينول|فيتامين|نياسين|ساليسيلك|هيالورون|retinol|niacin)/i.test(t)) return 'ingr';
+  if (/^(مرحبا|هلا|السلام|اهلا|أهلا|hi|hello)/i.test(t.trim())) return 'menu';
+  return '';
+};
 
 const detect = t => {
   t = String(t || '');
@@ -28,11 +39,11 @@ const owns = (ch, o) => (o.customer_id && o.customer_id === ch.customer_id) || (
 const line = o => `• ${o.code}: ${ST[o.status]} — ${Number(o.total).toLocaleString('en-US')} د.ع`;
 const reply = (body, chips = MAIN, extra = {}) => ({ body, chips, ...extra });
 
-async function aiAnswer(env, ch, text, orders) {
+async function aiAnswer(env, ch, text, orders, routine = false) {
   const cfg = await cfgOf(env);
   const prods = (await env.DB.prepare('SELECT name,price,category FROM products ORDER BY sort LIMIT 40').all()).results;
   const hist = (await env.DB.prepare('SELECT sender,body FROM chat_messages WHERE chat_id=? ORDER BY id DESC LIMIT 10').bind(ch.id).all()).results.reverse();
-  const sys = `أنت «${BOT}»، مساعد خدمة العملاء لمتجر ${cfg.n || 'لاسي'} للعناية بالبشرة في العراق. أجب بالعربية بلهجة مهذبة وقصيرة (3 جمل كحد أقصى).
+  const sys = routine ? `أنت «روتين»، مستشارة عناية بالبشرة لمتجر ${cfg.n || 'لاسي'} في العراق. أجيبي بالعربية بلهجة لطيفة ومختصرة (4 جمل كحد أقصى). قدّمي نصائح عامة للعناية بالبشرة فقط ولا تشخّصي أمراضاً ولا تصفي أدوية؛ للحالات الطبية (التهاب شديد، جروح، تحسس شديد، حمل مع مكونات فعالة) انصحي بمراجعة طبيب جلدية وأضيفي [[HUMAN]] إن أرادت الزبونة مختصة. لا تخترعي أسعاراً. المنتجات المتاحة: ${prods.map(p => `${p.name} (${p.category}) ${p.price}`).join(' | ') || 'غير متوفرة حالياً'}.\n${env.AI_PROMPT || ''}` : `أنت «${BOT}»، مساعد خدمة العملاء لمتجر ${cfg.n || 'لاسي'} للعناية بالبشرة في العراق. أجب بالعربية بلهجة مهذبة وقصيرة (3 جمل كحد أقصى).
 اعتمد فقط على المعلومات التالية ولا تخترع أسعاراً أو وعوداً. إن لم تعرف الجواب أو طلب الزبون موظفاً أو كانت المشكلة تحتاج صلاحية (استرجاع، شكوى، تعديل عنوان) فاختم بالكلمة [[HUMAN]] فقط.
 - التوصيل: ${cfg.del || 'نوصل لكل العراق خلال 2–4 أيام والدفع عند الاستلام'}. رسوم التوصيل: ${+cfg.sf ? cfg.sf + ' د.ع' : 'مجاني'}.
 - يمكن إلغاء الطلب خلال 10 دقائق من إنشائه، ثم يتأكد تلقائياً ويتابعه فريقنا.
@@ -53,6 +64,7 @@ ${env.AI_PROMPT || ''}`;
 
 /* يعيد { body, chips, handoff?, topic? } */
 export async function botReply(env, ch, { text, quick }) {
+  if (ch.dept === 'routine') return routineReply(env, ch, { text, quick });
   let intent = quick || detect(text);
   if (quick && quick.startsWith('cancel_yes:')) {
     const o = await env.DB.prepare('SELECT * FROM orders WHERE code=?').bind(quick.slice(11)).first();
@@ -94,4 +106,23 @@ export async function botReply(env, ch, { text, quick }) {
     }
   }
   return reply('لم أفهم سؤالك تماماً. اختر من الخيارات التالية أو اتصل بموظف:');
+}
+
+const R_HUMAN = reply => reply;
+async function routineReply(env, ch, { text, quick }) {
+  const intent = quick || detectR(text);
+  const link = (body, h, t) => ({ body, chips: [{ k: 'go', t, h }, ...ROUTINE.filter(x => x.k === 'human')] });
+  if (intent === 'human') return reply('تم تحويلك إلى مختصة العناية بالبشرة من فريقنا، ستردّ عليك هنا بأقرب وقت 🌸 اكتبي نوع بشرتك وما تريدين معالجته.', [], { handoff: true, topic: 'routine' });
+  if (intent === 'menu') return reply('أهلاً بك في «روتين» 🌸 مستشارتك للعناية بالبشرة. اختاري ما يناسبك أو اكتبي سؤالك:', ROUTINE);
+  if (intent === 'skin' || intent === 'plan') return link('ابدئي باختبار قصير (دقيقة واحدة) لتحصلي على روتين صباحي ومسائي بمنتجات من المتجر 🌿', '/routine', 'ابدئي الاختبار');
+  if (intent === 'ingr') return link('في دليل المكونات ستجدين فوائد كل مكوّن ومتى تستخدمينه وما لا يجتمع معه ✨', '/routine/guide', 'افتحي الدليل');
+  if (intent === 'prod') return reply('اكتبي كود المنتج (مثل LC101) وسؤالك في رسالة واحدة، أو اضغطي «اسألي عن منتج» وسيرد عليك مختص.', [{ k: 'go', t: 'اسألي عن منتج', h: '/routine/ask' }, ...ROUTINE.filter(x => x.k === 'human')]);
+  if (env.ANTHROPIC_API_KEY && env.AI_ON !== '0') {
+    const ans = await aiAnswer(env, ch, text, null, true);
+    if (ans) {
+      if (ans.includes('[[HUMAN]]')) { const clean = ans.replace('[[HUMAN]]', '').trim(); return reply((clean ? clean + '\n\n' : '') + 'سأحوّلك إلى مختصة لتساعدك بشكل أفضل 🌸', [], { handoff: true, topic: 'routine-ai' }); }
+      return reply(ans, ROUTINE);
+    }
+  }
+  return reply('لم أفهم سؤالك تماماً. اختاري من الخيارات أو تحدثي مع مختصة:', ROUTINE);
 }

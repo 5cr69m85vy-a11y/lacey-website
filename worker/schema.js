@@ -27,5 +27,9 @@ export const MIGRATIONS = [
  [
   "0007_birth_skin.sql",
   "-- 0007: تاريخ الميلاد (الحد الأدنى 15 سنة) ونوع البشرة للروتين\nALTER TABLE customers ADD COLUMN birth TEXT NOT NULL DEFAULT '';\nALTER TABLE customers ADD COLUMN skin TEXT NOT NULL DEFAULT '';\n"
+ ],
+ [
+  "0008_depts_routine.sql",
+  "-- 0008: أقسام الدعم (خدمة العملاء / روتين)، إيصالات القراءة، مؤشر الكتابة، روتين محفوظ، موافقة التسويق\nALTER TABLE chats ADD COLUMN dept TEXT NOT NULL DEFAULT 'service';\nALTER TABLE chats ADD COLUMN staff_seen_at INTEGER NOT NULL DEFAULT 0;\nALTER TABLE chats ADD COLUMN cust_seen_at INTEGER NOT NULL DEFAULT 0;\nALTER TABLE chats ADD COLUMN staff_typing_at INTEGER NOT NULL DEFAULT 0;\nALTER TABLE customers ADD COLUMN routine TEXT NOT NULL DEFAULT '';\nALTER TABLE customers ADD COLUMN mkt INTEGER NOT NULL DEFAULT 0;\nCREATE INDEX IF NOT EXISTS idx_chats_dept ON chats(dept, status);\n"
  ]
 ];

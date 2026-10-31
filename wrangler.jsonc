@@ -10,7 +10,7 @@
       "/order", "/order/*", "/orders", "/status", "/track",
       "/customers", "/customer", "/discount", "/discounts",
       "/auth/*", "/staff/*", "/chat/*", "/adm/*", "/media", "/media/*", "/manifest.json", "/quote", "/codes", "/me", "/me/*",
-      "/categories", "/offers", "/routine", "/routine/*", "/cart", "/checkout", "/account", "/account/*", "/support"
+      "/categories", "/offers", "/routine", "/routine/*", "/cart", "/checkout", "/account", "/account/*", "/support", "/help", "/help/*", "/tracking", "/preferences"
     ]
   },
   "d1_databases": [

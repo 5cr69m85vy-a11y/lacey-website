@@ -15,6 +15,13 @@ export function ageOf(birth, at = new Date()) {
   return age;
 }
 const birthErr = b => { const g = ageOf(b); return g === null ? 'أدخل تاريخ ميلاد صحيحاً' : g < MIN_AGE ? `لا يمكن إنشاء حساب لمن عمره أقل من ${MIN_AGE} سنة` : ''; };
+/* روتين محفوظ: { skin, am:[codes], pm:[codes], at } — يُنظَّف على الخادم */
+export function cleanRoutine(v) {
+  let o = v; if (typeof v === 'string') { try { o = JSON.parse(v); } catch (e) { return null; } }
+  if (!o || typeof o !== 'object') return null;
+  const codes = x => (Array.isArray(x) ? x : []).map(c => String(c).toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 20)).filter(Boolean).slice(0, 12);
+  return JSON.stringify({ skin: SKINS.includes(o.skin) ? o.skin : '', am: codes(o.am), pm: codes(o.pm), at: Date.now() });
+}
 export const SKINS = ['oily', 'dry', 'combo', 'sensitive', 'normal'];
 const SESSION_MS = 90 * 864e5;
 const OTP_MS = 10 * 60 * 1000;
@@ -41,7 +48,7 @@ export async function sessionCustomer(env, request) {
   if (row) env.DB.prepare('UPDATE customers SET last_seen_at=? WHERE id=?').bind(now(), row.id).run().catch(() => {});
   return row || null;
 }
-const pub = c => ({ id: c.id, name: c.name, ph: c.phone || '', email: c.email || '', city: c.city, area: c.area, lm: c.landmark, wa: !!c.wa_verified, pw: !!c.pw_hash, google: !!c.google_sub, orders: c.orders_count, birth: c.birth || '', age: ageOf(c.birth), skin: c.skin || '', avatar: c.avatar || '' });
+const pub = c => ({ id: c.id, name: c.name, ph: c.phone || '', email: c.email || '', city: c.city, area: c.area, lm: c.landmark, wa: !!c.wa_verified, pw: !!c.pw_hash, google: !!c.google_sub, orders: c.orders_count, birth: c.birth || '', age: ageOf(c.birth), mkt: !!c.mkt, routine: c.routine || '', skin: c.skin || '', avatar: c.avatar || '' });
 
 async function welcomeOnce(env, c, origin, ctx) {
   if (c.welcomed || !c.phone) return;
@@ -101,7 +108,7 @@ export async function authRoutes(c) {
     return J({ ok: true });
   }
   if (p === '/auth/otp/verify' && M === 'POST') {
-    const { ph, code, name, birth } = await body();
+    const { ph, code, name, birth, mkt } = await body();
     if (!PHONE.test(String(ph || '')) || !/^\d{6}$/.test(String(code || ''))) return J({ error: 'رمز غير صحيح' }, 400);
     { const lim = await limit(env, request, 'otp-verify', 30, 15 * 60e3); if (lim) return lim; }
     const o = await env.DB.prepare('SELECT * FROM otp_codes WHERE phone=? AND expires_at>? ORDER BY id DESC LIMIT 1').bind(ph, now()).first();
@@ -122,7 +129,7 @@ export async function authRoutes(c) {
     } else {
       const ex = await env.DB.prepare('SELECT id FROM customers WHERE phone=?').bind(ph).first();
       if (ex) { id = ex.id; await env.DB.prepare("UPDATE customers SET wa_verified=1,name=CASE WHEN name='' THEN ? ELSE name END WHERE id=?").bind(nm, id).run(); }
-      else id = (await env.DB.prepare('INSERT INTO customers(phone,name,wa_verified,birth,created_at,last_seen_at) VALUES(?,?,1,?,?,?) RETURNING id').bind(ph, nm, String(birth || ''), now(), now()).first()).id;
+      else id = (await env.DB.prepare('INSERT INTO customers(phone,name,wa_verified,birth,mkt,created_at,last_seen_at) VALUES(?,?,1,?,?,?,?) RETURNING id').bind(ph, nm, String(birth || ''), mkt ? 1 : 0, now(), now()).first()).id;
     }
     return done(id);
   }
@@ -139,7 +146,7 @@ export async function authRoutes(c) {
     { const e = birthErr(b.birth); if (e) return J({ error: e }, 400); }
     if (await env.DB.prepare('SELECT 1 x FROM customers WHERE email=?').bind(email).first()) return J({ error: 'هذا البريد مسجّل مسبقاً' }, 409);
     const salt = randHex(16), h = await pbkdf2(pw, salt);
-    const id = (await env.DB.prepare('INSERT INTO customers(email,name,pw_hash,pw_salt,avatar,birth,created_at,last_seen_at) VALUES(?,?,?,?,?,?,?,?) RETURNING id').bind(email, name, h, salt, AVATAR.test(String(b.avatar || '')) ? b.avatar : '', String(b.birth), now(), now()).first()).id;
+    const id = (await env.DB.prepare('INSERT INTO customers(email,name,pw_hash,pw_salt,avatar,birth,mkt,created_at,last_seen_at) VALUES(?,?,?,?,?,?,?,?,?) RETURNING id').bind(email, name, h, salt, AVATAR.test(String(b.avatar || '')) ? b.avatar : '', String(b.birth), b.mkt ? 1 : 0, now(), now()).first()).id;
     return done(id);
   }
   if (p === '/auth/login' && M === 'POST') {
@@ -189,6 +196,11 @@ export async function authRoutes(c) {
       if (b.birth !== undefined && b.birth !== '' && !me.birth) { const e = birthErr(b.birth); if (e) return J({ error: e }, 400); await env.DB.prepare('UPDATE customers SET birth=? WHERE id=?').bind(String(b.birth), me.id).run(); }
       if (b.skin !== undefined && b.skin !== '' && !SKINS.includes(String(b.skin))) return J({ error: 'نوع بشرة غير صالح' }, 400);
       if (b.skin !== undefined) await env.DB.prepare('UPDATE customers SET skin=? WHERE id=?').bind(String(b.skin), me.id).run();
+      if (b.mkt !== undefined) await env.DB.prepare('UPDATE customers SET mkt=? WHERE id=?').bind(b.mkt ? 1 : 0, me.id).run();
+      if (b.routine !== undefined) {
+        const r = b.routine === '' ? '' : cleanRoutine(b.routine); if (r === null) return J({ error: 'روتين غير صالح' }, 400);
+        await env.DB.prepare('UPDATE customers SET routine=? WHERE id=?').bind(r, me.id).run();
+      }
       await env.DB.prepare('UPDATE customers SET name=?,city=?,area=?,landmark=?,avatar=? WHERE id=?')
         .bind(String(b.name ?? me.name).trim().slice(0, 80), String(b.city ?? me.city).slice(0, 80), String(b.area ?? me.area).slice(0, 120), String(b.lm ?? me.landmark).slice(0, 160), b.avatar === undefined ? (me.avatar || '') : String(b.avatar), me.id).run();
       return J({ ok: true });

@@ -270,3 +270,26 @@ header{z-index:35}
 #bnav #accb svg:not(.avs),#bnav #accb.on svg:not(.avs){stroke:currentColor!important}
 #bnav #accb .bni{background:#fff}
 #bnav #accb i.bni{color:inherit;top:auto;right:auto;min-width:0;line-height:normal;padding:0;min-height:0}
+
+/* صفحات الدعم والتتبع والتفضيلات */
+#hlp{position:relative;display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:50%;background:var(--mist);color:inherit}#hlp.hn::after{content:attr(data-n);position:absolute;top:-3px;inset-inline-end:-3px;min-width:16px;height:16px;border-radius:99px;background:#e53935;color:#fff;font:600 10px/16px system-ui;text-align:center;padding:0 3px}
+body[data-pg=help] #hlp,body[data-pg=routine] #hlp{background:var(--ac);color:#fff}
+#hlpg,#prf,#trk{padding:28px 0 120px;min-height:70vh}#hlpg .hg{display:grid;grid-template-columns:1fr 1.2fr;gap:20px}@media(max-width:820px){#hlpg .hg{grid-template-columns:1fr}}
+#hlpg #chp.inl,#rtn #chp.inl{position:static;display:flex;width:100%;height:70vh;min-height:420px;box-shadow:none;border:1px solid #e1ebeb;border-radius:22px}#hlpg #chp.inl [data-c=x],#rtn #chp.inl [data-c=x]{display:none}
+.faq details{background:#fff;border-radius:14px;padding:12px 16px;margin:8px 0;box-shadow:0 2px 10px rgba(40,60,60,.06)}.faq summary{cursor:pointer;font-weight:600}.faq p{margin-top:8px;opacity:.8}
+.tiles2{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:14px 0}.tiles2 a{background:#fff;border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:4px;box-shadow:0 2px 10px rgba(40,60,60,.06);color:inherit}.tiles2 a b{font-size:15px}.tiles2 a small{opacity:.65}
+#chp .m{position:relative}#chp .tk{display:block;font-size:10px;opacity:.6;margin-top:3px;text-align:end}#chp .tk.sn{color:#9fe6c0;opacity:1}#chp .m.customer .tk{color:#ddd}#chp .m.customer .tk.sn{color:#9fe6c0}
+.typ{padding:2px 14px 6px;font-size:12px;opacity:.7}.typ i{display:inline-block;width:5px;height:5px;margin:0 1.500px;border-radius:50%;background:currentColor;animation:tp 1s infinite}.typ i:nth-child(3){animation-delay:.15s}.typ i:nth-child(4){animation-delay:.3s}@keyframes tp{50%{opacity:.2;transform:translateY(-3px)}}
+#chp .pk{font-size:18px;padding:0 6px}#chp .row2{display:flex;gap:8px}#chp #chcp .chips{max-height:92px;overflow:auto}#chp .chr{padding:10px 14px}
+.prf-c{background:#fff;border-radius:18px;padding:16px;margin:12px 0;box-shadow:0 2px 12px rgba(40,60,60,.06);display:flex;flex-direction:column;gap:10px}.prf-c label{display:flex;align-items:center;gap:10px}.prf-c label input{width:20px;height:20px}
+.rt-tabs{display:flex;gap:6px;overflow:auto;padding:4px 0 10px}.rt-tabs a{white-space:nowrap}
+.rt-chk{display:flex;align-items:center;gap:10px;padding:10px;border-radius:14px;background:#faf7fd;margin:6px 0}.rt-chk input{width:20px;height:20px}.rt-chk.done span{text-decoration:line-through;opacity:.55}
+.rt-str{display:flex;gap:6px;flex-wrap:wrap}.rt-str span{padding:4px 12px;border-radius:99px;background:#efe6fb;color:#5b2d8a;font-size:13px}
+.rt-warn{background:#fff4e5;color:#8a5200;border-radius:12px;padding:10px 12px;margin:6px 0;font-size:14px}.rt-ok{background:#e9f7ef;color:#1f6b3d;border-radius:12px;padding:10px 12px;margin:6px 0;font-size:14px}
+.rt-ing{border:1px solid #ece6f3;border-radius:14px;padding:10px 12px;margin:6px 0}.rt-ing b{display:block}.rt-ing small{opacity:.7}
+
+#stf .dtabs{display:flex;gap:6px;margin-bottom:8px}#stf .dtabs button{padding:6px 12px;border-radius:99px;background:var(--mist)}#stf .dtabs .on{background:var(--ac);color:#fff}
+.ub{display:inline-block;min-width:18px;height:18px;line-height:18px;border-radius:99px;background:#e53935;color:#fff;font:600 11px/18px system-ui;text-align:center;padding:0 4px;font-style:normal}
+.dp{padding:1px 8px;border-radius:99px;background:#e6f0f0}.dp.routine{background:#efe6fb;color:#5b2d8a}
+#stf .inf{display:flex;gap:8px;flex-wrap:wrap;margin:4px 0 8px;font-size:12px}#stf .inf span{background:#f3f7f7;border-radius:99px;padding:3px 10px}#stf #stq{padding:6px;border-radius:10px;border:1px solid #d9e3e3;margin:6px 0}
+.tiles2 a,.tiles2 a:hover{text-decoration:none}.tiles2 a small{text-decoration:none}

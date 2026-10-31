@@ -42,10 +42,11 @@ const { makeDB } = require('./d1shim');
   });
   await ok('campaign: audience "registered today" gets personal one-use codes + store link; dry run; counts', async () => {
     await post('/auth/otp/send', { ph: '07705550009' }); // creates nothing yet
-    env.DB.raw.prepare("INSERT INTO customers(phone,name,created_at,last_seen_at) VALUES('07705550010','New',?,?)").run(Date.now(), Date.now());
-    env.DB.raw.prepare("INSERT INTO customers(phone,name,created_at,last_seen_at) VALUES('07705550011','Old',?,?)").run(Date.now() - 5 * 864e5, Date.now() - 5 * 864e5);
+    env.DB.raw.prepare("INSERT INTO customers(phone,name,mkt,created_at,last_seen_at) VALUES('07705550010','New',1,?,?)").run(Date.now(), Date.now());
+    env.DB.raw.prepare("INSERT INTO customers(phone,name,mkt,created_at,last_seen_at) VALUES('07705550011','Old',1,?,?)").run(Date.now() - 5 * 864e5, Date.now() - 5 * 864e5);
+    env.DB.raw.prepare("INSERT INTO customers(phone,name,mkt,created_at,last_seen_at) VALUES('07705550012','NoConsent',0,?,?)").run(Date.now(), Date.now());
     const dry = await (await post('/adm/campaign', { body: 'x', audience: { type: 'today' }, dry: true }, H)).json();
-    assert(dry.sample.includes('07705550010') && !dry.sample.includes('07705550011'));
+    assert(dry.sample.includes('07705550010') && !dry.sample.includes('07705550011') && !dry.sample.includes('07705550012'), 'only consenting customers');
     wa.length = 0;
     const r = await (await post('/adm/campaign', { body: 'عرض خاص 🌸', audience: { type: 'today' }, perUser: { kind: 'percent', value: 15, days: 7 }, codes: ['SHIP'] }, H)).json();
     assert(r.total >= 1);
@@ -138,6 +139,40 @@ const { makeDB } = require('./d1shim');
     const lv = await (await call('/adm/live', { headers: H })).json();
     assert.strictEqual(lv.days.length, 14); assert.strictEqual(lv.hours.length, 24); assert(lv.kpi && Array.isArray(lv.recent));
     const hl = await (await call('/adm/health', { headers: H })).json(); assert.strictEqual(typeof hl.wa, 'boolean'); assert(!JSON.stringify(hl).includes('TOKEN'));
+  });
+  await ok('support departments: service and routine are separate threads; routine bot has its own menu; closed chat → new chat (rating kept)', async () => {
+    const send = (dept, text, extra = {}) => post('/chat/send', { text, dept, token: 'tok-' + dept, name: 'Dina', ...extra });
+    const a = await (await send('service', 'مرحبا')).json(), b = await (await send('routine', 'مرحبا')).json();
+    assert.notStrictEqual(a.chat, b.chat);
+    const pr = await get('/chat/poll?dept=routine&token=tok-routine&after=0', {}); assert.strictEqual(pr.dept, 'routine');
+    assert(pr.messages.some(m => m.sender === 'bot' && /روتين/.test(m.body) && m.meta && m.meta.chips.some(c => c.k === 'skin')), 'routine menu');
+    const sk = await (await send('routine', 'اعرفي نوع بشرتي', { quick: 'skin' })).json();
+    const pr2 = await get('/chat/poll?dept=routine&token=tok-routine&after=0', {}); assert(pr2.messages.some(m => m.meta && m.meta.chips && m.meta.chips.some(c => c.h === '/routine')), 'link chip to the quiz');
+    /* staff: sees dept + unread, opening marks seen, typing, transfer, quick replies */
+    const list = await get('/adm/chats?dept=routine'); assert(list.chats.every(c => c.dept === 'routine') && list.chats.length >= 1);
+    assert((await get('/adm/chats')).chats.some(c => c.dept === 'service'));
+    await post('/adm/chat/reply', { id: b.chat, text: 'أهلاً دينا' }, H);
+    const view = await get('/adm/chat?id=' + b.chat); assert.strictEqual(view.chat.dept, 'routine');
+    await post('/adm/chat/typing', { id: b.chat }, H);
+    const live = await get('/chat/poll?dept=routine&token=tok-routine&after=0', {}); assert.strictEqual(live.typing, true); assert(live.seen > 0); assert(live.unread >= 1);
+    await get('/chat/poll?dept=routine&token=tok-routine&after=0&mark=1', {}); assert.strictEqual((await get('/chat/poll?dept=routine&token=tok-routine&after=0', {})).unread, 0);
+    assert.strictEqual((await post('/adm/chat/transfer', { id: b.chat, dept: 'nope' }, H)).status, 400);
+    assert.strictEqual((await post('/adm/chat/transfer', { id: b.chat, dept: 'service' }, H)).status, 200);
+    assert.strictEqual((await get('/chat/poll?dept=service&token=tok-routine&after=0', {})).chat, b.chat, 'moved to service');
+    assert((await get('/adm/quick')).items.length >= 4);
+    assert.strictEqual((await post('/adm/quick', { items: ['a', 'b'] }, H)).status, 200); assert.deepStrictEqual((await get('/adm/quick')).items, ['a', 'b']);
+    /* close + rate, then a new message opens a NEW chat (old rating stays) */
+    await post('/chat/close', { token: 'tok-service', dept: 'service' }); await post('/chat/rate', { token: 'tok-service', dept: 'service', rating: 5 });
+    const again = await (await send('service', 'سؤال جديد')).json(); assert.notStrictEqual(again.chat, a.chat);
+    assert.strictEqual(env.DB.raw.prepare('select count(*) n from reviews where chat_id=?').get(a.chat).n, 1);
+  });
+  await ok('saved routine + marketing consent live on the account; product code in a routine chat attaches the product card', async () => {
+    const r = await (await post('/auth/register', { email: 'rt@example.com', pw: 'Str0ng-pass5', name: 'Rt', birth: '2000-01-01', mkt: true })).json();
+    const A = { Authorization: 'Bearer ' + r.token }; assert.strictEqual(r.customer.mkt, true);
+    const save = await post('/me', { routine: { skin: 'oily', am: ['LC101', 'x y<script>'], pm: ['LC103'] }, skin: 'oily' }, A); assert.strictEqual(save.status, 200);
+    const me = (await get('/me', A)).customer, rt = JSON.parse(me.routine); assert.deepStrictEqual([rt.skin, rt.am, rt.pm], ['oily', ['LC101', 'XYSCRIPT'], ['LC103']]);
+    assert.strictEqual((await post('/me', { routine: '{bad' }, A)).status, 400);
+    assert.strictEqual((await post('/me', { mkt: false }, A)).status, 200); assert.strictEqual((await get('/me', A)).customer.mkt, false);
   });
   console.log(n + ' extra tests passed');
 })().catch(e => { console.error('FAIL', e); process.exit(1); });

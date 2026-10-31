@@ -59,7 +59,7 @@ const assert = require('assert');
   await vis.click('#of [type=submit]'); await vis.click('[data-a=c10s]'); await vis.waitForSelector('#trkbox .tl');
   const code = db.prepare('select code from orders where status=1').get().code; ok('"Skip" sends immediately');
   db.prepare('update orders set created_at=? where code=?').run(Date.now() - 11 * 60 * 1000, code);
-  await vis.evaluate(() => { A.x(); document.querySelector('#trk').scrollIntoView(); });
+  await vis.evaluate(() => { A.x(); lcNav('/tracking'); }); await vis.waitForSelector('#tkf input', { state: 'visible' });
   await vis.fill('#tkf input', code); await vis.click('#tkf button'); await vis.waitForSelector('#tkr .tl li.done'); 
   assert.strictEqual(await vis.$eval('#tkr .tl li.cur b', e => e.textContent), 'تم تأكيد الطلب'); assert(!(await vis.$('#tkr [data-a=ocx]')) || true); ok('after 10 minutes the order is confirmed automatically (tracking form)');
 
@@ -104,21 +104,27 @@ const assert = require('assert');
   /* description images */
   await v3.evaluate(() => { A.x(); }); const dh = await v3.evaluate(() => descHTML(S.P[0])); assert(/<p>سطر 1<\/p><img[^>]*width:40%;margin:8px auto 8px 0[^>]*><p>سطر 2/.test(dh), dh); ok('rich description: image in the middle, 40% wide, left-aligned');
   /* chat */
-  await v3.evaluate(() => lcNav('/routine/support')); await v3.waitForSelector('#scf input'); await v3.fill('#scf input', 'هل المنتج مناسب للبشرة الدهنية؟'); await v3.click('#scf button'); await v3.waitForSelector('.m.customer', { timeout: 6000 }).catch(async x => { console.log('CHATDBG', await v3.$eval('#chp', n => n.innerText), v3.errs); throw x; });
+  await v3.evaluate(() => lcNav('/routine/support')); await v3.waitForSelector('#scf input'); await v3.fill('#scf input', 'هل المنتج مناسب للبشرة الدهنية؟'); await v3.click('#scf .btn'); await v3.waitForSelector('.m.customer', { timeout: 6000 }).catch(async x => { console.log('CHATDBG', await v3.$eval('#chp', n => n.innerText), v3.errs); throw x; });
   const chatId = db.prepare('select id from chats where channel=\'support\'').get().id; ok('customer sends a support message');
   await adm.evaluate(async id => { await apiJ('/adm/chat/reply', { method: 'POST', body: JSON.stringify({ id, text: 'نعم مناسب' }) }); await apiJ('/adm/chat/close', { method: 'POST', body: JSON.stringify({ id }) }); }, chatId);
   await v3.waitForSelector('.m.admin', { timeout: 8000 }); await v3.waitForSelector('.stars', { timeout: 8000 }); ok('admin reply appears, closing shows the rating form');
   await v3.click('.stars button >> nth=3'); await v3.fill('#chc', 'ممتاز'); await v3.click('[data-c=rate]'); await v3.waitForTimeout(500);
   assert.deepStrictEqual({ ...db.prepare('select rating,comment from reviews').get() }, { rating: 4, comment: 'ممتاز' }); ok('rating saved (4 stars + comment)');
   /* --- smart support: reason buttons, staff takes over by name, bell notification --- */
-  const sp = await mk(); await sp.goto(base + '/'); await sp.evaluate(() => lcNav('/routine/support')); await sp.waitForSelector('#scf input'); await sp.waitForSelector('#chp .chips button');
-  await sp.fill('#scn', 'نور'); await sp.click('#chp .chips button[data-k=track]'); await sp.waitForSelector('#chp .m.customer + .m.bot', { timeout: 8000 }); ok('reason buttons ("أين طلبي؟") get an automatic answer');
+  const sp = await mk(); await sp.goto(base + '/help'); await sp.waitForSelector('#scf input'); await sp.waitForSelector('#chp .chips button');
+  await sp.fill('#scn', 'نور'); await sp.click('#chp .chips button[data-k=where]'); await sp.waitForSelector('#chp .m.customer + .m.bot', { timeout: 8000 }); ok('reason buttons ("أين طلبي؟") get an automatic answer');
   await sp.click('#chp .chips button[data-k=human]'); await sp.waitForFunction(() => document.querySelector('#chp .chh small').textContent.includes('بانتظار'), null, { timeout: 8000 }); ok('"الاتصال بموظف" hands the chat to a human');
   await adm.evaluate(async () => { await apiJ('/adm/staff', { method: 'POST', body: JSON.stringify({ name: 'سارة', username: 'sara', pw: 'sara1234' }) }); });
   const st = await mk(); await st.goto(base + '/#staff'); await st.waitForSelector('#stl'); await st.fill('#stl [name=username]', 'sara'); await st.fill('#stl [name=pw]', 'sara1234'); await st.click('#stl button');
   await st.waitForSelector('#stc .row'); await st.click('#stc .row >> nth=0'); await st.waitForSelector('#str input'); await st.click('[data-s=claim]'); await st.waitForFunction(() => document.querySelector('#stm').textContent.includes('سارة') || true); await new Promise(r => setTimeout(r, 1200)); await st.fill('#str input', 'أهلاً نور، أنا سارة'); await st.click('#str .btn >> nth=0');
   await sp.waitForFunction(() => document.querySelector('#chp .chh small').textContent.includes('سارة') && document.querySelector('#chp .m.staff .au')?.textContent === 'سارة', null, { timeout: 9000 }); ok('employee replies under her name; customer sees who is answering');
   assert.strictEqual(await st.$eval('#stm .chhd', e => e.textContent.includes('نور')), true); ok('staff console shows the customer name');
+  assert.strictEqual(await st.$$eval('#std button', b => b.length), 3); assert(await st.$eval('#stc', e => e.textContent.includes('خدمة الزبائن'))); ok('staff console: department tabs (all / service / routine) with dept badges');
+  { const pg = await mk(); await pg.goto(base + '/help'); await pg.waitForSelector('#hlpg #chp #scf'); assert.strictEqual(await pg.$eval('#chp .chh b', e => e.textContent), 'خدمة الزبائن'); assert(await pg.$('#hlpg .faq details')); assert.strictEqual(await pg.evaluate(() => document.body.dataset.pg), 'help'); ok('/help is an isolated customer-service page (FAQ + live chat)');
+    await pg.goto(base + '/routine/support'); await pg.waitForSelector('#rtn #chp'); assert.strictEqual(await pg.$eval('#chp .chh b', e => e.textContent), 'دعم روتين'); ok('/routine/support is its own isolated page with its own department chat');
+    await pg.goto(base + '/routine/guide'); await pg.waitForSelector('#rtn .rt-ing'); await pg.click('[data-rt=ing][data-v=retinol]'); await pg.click('[data-rt=ing][data-v=aha]'); await pg.waitForSelector('#rtn .rt-warn'); ok('Routine ingredient guide warns about conflicting actives (retinol + AHA)');
+    await pg.goto(base + '/preferences'); await pg.waitForSelector('#prf .prf-c'); assert.strictEqual(await pg.evaluate(() => document.body.dataset.pg), 'preferences'); await pg.goto(base + '/tracking'); await pg.waitForSelector('#tkf input', { state: 'visible' }); ok('/preferences and /tracking are isolated pages');
+    await pg.close(); }
   /* --- bell --- */
   await adm.evaluate(async () => { await apiJ('/status', { method: 'POST', body: JSON.stringify({ code: 'LC-ACCT01', s: 3 }) }); });
   await cu.reload(); await cu.waitForSelector('#bellb', { state: 'visible', timeout: 8000 }); await cu.waitForFunction(() => document.getElementById('belln').style.display == 'flex', null, { timeout: 10000 }); ok('bell shows an in-site notification badge for the logged-in customer');

@@ -9,6 +9,8 @@
   try { me = JSON.parse(ls.get('lc_me') || 'null') } catch (e) {}
   window.custAuth = () => tok ? { Authorization: 'Bearer ' + tok } : {};
   window.custMe = () => me;
+  window.accountRefresh = () => refresh();
+  window.accountSignOut = () => { setSession('', null); tab = 'p'; };
   const base = () => (typeof API == 'function' && API()) || location.origin;
   async function call(path, body, method) {
     const r = await fetch(base() + path, { method: method || (body ? 'POST' : 'GET'), headers: { 'Content-Type': 'application/json', ...custAuth() }, body: body ? JSON.stringify(body) : undefined });
@@ -78,8 +80,8 @@
     if (er) er.textContent = '';
     try {
       if (f.id === 'af-otps') { await call('/auth/otp/send', { ph: v.ph }); sPh = v.ph; step = 1; draw(); }
-      else if (f.id === 'af-otpv') { const j = await call('/auth/otp/verify', { ph: sPh, code: v.code, name: v.name, birth: v.birth || '' }); done(j); }
-      else if (f.id === 'af-reg') { done(await call('/auth/register', { email: v.email, pw: v.pw, name: v.name, avatar: v.avatar || '', birth: v.birth || '' })); }
+      else if (f.id === 'af-otpv') { const j = await call('/auth/otp/verify', { ph: sPh, code: v.code, name: v.name, birth: v.birth || '', mkt: !!v.mkt }); done(j); }
+      else if (f.id === 'af-reg') { done(await call('/auth/register', { email: v.email, pw: v.pw, name: v.name, avatar: v.avatar || '', birth: v.birth || '', mkt: !!v.mkt })); }
       else if (f.id === 'af-log') { done(await call('/auth/login', { email: v.email, pw: v.pw })); }
       else if (f.id === 'af-prof') { await call('/me', { name: v.name, city: v.city, area: v.area, lm: v.lm, avatar: v.avatar || '', skin: v.skin || '', birth: v.birth || '' }); me = { ...me, name: v.name, city: v.city, area: v.area, lm: v.lm, avatar: v.avatar || '' }; setSession(tok, me); toast(T('تم الحفظ', 'Saved')); }
       else if (f.id === 'af-ph') { await call('/auth/otp/send', { ph: v.ph }); sPh = v.ph; step = 1; draw(); }
@@ -98,10 +100,10 @@
       let f = '';
       if (mode == 'ph') f = step == 0
         ? `<form id="af-otps"><p>${T('سنرسل رمز تحقق إلى واتساب الخاص بك', 'We will send a verification code to your WhatsApp')}</p><input name="ph" type="tel" inputmode="numeric" maxlength="11" placeholder="07XXXXXXXXX" required><button class="btn">${T('إرسال الرمز', 'Send code')}</button>${err}</form>`
-        : `<form id="af-otpv"><p>${T('أدخل الرمز المرسل إلى ' + E(sPh), 'Enter the code sent to ' + E(sPh))}</p><input name="code" inputmode="numeric" maxlength="6" placeholder="000000" required autocomplete="one-time-code"><input name="name" placeholder="${T('اسمك (للحسابات الجديدة)', 'Your name (new accounts)')}">${dobField(false)}<button class="btn">${T('تحقق ودخول', 'Verify & sign in')}</button><button type="button" class="ln" data-x="mode" data-v="ph">${T('تغيير الرقم', 'Change number')}</button>${err}</form>`;
+        : `<form id="af-otpv"><p>${T('أدخل الرمز المرسل إلى ' + E(sPh), 'Enter the code sent to ' + E(sPh))}</p><input name="code" inputmode="numeric" maxlength="6" placeholder="000000" required autocomplete="one-time-code"><input name="name" placeholder="${T('اسمك (للحسابات الجديدة)', 'Your name (new accounts)')}">${dobField(false)}<label class="dob" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" name="mkt" style="width:auto"> ${T('أوافق على استلام العروض والأكواد (يمكنك الإلغاء لاحقاً)', 'I agree to receive offers and codes (you can opt out any time)')}</label><button class="btn">${T('تحقق ودخول', 'Verify & sign in')}</button><button type="button" class="ln" data-x="mode" data-v="ph">${T('تغيير الرقم', 'Change number')}</button>${err}</form>`;
       else if (mode == 'em') f = sub == 'login'
         ? `<form id="af-log"><input name="email" type="email" placeholder="${T('البريد الإلكتروني', 'Email')}" required><input name="pw" type="password" placeholder="${T('كلمة السر', 'Password')}" required><button class="btn">${T('دخول', 'Sign in')}</button><button type="button" class="ln" data-x="sub" data-v="reg">${T('إنشاء حساب جديد', 'Create an account')}</button>${err}</form>`
-        : `<form id="af-reg"><input name="name" placeholder="${T('الاسم', 'Name')}" required><input name="email" type="email" placeholder="${T('البريد الإلكتروني', 'Email')}" required><input name="pw" type="password" minlength="8" placeholder="${T('كلمة السر (8 أحرف على الأقل)', 'Password (min 8 chars)')}" required>${dobField(true)}${avPick('')}<button class="btn">${T('إنشاء الحساب', 'Create account')}</button><button type="button" class="ln" data-x="sub" data-v="login">${T('لدي حساب', 'I have an account')}</button>${err}</form>`;
+        : `<form id="af-reg"><input name="name" placeholder="${T('الاسم', 'Name')}" required><input name="email" type="email" placeholder="${T('البريد الإلكتروني', 'Email')}" required><input name="pw" type="password" minlength="8" placeholder="${T('كلمة السر (8 أحرف على الأقل)', 'Password (min 8 chars)')}" required>${dobField(true)}<label class="dob" style="flex-direction:row;align-items:center;gap:8px"><input type="checkbox" name="mkt" style="width:auto"> ${T('أوافق على استلام العروض والأكواد (يمكنك الإلغاء لاحقاً)', 'I agree to receive offers and codes (you can opt out any time)')}</label>${avPick('')}<button class="btn">${T('إنشاء الحساب', 'Create account')}</button><button type="button" class="ln" data-x="sub" data-v="login">${T('لدي حساب', 'I have an account')}</button>${err}</form>`;
       else f = `<div id="gbtn" class="gb">${cfg && cfg.google ? '' : T('تسجيل Google غير مُفعّل بعد', 'Google sign-in is not enabled yet')}</div>${err}`;
       b.innerHTML = `${head}<h3>${T('أهلاً بك في لاسي', 'Welcome to Lacey')}</h3><div class="act">${tabs}</div>${f}`;
       if (mode == 'gg') gsi();
@@ -111,7 +113,8 @@
     let c = '';
     if (tab == 'p') c = `<form id="af-prof">${avPick(me.avatar || '')}<input name="name" value="${E(me.name)}" placeholder="${T('الاسم', 'Name')}" required><input name="city" value="${E(me.city)}" placeholder="${T('المحافظة', 'City')}"><input name="area" value="${E(me.area)}" placeholder="${T('المنطقة', 'Area')}"><input name="lm" value="${E(me.lm)}" placeholder="${T('أقرب نقطة دالة', 'Landmark')}">${me.birth ? `<small>${T('تاريخ الميلاد', 'Birth date')}: ${E(me.birth)} · ${me.age} ${T('سنة', 'y')}</small>` : `<div class="dob" style="background:#fff4d6;padding:10px;border-radius:12px"><b>${T('أضف تاريخ ميلادك لتتمكن من الطلب', 'Add your birth date to place orders')}</b>${dobField(true, true)}</div>`}<label class="dob">${T('نوع بشرتك (يساعد في صفحة روتين)', 'Skin type (used by Routine)')}<select name="skin"><option value="">—</option>${SK.map(([k, n, en]) => `<option value="${k}" ${me.skin == k ? 'selected' : ''}>${T(n, en)}</option>`).join('')}</select></label><small>${E(me.ph || '')} ${E(me.email || '')}${me.ph ? '' : ' — ' + T('لم يُربط رقم واتساب بعد', 'no WhatsApp number linked')}</small><button class="btn">${T('حفظ', 'Save')}</button>${err}</form>${me.ph ? '' : phoneForm()}<button class="ln" data-x="out">${T('تسجيل الخروج', 'Sign out')}</button>`;
     else c = `<div id="acl"><p class="em">…</p></div>`;
-    b.innerHTML = `${head}<h3>${E(me.name || me.email || me.ph)}</h3><div class="act">${tabs}</div>${c}`;
+    const tiles = `<div class="tiles2"><a href="/help"><b>🎧 ${T('خدمة الزبائن', 'Customer service')}</b><small>${T('محادثة وأسئلة شائعة', 'Chat & FAQ')}</small></a><a href="/routine/support"><b>🌸 ${T('دعم روتين', 'Routine support')}</b><small>${T('استشارة بشرة', 'Skin advice')}</small></a><a href="/tracking"><b>📦 ${T('تتبع الطلب', 'Track order')}</b><small>${T('برمز الطلب', 'By order code')}</small></a><a href="/preferences"><b>⚙️ ${T('الإعدادات', 'Settings')}</b><small>${T('اللغة والخصوصية', 'Language & privacy')}</small></a></div>`;
+    b.innerHTML = `${head}<h3>${E(me.name || me.email || me.ph)}</h3>${tiles}<div class="act">${tabs}</div>${c}`;
   }
   const phoneForm = () => step == 1 && tab == 'p'
     ? `<form id="af-otpv" class="ph"><input name="code" inputmode="numeric" maxlength="6" placeholder="000000" required><input type="hidden" name="name" value="${E(me.name)}"><button class="btn">${T('تأكيد الرقم', 'Confirm number')}</button>${err}</form>`

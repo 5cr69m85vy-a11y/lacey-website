@@ -1,24 +1,27 @@
 /* extra.js — دردشة الدعم، التقييمات، الحملات التسويقية، الإحصائيات، رفع الوسائط، manifest */
 import { J, CORS, now, jp, rnd, randHex, sha256, today, cfgOf, IG_KEYS, IG_SECRET, readIg, resetIg } from './lib.js';
 import { waSend, waOn } from './wa.js';
-import { botReply, BOT, MAIN } from './bot.js';
-import { pbkdf2, eq } from './auth.js';
+import { botReply, BOT, MAIN, ROUTINE } from './bot.js';
+import { pbkdf2, eq, ageOf } from './auth.js';
 import { processQueue } from './wa.js';
 import { limit, audit, ipOf } from './guard.js';
 
+const QUICK = ['أهلاً بك في لاسي 🌸 كيف أقدر أساعدك؟', 'تم استلام طلبك وهو قيد التجهيز ✅', 'هل ممكن ترسلين كود الطلب (LC-XXXXXX)؟', 'شكراً لتواصلك، سنتابع الموضوع ونعود إليك بأقرب وقت 🌸', 'هل لديك حساسية من أي مكوّن؟', 'ننصح بتجربة المنتج على منطقة صغيرة أولاً (Patch test) 🌿'];
 const TZ = 3 * 3600;                                    // بغداد UTC+3
 const MEDIA_TYPES = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/gif': 'gif', 'video/mp4': 'mp4', 'video/webm': 'webm' };
 const MAX_MEDIA = 40 * 1024 * 1024, MAX_D1_MEDIA = 8 * 1024 * 1024, CHUNK = 700000;
 
-async function guestChat(env, token, create, sess, extra = {}) {
-  let ch = null;
-  if (sess) ch = await env.DB.prepare("SELECT * FROM chats WHERE customer_id=? AND channel='support' ORDER BY id DESC LIMIT 1").bind(sess.id).first();
-  if (!ch && token) ch = await env.DB.prepare("SELECT * FROM chats WHERE guest_token=? AND channel='support' ORDER BY id DESC LIMIT 1").bind(await sha256(token)).first();
+export const DEPTS = ['service', 'routine'];
+const deptOf = v => DEPTS.includes(String(v)) ? String(v) : 'service';
+async function guestChat(env, token, create, sess, extra = {}, dept = 'service') {
+  dept = deptOf(dept); let ch = null;
+  if (sess) ch = await env.DB.prepare("SELECT * FROM chats WHERE customer_id=? AND channel='support' AND dept=? ORDER BY id DESC LIMIT 1").bind(sess.id, dept).first();
+  if (!ch && token) ch = await env.DB.prepare("SELECT * FROM chats WHERE guest_token=? AND channel='support' AND dept=? ORDER BY id DESC LIMIT 1").bind(await sha256(token), dept).first();
   if (ch && sess && !ch.customer_id) { await env.DB.prepare('UPDATE chats SET customer_id=?,name=CASE WHEN name=\'\' THEN ? ELSE name END,phone=CASE WHEN phone=\'\' OR phone IS NULL THEN ? ELSE phone END WHERE id=?').bind(sess.id, sess.name || '', sess.phone || '', ch.id).run(); ch.customer_id = sess.id; }   // محادثة الضيف تُربط بحسابه بعد الدخول (ليصله الإشعار)
   if (!ch && create) {
     const tk = token || randHex(16);
-    const id = (await env.DB.prepare("INSERT INTO chats(customer_id,channel,status,created_at,guest_token,name,phone) VALUES(?,'support','open',?,?,?,?) RETURNING id")
-      .bind(sess ? sess.id : null, now(), await sha256(tk), String(extra.name || (sess && sess.name) || '').slice(0, 60), String(extra.ph || (sess && sess.phone) || '').slice(0, 20)).first()).id;
+    const id = (await env.DB.prepare("INSERT INTO chats(customer_id,channel,status,created_at,guest_token,name,phone,dept) VALUES(?,'support','open',?,?,?,?,?) RETURNING id")
+      .bind(sess ? sess.id : null, now(), await sha256(tk), String(extra.name || (sess && sess.name) || '').slice(0, 60), String(extra.ph || (sess && sess.phone) || '').slice(0, 20), dept).first()).id;
     ch = await env.DB.prepare('SELECT * FROM chats WHERE id=?').bind(id).first(); ch._tk = tk;
   }
   return ch;
@@ -141,13 +144,17 @@ export async function extraRoutes(c) {
   if (p === '/chat/send' && M === 'POST') {
     { const lim = await limit(env, request, 'chat-send', 40, 10 * 60e3); if (lim) return lim; }
     const b = await body(); const quick = ({ track: 'where', edit: 'modify', cancel: 'cancel', human: 'human' })[String(b.intent || '')] || String(b.quick || '').slice(0, 60);
-    const label = quick ? ((MAINCH.find(x => x.k === quick) || {}).t || (quick.startsWith('cancel_yes') ? 'نعم، ألغِ الطلب' : quick === 'no' ? 'لا' : quick)) : '';
+    const label = quick ? (([...MAINCH, ...ROUTINE].find(x => x.k === quick) || {}).t || (quick.startsWith('cancel_yes') ? 'نعم، ألغِ الطلب' : quick === 'no' ? 'لا' : quick)) : '';
     const text = String(b.text || label || '').trim().slice(0, 1000);
     if (!text) return J({ error: 'empty' }, 400);
-    const ch = await guestChat(env, b.token, true, sess, b);
+    const dept = deptOf(b.dept); let ch = await guestChat(env, b.token, true, sess, b, dept);
     const recent = await env.DB.prepare("SELECT COUNT(*) n FROM chat_messages WHERE chat_id=? AND sender='customer' AND at>?").bind(ch.id, now() - 3600e3).first();
     if (recent.n >= 40) return J({ error: 'رسائل كثيرة، حاول لاحقاً' }, 429);
-    if (ch.status !== 'open') { await env.DB.prepare("UPDATE chats SET status='open',closed_at=NULL,mode='bot',assigned_to=NULL WHERE id=?").bind(ch.id).run(); ch.mode = 'bot'; ch.assigned_to = null; }
+    if (ch.status !== 'open') {                             // محادثة منتهية (ومقيَّمة غالباً): تبدأ محادثة جديدة بدل إعادة فتح القديمة
+      const tk = b.token || ch._tk || randHex(16);
+      const nid = (await env.DB.prepare("INSERT INTO chats(customer_id,channel,status,created_at,guest_token,name,phone,dept) VALUES(?,'support','open',?,?,?,?,?) RETURNING id").bind(ch.customer_id, now(), await sha256(tk), ch.name || '', ch.phone || '', dept).first()).id;
+      ch = await env.DB.prepare('SELECT * FROM chats WHERE id=?').bind(nid).first(); ch._tk = tk;
+    }
     /* استفسار عن منتج: كود المنتج صريح (b.product) أو مكتوب داخل الرسالة → بطاقة المنتج + تحويل لموظف */
     let prod = null;
     if (!quick && !b.intent) {
@@ -175,19 +182,22 @@ export async function extraRoutes(c) {
   }
   if (p === '/chat/poll' && M === 'GET') {
     { const lim = await limit(env, request, 'chat-poll', 400, 10 * 60e3); if (lim) return lim; }
-    const ch = await guestChat(env, url.searchParams.get('token') || '', false, sess);
-    if (!ch) return J({ chat: null, messages: [] });
+    const dept = deptOf(url.searchParams.get('dept'));
+    const ch = await guestChat(env, url.searchParams.get('token') || '', false, sess, {}, dept);
+    if (!ch) return J({ chat: null, messages: [], unread: 0 });
     const rated = await env.DB.prepare('SELECT 1 x FROM reviews WHERE chat_id=?').bind(ch.id).first();
-    return J({ chat: ch.id, status: ch.status, mode: ch.mode, staff: await staffName(ch), rated: !!rated,
+    const unread = ((await env.DB.prepare("SELECT COUNT(*) n FROM chat_messages WHERE chat_id=? AND sender<>'customer' AND at>?").bind(ch.id, ch.cust_seen_at || 0).first()) || {}).n || 0;
+    if (url.searchParams.get('mark') === '1' && unread) await env.DB.prepare('UPDATE chats SET cust_seen_at=? WHERE id=?').bind(now(), ch.id).run();
+    return J({ chat: ch.id, dept, status: ch.status, mode: ch.mode, staff: await staffName(ch), rated: !!rated, unread, seen: ch.staff_seen_at || 0, typing: !!ch.staff_typing_at && now() - ch.staff_typing_at < 6000,
       messages: (await msgs(env, ch.id, +url.searchParams.get('after') || 0)).map(m => ({ ...m, meta: jp(m.meta, null) })) }, 200, { 'Cache-Control': 'no-store' });
   }
   if (p === '/chat/close' && M === 'POST') {
-    const b = await body(); const ch = await guestChat(env, b.token, false, sess); if (!ch) return J({ error: 'no chat' }, 404);
+    const b = await body(); const ch = await guestChat(env, b.token, false, sess, {}, b.dept); if (!ch) return J({ error: 'no chat' }, 404);
     await env.DB.prepare("UPDATE chats SET status='closed',closed_at=? WHERE id=?").bind(now(), ch.id).run();
     return J({ ok: true });
   }
   if (p === '/chat/rate' && M === 'POST') {
-    const b = await body(); const ch = await guestChat(env, b.token, false, sess); if (!ch) return J({ error: 'no chat' }, 404);
+    const b = await body(); const ch = await guestChat(env, b.token, false, sess, {}, b.dept); if (!ch) return J({ error: 'no chat' }, 404);
     const r = Math.round(+b.rating);
     if (!(r >= 1 && r <= 5)) return J({ error: 'التقييم من 1 إلى 5' }, 400);
     if (await env.DB.prepare('SELECT 1 x FROM reviews WHERE chat_id=?').bind(ch.id).first()) return J({ error: 'تم التقييم مسبقاً' }, 409);
@@ -251,17 +261,46 @@ export async function extraRoutes(c) {
     const a = needOp(); if (a) return a;
     const ch = url.searchParams.get('channel') === 'admin' ? 'admin' : 'support';
     if (ch === 'admin' && !op.admin) return J({ error: 'unauthorized' }, 401);
+    const dp = DEPTS.includes(url.searchParams.get('dept')) ? url.searchParams.get('dept') : '';
     const rows = (await env.DB.prepare(`SELECT c.*, (SELECT body FROM chat_messages m WHERE m.chat_id=c.id ORDER BY m.id DESC LIMIT 1) last,
       (SELECT sender FROM chat_messages m WHERE m.chat_id=c.id ORDER BY m.id DESC LIMIT 1) lastby, (SELECT name FROM staff s WHERE s.id=c.assigned_to) sname,
-      (SELECT rating FROM reviews r WHERE r.chat_id=c.id) rating FROM chats c WHERE c.channel=? ORDER BY (c.mode='human' AND c.status='open') DESC, c.id DESC LIMIT 200`).bind(ch).all()).results;
-    return J({ chats: rows.map(r => ({ id: r.id, status: r.status, mode: r.mode, name: r.name, ph: r.phone, product: r.product_code, topic: r.topic, staff: r.sname || '', mine: r.assigned_to === op.id && !op.admin, last: r.last || '', lastby: r.lastby || '', rating: r.rating || 0, t: r.created_at })) });
+      (SELECT COUNT(*) FROM chat_messages m WHERE m.chat_id=c.id AND m.sender='customer' AND m.at>c.staff_seen_at) unread,
+      (SELECT rating FROM reviews r WHERE r.chat_id=c.id) rating FROM chats c WHERE c.channel=? ${dp ? 'AND c.dept=?' : ''} ORDER BY (c.mode='human' AND c.status='open') DESC, c.id DESC LIMIT 200`).bind(...(dp ? [ch, dp] : [ch])).all()).results;
+    return J({ chats: rows.map(r => ({ id: r.id, dept: r.dept || 'service', status: r.status, mode: r.mode, name: r.name, ph: r.phone, product: r.product_code, topic: r.topic, staff: r.sname || '', mine: r.assigned_to === op.id && !op.admin, last: r.last || '', lastby: r.lastby || '', unread: r.status === 'open' ? r.unread : 0, rating: r.rating || 0, t: r.created_at })) });
   }
   if (p === '/adm/chat' && M === 'GET') {
     const a = needOp(); if (a) return a;
     const id = +url.searchParams.get('id');
     const ch = await env.DB.prepare('SELECT * FROM chats WHERE id=?').bind(id).first(); if (!ch) return J({ error: 'not found' }, 404);
     if (ch.channel === 'admin' && !op.admin) return J({ error: 'unauthorized' }, 401);
-    return J({ chat: { id: ch.id, name: ch.name, ph: ch.phone, status: ch.status, mode: ch.mode, staff: await staffName(ch), topic: ch.topic }, messages: await msgs(env, id, +url.searchParams.get('after') || 0) }, 200, { 'Cache-Control': 'no-store' });
+    if (ch.channel === 'support' && !url.searchParams.get('quiet')) await env.DB.prepare('UPDATE chats SET staff_seen_at=? WHERE id=?').bind(now(), id).run();
+    let info = null;
+    if (ch.customer_id) { const u = await env.DB.prepare('SELECT name,phone,email,city,orders_count,spent,birth,skin FROM customers WHERE id=?').bind(ch.customer_id).first(); if (u) info = { name: u.name, ph: u.phone || '', email: u.email || '', city: u.city || '', orders: u.orders_count, spent: u.spent, age: ageOf(u.birth), skin: u.skin || '' }; }
+    return J({ chat: { id: ch.id, dept: ch.dept || 'service', name: ch.name, ph: ch.phone, status: ch.status, mode: ch.mode, staff: await staffName(ch), topic: ch.topic, info }, messages: await msgs(env, id, +url.searchParams.get('after') || 0) }, 200, { 'Cache-Control': 'no-store' });
+  }
+  if (p === '/adm/chat/typing' && M === 'POST') {
+    const a = needOp(); if (a) return a; const b = await body();
+    await env.DB.prepare("UPDATE chats SET staff_typing_at=? WHERE id=? AND channel='support'").bind(now(), +b.id).run(); return J({ ok: true });
+  }
+  if (p === '/adm/chat/transfer' && M === 'POST') {          // تحويل المحادثة بين خدمة العملاء وروتين
+    const a = needOp(); if (a) return a; const b = await body();
+    if (!DEPTS.includes(b.dept)) return J({ error: 'قسم غير صالح' }, 400);
+    const ch = await env.DB.prepare("SELECT * FROM chats WHERE id=? AND channel='support'").bind(+b.id).first(); if (!ch) return J({ error: 'not found' }, 404);
+    await env.DB.prepare('UPDATE chats SET dept=?,assigned_to=NULL WHERE id=?').bind(b.dept, ch.id).run();
+    await addMsg(ch.id, 'bot', `تم تحويل محادثتك إلى قسم ${b.dept === 'routine' ? 'روتين' : 'خدمة العملاء'} 🌸`, BOT);
+    await audit(env, request, op.admin ? 'admin' : 'staff:' + op.name, 'chat_transfer', String(ch.id), ch.dept, b.dept);
+    return J({ ok: true });
+  }
+  if (p === '/adm/quick' && M === 'GET') {
+    const a = needOp(); if (a) return a;
+    const row = await env.DB.prepare("SELECT value FROM settings WHERE key='quick_replies'").first();
+    return J({ items: jp(row && row.value, null) || QUICK });
+  }
+  if (p === '/adm/quick' && M === 'POST') {
+    const a = adm(); if (a) return a; const b = await body();
+    const items = (Array.isArray(b.items) ? b.items : []).map(x => String(x || '').trim().slice(0, 300)).filter(Boolean).slice(0, 25);
+    await env.DB.prepare("INSERT INTO settings(key,value,updated_at) VALUES('quick_replies',?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated_at=excluded.updated_at").bind(JSON.stringify(items), now()).run();
+    await audit(env, request, 'admin', 'quick_replies_save', '', null, { n: items.length }); return J({ ok: true });
   }
   if (p === '/adm/chat/reply' && M === 'POST') {
     const a = needOp(); if (a) return a;
@@ -271,7 +310,7 @@ export async function extraRoutes(c) {
     if (ch.channel === 'support' && !op.admin && ch.assigned_to && ch.assigned_to !== op.id) return J({ error: 'المحادثة مع موظف آخر: ' + (await staffName(ch)) }, 409);
     await addMsg(ch.id, op.admin ? 'admin' : 'staff', text, op.name);
     if (ch.channel === 'support') {
-      await env.DB.prepare("UPDATE chats SET mode='human',status='open',assigned_to=COALESCE(assigned_to,?) WHERE id=?").bind(op.admin ? null : op.id, ch.id).run();
+      await env.DB.prepare("UPDATE chats SET mode='human',status='open',assigned_to=COALESCE(assigned_to,?),staff_typing_at=0,staff_seen_at=? WHERE id=?").bind(op.admin ? null : op.id, now(), ch.id).run();
       await env.DB.prepare("INSERT INTO notifications(customer_id,phone,channel,template,payload,status,created_at) VALUES(?,?,'inapp','chat_reply',?,'sent',?)").bind(ch.customer_id, ch.phone || null, JSON.stringify({ text: 'رد جديد من ' + op.name + ': ' + text.slice(0, 80) }), now()).run();
     }
     return J({ ok: true });
@@ -325,7 +364,7 @@ export async function extraRoutes(c) {
       if (list.length) rows = (await env.DB.prepare(`SELECT id,phone,name FROM customers WHERE phone IN (${list.map(() => '?').join(',')})`).bind(...list).all()).results;
       for (const ph of list) if (!rows.some(r => r.phone === ph)) rows.push({ id: null, phone: ph, name: '' });
     } else {
-      let q = 'SELECT id,phone,name FROM customers WHERE phone IS NOT NULL';
+      let q = 'SELECT id,phone,name FROM customers WHERE phone IS NOT NULL AND mkt=1';   // تسويق للموافقين فقط
       const args = [];
       if (au.type === 'today' || au.type === 'day') {
         const day = au.type === 'today' ? new Date(now() + TZ * 1000).toISOString().slice(0, 10) : String(au.day || '');
