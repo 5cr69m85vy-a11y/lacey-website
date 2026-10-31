@@ -80,7 +80,11 @@
     if (![1, 2, 3].includes(o.st) || !(ig ? v('DLV_PROVIDER') : window.__dlvOn)) return '';
     return `<div id="dlp-${E(o.code)}"><button class="btn g" data-a="dlo" data-c="${E(o.code)}">إرسال لشركة التوصيل</button></div>`;
   };
-  api('/adm/integrations').then(j => { window.__dlvOn = j.DLV_PROVIDER && j.DLV_PROVIDER.value; }).catch(() => {});
+  /* يُجلب مرة واحدة عند فتح تبويب الطلبات فقط (وليس عند تحميل المتجر للزوّار) */
+  const tor = TB.or; TB.or = () => {
+    if (window.__dlvOn === undefined) { window.__dlvOn = ''; api('/adm/integrations').then(j => { window.__dlvOn = (j.DLV_PROVIDER && j.DLV_PROVIDER.value) || ''; if (window.__dlvOn && typeof loadOr === 'function') loadOr(); }).catch(() => {}); }
+    return tor();
+  };
   A.dlo = async code => {
     const box = document.getElementById('dlp-' + code); if (!box) return; box.innerHTML = '<span class="em">جارٍ التحميل…</span>';
     let i; try { i = await api('/adm/delivery/info?code=' + encodeURIComponent(code)); } catch (e) { box.innerHTML = E(e.message); return; }

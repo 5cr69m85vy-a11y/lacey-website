@@ -1,5 +1,5 @@
 /* sw.js — Service Worker: يعمل الموقع دون اتصال (واجهة + آخر كتالوج) ويتحدّث تلقائياً */
-const V = 'lacey-v14', SHELL = ['/', '/index.html', '/style.css', '/storage.js', '/lang.js', '/script.js', '/account.js', '/admin2.js', '/admin3.js', '/admin-ops.js', '/store2.js', '/chat.js', '/staff.js', '/pages.js', '/icons/icon-192.png'];
+const V = 'lacey-v15', SHELL = ['/', '/index.html', '/style.css', '/storage.js', '/lang.js', '/script.js', '/account.js', '/admin2.js', '/admin3.js', '/admin-ops.js', '/store2.js', '/chat.js', '/staff.js', '/pages.js', '/icons/icon-192.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(V).then(c => c.addAll(SHELL).catch(() => {})).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(k => Promise.all(k.filter(x => x !== V).map(x => caches.delete(x)))).then(() => self.clients.claim())); });
 const DYN = /^\/(login|settings|code|visit|stats|order|orders|status|track|customers?|discounts?|auth|me|quote|codes|chat|adm|staff)(\/|$)/;

@@ -242,9 +242,9 @@ export async function productPage(env, request, code) {
   const ld = { '@context': 'https://schema.org', '@type': 'Product', name: pd.n, sku: code, description: desc, ...(img ? { image: img.startsWith('/') ? base + img : img } : {}), ...(ing.length ? { additionalProperty: { '@type': 'PropertyValue', name: 'Active ingredients', value: ing.join(', ') } } : {}),
     brand: { '@type': 'Brand', name: store }, offers: { '@type': 'Offer', url: canon, priceCurrency: cur, price: pd.p, availability: inStock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock', itemCondition: 'https://schema.org/NewCondition' } };
   const head = `<meta name="description" content="${esc(desc)}"><link rel="canonical" href="${esc(canon)}"><meta property="og:type" content="product"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(desc)}"><meta property="og:url" content="${esc(canon)}">${img ? `<meta property="og:image" content="${esc(img.startsWith('/') ? base + img : img)}">` : ''}<meta property="product:price:amount" content="${pd.p}"><meta property="product:price:currency" content="${cur}"><meta name="twitter:card" content="summary_large_image"><script type="application/ld+json">${JSON.stringify(ld).replace(/</g, '\\u003c')}</script>`;
-  html = html.replace(/<title>[^<]*<\/title>/, `<title>${esc(title)}</title>`).replace('</head>', head + '</head>');
+  html = html.replace(/<title>[^<]*<\/title>/, () => `<title>${esc(title)}</title>`).replace('</head>', () => head + '</head>');
   const body = `<section id="prd" data-pg="product"><div class="w" data-ssr="1"><h1>${esc(pd.n)}</h1>${img ? `<img src="${esc(img)}" alt="${esc(pd.n)}" style="max-width:360px;width:100%">` : ''}<p>${esc(code)} — ${Number(pd.p).toLocaleString('en-US')} د.ع</p><p>${esc(desc)}</p>${ing.length ? `<ul>${ing.map(i => `<li>${esc(i)}</li>`).join('')}</ul>` : ''}<p>${inStock ? 'متوفر' : 'نفد من المخزون'}</p></div></section>`;
-  html = html.replace(/<section id="prd"[^>]*><\/section>/, body);
+  html = html.replace(/<section id="prd"[^>]*><\/section>/, () => body);
   return new Response(html, { status: 200, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'public, max-age=300' } });
 }
 export async function sitemap(env, request) {
