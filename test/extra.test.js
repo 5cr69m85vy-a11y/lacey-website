@@ -163,6 +163,7 @@ const { makeDB } = require('./d1shim');
     assert.strictEqual((await post('/adm/quick', { items: ['a', 'b'] }, H)).status, 200); assert.deepStrictEqual((await get('/adm/quick')).items, ['a', 'b']);
     /* close + rate, then a new message opens a NEW chat (old rating stays) */
     await post('/chat/close', { token: 'tok-service', dept: 'service' }); await post('/chat/rate', { token: 'tok-service', dept: 'service', rating: 5 });
+    assert.strictEqual((await get('/chat/poll?dept=service&token=tok-service&after=0', {})).chat, null, 'rated chat disappears for the customer');
     const again = await (await send('service', 'سؤال جديد')).json(); assert.notStrictEqual(again.chat, a.chat);
     assert.strictEqual(env.DB.raw.prepare('select count(*) n from reviews where chat_id=?').get(a.chat).n, 1);
   });

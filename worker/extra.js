@@ -186,6 +186,7 @@ export async function extraRoutes(c) {
     const ch = await guestChat(env, url.searchParams.get('token') || '', false, sess, {}, dept);
     if (!ch) return J({ chat: null, messages: [], unread: 0 });
     const rated = await env.DB.prepare('SELECT 1 x FROM reviews WHERE chat_id=?').bind(ch.id).first();
+    if (rated && ch.status === 'closed') return J({ chat: null, messages: [], unread: 0, done: true }, 200, { 'Cache-Control': 'no-store' });   // بعد التقييم تختفي المحادثة من جهة الزبون (تبقى للموظفين)
     const unread = ((await env.DB.prepare("SELECT COUNT(*) n FROM chat_messages WHERE chat_id=? AND sender<>'customer' AND at>?").bind(ch.id, ch.cust_seen_at || 0).first()) || {}).n || 0;
     if (url.searchParams.get('mark') === '1' && unread) await env.DB.prepare('UPDATE chats SET cust_seen_at=? WHERE id=?').bind(now(), ch.id).run();
     return J({ chat: ch.id, dept, status: ch.status, mode: ch.mode, staff: await staffName(ch), rated: !!rated, unread, seen: ch.staff_seen_at || 0, typing: !!ch.staff_typing_at && now() - ch.staff_typing_at < 6000,

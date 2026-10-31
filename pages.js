@@ -32,7 +32,7 @@
   function closeCart() { const cv = $1('#cv'); if (cv) cv.classList.remove('on', 'pgv'); }
   function show(path, push, replace) {
     const { page, sub, u } = parse(path), was = cur;
-    if ((was === 'routine' || was === 'help') && window.LCChat && !(page === was)) LCChat.unmount();
+    if ((was === 'routine' || was === 'help') && window.LCChat && page !== was) LCChat.unmount();
     if (was === 'account' && page !== 'account' && window.accountHide) accountHide();
     if (was && !OVERLAY.includes(was) && was !== 'support' && was !== page) prevPath = location.pathname + location.search;
     if ((was === 'cart' || was === 'checkout') && page !== 'cart' && page !== 'checkout') closeCart();
@@ -46,7 +46,7 @@
     if (page === 'cart' || page === 'checkout') { try { view = page === 'cart' ? 'bag' : 'form'; rc(); const cv = $1('#cv'); cv.classList.add('on', 'pgv'); } catch (e) { console.error(e); } }
     if (page === 'account' && window.accountShow) accountShow({ '': 'p', orders: 'o', receipts: 'r', alerts: 'n' }[sub] || 'p');
     if (page === 'routine') renderRoutine(sub, u);
-    if (page === 'help') renderHelp();
+    if (page === 'help') renderHelp(sub);
     if (page === 'tracking') renderTrack(u);
     if (page === 'preferences') renderPrefs();
     if (!(was === page && page === 'routine')) scrollTo(0, 0);
@@ -80,7 +80,7 @@
     const ls0 = $1('#lsw'); if (ls0) ls0.addEventListener('change', () => setTimeout(() => { langBar(); if (cur === 'routine') renderRoutine(rsub, null, true); }, 50));
     const pm = $1('#pm'); if (pm) new MutationObserver(() => {
       const md = pm.querySelector('.md'), add = md && md.querySelector('[data-a=add]');
-      if (add && !md.querySelector('.rtq')) add.insertAdjacentHTML('afterend', `<button class="rtq" data-a="rtn" data-c="${E(add.dataset.c)}">${lcIco('flower')} ${T('روتين — اسأل عن هذا المنتج', 'Routine — ask about this product')}</button>`);
+      if (add && !md.querySelector('.rtq')) { const pp = prodBy(add.dataset.c); if (pp && ingOf(pp).length) add.insertAdjacentHTML('beforebegin', `<div class="ingl"><b>${T('المكونات الفعالة', 'Active ingredients')}</b>${ingHTML(pp)}</div>`); } add.insertAdjacentHTML('afterend', `<button class="rtq" data-a="rtn" data-c="${E(add.dataset.c)}">${lcIco('flower')} ${T('روتين — اسأل عن هذا المنتج', 'Routine — ask about this product')}</button>`);
     }).observe(pm, { childList: true, subtree: true });
   }
 
@@ -94,10 +94,31 @@
     acne: /acne|salicylic|bha|blemish|حب|شباب/i, spots: /vitamin c|brighten|dark spot|تفتيح|نمش|بقع|تصبغ/i, aging: /retinol|peptide|collagen|anti-?aging|wrinkle|تجاعيد|خطوط/i, redness: /redness|calm|centella|soothing|احمرار|مهدئ/i, pores: /pore|niacinamide|مسام/i,
   };
   const STEPS = [['cleanse', 'غسول', 'Cleanser', /clean|wash|foam|غسول|منظف/i, 'cm'], ['serum', 'سيروم علاجي', 'Treatment serum', /serum|سيروم/i, 'cm'], ['moist', 'مرطّب', 'Moisturizer', /moistur|cream|lotion|مرطب|كريم/i, 'cm'], ['spf', 'واقي شمس', 'Sunscreen', /sun|spf|واقي/i, 'am']];
+  const XSTEPS = [['toner', 'تونر', 'Toner', /toner|essence|mist|تونر|ايسنس/i], ['eye', 'عناية العين', 'Eye care', /eye|عين/i], ['mask', 'قناع', 'Mask', /mask|قناع|ماسك/i]];
+  const STEP_ALL = () => [...STEPS.map(s => [s[0], s[1], s[2], s[3]]), ...XSTEPS, ['other', 'أخرى', 'Other', /$^/]];
+  const stepOf = p => { if (p.st) return p.st; const t = (p.k || '') + ' ' + (p.n || ''); for (const s of STEP_ALL()) if (s[0] !== 'other' && s[3].test(t)) return s[0]; return 'other'; };
+  const timeOf = p => p.tm || (stepOf(p) === 'spf' ? 'am' : /retinol|ريتينول/i.test(plain(p)) ? 'pm' : 'both');
+  const ingOf = p => String(p.ing || '').split(/[,،;\n]/).map(x => x.trim()).filter(Boolean).slice(0, 8);
+  const ingHTML = p => ingOf(p).length ? `<div class="ingc">${ingOf(p).map(x => `<span>${E(x)}</span>`).join('')}</div>` : '';
+  const unsafePreg = p => !!p.np || /retinol|ريتينول|salicylic|ساليسيليك|benzoyl|بنزويل/i.test(plain(p));
+  const DQ = [
+    ['كيف تبدو بشرتك بعد ساعتين من غسلها؟', 'How does your skin look 2 hours after washing?', [['oily', 2, 'لامعة في كل الوجه', 'Shiny all over'], ['combo', 2, 'لامعة في الجبهة والأنف فقط', 'Shiny on forehead & nose only'], ['dry', 2, 'مشدودة أو متقشرة', 'Tight or flaky'], ['normal', 2, 'مريحة ومتوازنة', 'Comfortable & balanced']]],
+    ['كيف تبدو مسامك؟', 'How do your pores look?', [['oily', 1, 'واسعة وظاهرة في الوجه', 'Large & visible'], ['combo', 1, 'واسعة في منطقة T فقط', 'Large in the T-zone only'], ['dry', 1, 'صغيرة أو غير ظاهرة', 'Small or invisible'], ['normal', 1, 'متوسطة', 'Medium']]],
+    ['كيف تشعرين بعد غسل الوجه بدون مرطّب؟', 'How does it feel after washing without moisturiser?', [['dry', 2, 'مشدودة جداً وغير مريحة', 'Very tight'], ['normal', 1, 'مرتاحة', 'Comfortable'], ['oily', 1, 'تعود للمعان بسرعة', 'Gets shiny quickly']]],
+    ['كيف تتفاعل بشرتك مع المنتجات الجديدة؟', 'How does your skin react to new products?', [['sens', 2, 'تحمرّ أو تحرق غالباً', 'Often red or stinging'], ['sens', 1, 'أحياناً', 'Sometimes'], ['', 0, 'نادراً أو أبداً', 'Rarely or never']]],
+  ];
+  function diagResult(a) {
+    if (!a || a.length < DQ.length || a.some(x => x == null)) return null;
+    const sc = { oily: 0, dry: 0, combo: 0, normal: 0, sens: 0 };
+    a.forEach((ix, qi) => { const o = DQ[qi][2][ix]; if (o && o[0]) sc[o[0]] += o[1]; });
+    const base = ['oily', 'dry', 'combo', 'normal'].sort((x, y) => sc[y] - sc[x]);
+    const top = sc[base[0]] === sc[base[1]] && sc[base[0]] > 0 && base[0] !== 'normal' && base[1] !== 'normal' ? 'combo' : base[0];
+    return { skin: sc.sens >= 3 ? 'sensitive' : top, base: top, sens: sc.sens >= 2 };
+  }
   const TIPS = { oily: 'اختاري غسولاً خفيفاً بجل ومرطباً مائياً — الترطيب مهم حتى للبشرة الدهنية.', dry: 'ركّزي على الترطيب والمواد المرمّمة، وتجنّبي الماء الساخن.', combo: 'استخدمي مرطباً خفيفاً على المنطقة الدهنية وأغنى على الخدود الجافة.', sensitive: 'أدخلي منتجاً جديداً كل أسبوعين وجرّبيه على منطقة صغيرة أولاً.', normal: 'حافظي على روتين بسيط ثابت: غسول، مرطّب، واقي شمس.' };
   let rsub = '', rq = (() => { try { return JSON.parse(ls.get('lc_rq') || '') || {} } catch (e) { return {} } })(), askP = '', res = false;
-  rq.skin = rq.skin || ''; rq.concerns = rq.concerns || []; rq.when = rq.when || 'both'; rq.preg = !!rq.preg; rq.budget = rq.budget || '';
-  const sv = () => ls.set('lc_rq', JSON.stringify({ skin: rq.skin, concerns: rq.concerns, when: rq.when, preg: rq.preg, budget: rq.budget }));
+  rq.skin = rq.skin || ''; rq.concerns = rq.concerns || []; rq.when = rq.when || 'both'; rq.preg = !!rq.preg; rq.budget = rq.budget || ''; rq.dq = Array.isArray(rq.dq) ? rq.dq : []; rq.sens = !!rq.sens; let diagOpen = false, pfs = { step: '', q: '' };
+  const sv = () => ls.set('lc_rq', JSON.stringify({ skin: rq.skin, concerns: rq.concerns, when: rq.when, preg: rq.preg, budget: rq.budget, dq: rq.dq, sens: rq.sens }));
   const jp = s => { try { return JSON.parse(s) || null } catch (e) { return null } };
   const savedR = () => { const me = typeof custMe == 'function' ? custMe() : null; return (me && jp(me.routine)) || jp(ls.get('lc_rt')); };
   const today = () => new Date().toISOString().slice(0, 10);
@@ -124,21 +145,37 @@
   const prodList = () => (typeof S !== 'undefined' && S.P) || [];
   const prodBy = c => prodList().find(p => String(p.c).toUpperCase() === String(c).toUpperCase());
 
+  function okFor(p) {
+    const me = typeof custMe == 'function' ? custMe() : null, young = me && me.age != null && me.age < 18;
+    return !(young && /retinol|ريتينول/i.test(plain(p))) && !(rq.preg && unsafePreg(p));
+  }
+  function score(p) {
+    const t = plain(p); let s = rq.budget === 'low' ? -p.p / 1e6 : 0;
+    if (rq.skin) { if (p.sk && p.sk.length) s += p.sk.includes(rq.skin) ? 5 : -3; else if (KW[rq.skin].test(t)) s += 3; }
+    rq.concerns.forEach(c => { if (KW[c].test(t)) s += 2; });
+    if (rq.sens && /retinol|ريتينول|glycolic|salicylic|ساليسيليك|\baha\b/i.test(t)) s -= 3;
+    return s;
+  }
+  const suit = p => { if (!okFor(p)) return 'avoid'; if (!rq.skin) return ''; const s = score(p); return s >= 4 ? 'good' : s < 0 ? 'weak' : 'ok'; };
   function recommend() {
-    const me = typeof custMe == 'function' ? custMe() : null, young = me && me.age != null && me.age < 18, list = prodList().filter(p => !(young && /retinol|ريتينول/i.test(plain(p))) && !(rq.preg && /retinol|ريتينول|salicylic|ساليسيليك|benzoyl|بنزويل/i.test(plain(p))));
+    const list = prodList().filter(okFor);
     return STEPS.map(([id, ar, en, re, when]) => {
-      const pool = list.filter(p => re.test(p.k || '') || re.test(p.n || ''));
-      const scored = pool.map(p => { const t = plain(p); let s = rq.budget === 'low' ? -p.p / 1e6 : 0; if (rq.skin && KW[rq.skin].test(t)) s += 3; rq.concerns.forEach(c => { if (KW[c].test(t)) s += 2; }); return [s, p]; }).sort((a, b) => b[0] - a[0] || a[1].p - b[1].p);
+      const pool = list.filter(p => stepOf(p) === id);
+      const scored = pool.map(p => [score(p), p]).sort((a, b) => b[0] - a[0] || a[1].p - b[1].p);
       return { id, ar, en, when, items: scored.slice(0, 2).map(x => x[1]) };
     });
   }
-  const pcard = (p, acts) => `<div class="rt-p"><div class="th" style="${p.i ? `background-image:url('${E(p.i)}')` : ''}"></div><div><b>${E(p.n)}</b><small>${E(p.c)} · ${fmM(p.p)}</small></div><div class="acts">${acts ? `<button data-rt="add" data-c="${E(p.c)}">${T('أضف', 'Add')}</button><button class="g" data-rt="ask" data-c="${E(p.c)}">${T('اسأل', 'Ask')}</button>` : ''}</div></div>`;
+  const pcard = (p, acts) => `<div class="rt-p"><div class="th" style="${p.i ? `background-image:url('${E(p.i)}')` : ''}"></div><div><b>${E(p.n)}</b><small>${E(p.c)} · ${fmM(p.p)}</small>${ingHTML(p)}</div><div class="acts">${acts ? `<button data-rt="add" data-c="${E(p.c)}">${T('أضف', 'Add')}</button><button class="g" data-rt="ask" data-c="${E(p.c)}">${T('اسأل', 'Ask')}</button>` : ''}</div></div>`;
 
   function quizHTML() {
     const me = typeof custMe == 'function' ? custMe() : null;
     const pre = savedHTML();
     const opt = (list, sel, kind) => list.map(([k, ar, en]) => `<button type="button" data-rt="${kind}" data-v="${k}" class="${(Array.isArray(sel) ? sel.includes(k) : sel === k) ? 'on' : ''}" aria-pressed="${Array.isArray(sel) ? sel.includes(k) : sel === k}">${T(ar, en)}</button>`).join('');
-    let out = pre + `<div class="rt-c"><h3>1. ${T('ما نوع بشرتك؟', 'What is your skin type?')}</h3><div class="rt-opts">${opt(SKINS, rq.skin, 'skin')}</div>
+    const dr = diagResult(rq.dq), sk0 = dr && SKINS.find(x => x[0] === dr.skin);
+    const diag = !diagOpen ? `<button type="button" class="btn g" data-rt="dopen">${T('لا أعرف نوع بشرتي — قيّمي بشرتي', 'Not sure — assess my skin')}</button>` :
+      `<div class="rt-dq">${DQ.map((q, qi) => `<div class="rt-q"><b>${qi + 1}. ${T(q[0], q[1])}</b><div class="rt-opts">${q[2].map((o, oi) => `<button type="button" data-rt="dq" data-q="${qi}" data-v="${oi}" class="${rq.dq[qi] === oi ? 'on' : ''}">${T(o[2], o[3])}</button>`).join('')}</div></div>`).join('')}
+        ${dr ? `<p class="rt-ok">${lcIco('check')} ${T('نتيجة التقييم: بشرة ' + sk0[1] + (dr.sens && dr.skin !== 'sensitive' ? ' مع حساسية' : ''), 'Result: ' + sk0[2] + ' skin' + (dr.sens && dr.skin !== 'sensitive' ? ' with sensitivity' : ''))}</p><small class="em">${T('تم اعتماد النتيجة تلقائياً، ويمكنك تغييرها أعلاه.', 'Applied automatically — you can change it above.')}</small>` : `<small class="em">${rq.dq.filter(x => x != null).length}/${DQ.length}</small>`}</div>`;
+    let out = pre + `<div class="rt-c"><h3>1. ${T('ما نوع بشرتك؟', 'What is your skin type?')}</h3><div class="rt-opts">${opt(SKINS, rq.skin, 'skin')}</div>${rq.sens && rq.skin !== 'sensitive' ? `<p class="rt-warn">${lcIco('warn')} ${T('بشرتك تتأثر بسهولة: سنُبعد الأحماض والريتينول القويّة.', 'Your skin is reactive: strong acids and retinol are deprioritised.')}</p>` : ''}${diag}
       <h3>2. ${T('ما الذي تريدين معالجته؟ (اختاري أكثر من واحد)', 'What would you like to treat? (pick any)')}</h3><div class="rt-opts">${opt(CONCERNS, rq.concerns, 'con')}</div>
       <h3>3. ${T('متى تستخدمين روتينك؟', 'When do you use your routine?')}</h3><div class="rt-opts">${opt(WHEN, rq.when, 'when')}</div>
       <h3>4. ${T('تفضيلات إضافية', 'Extras')}</h3><div class="rt-opts"><button type="button" data-rt="preg" class="${rq.preg ? 'on' : ''}" aria-pressed="${rq.preg}">${T('حامل أو مرضعة', 'Pregnant / nursing')}</button><button type="button" data-rt="budget" class="${rq.budget === 'low' ? 'on' : ''}" aria-pressed="${rq.budget === 'low'}">${T('الأوفر سعراً', 'Lowest price first')}</button></div>
@@ -174,6 +211,15 @@
       <div class="rt-c"><h3>${lcIco('scale')} ${T('هل يمكن الجمع بينها؟', 'Can I combine them?')}</h3><p class="em">${T('علّمي مكوّنين أو أكثر من القائمة لنخبرك.', 'Tick two or more ingredients above.')}</p>
       ${sel.length > 1 ? (cf.length ? cf.map(c => `<p class="rt-warn">${lcIco('warn')} ${T(c[2], c[3])}</p>`).join('') : `<p class="rt-ok">${lcIco('check')} ${T('لا تعارض معروف بين هذه المكوّنات.', 'No known conflict between these.')}</p>`) : ''}</div>`;
   }
+  function prodsHTML() {
+    const steps = STEP_ALL(), q = pfs.q.trim().toLowerCase();
+    const list = prodList().filter(p => (!pfs.step || stepOf(p) === pfs.step) && (!q || (p.n + ' ' + p.c + ' ' + (p.ing || '')).toLowerCase().includes(q))).map(p => [p, suit(p)]).sort((a, b) => ({ good: 0, ok: 1, '': 2, weak: 3, avoid: 4 })[a[1]] - ({ good: 0, ok: 1, '': 2, weak: 3, avoid: 4 })[b[1]]);
+    const badge = s => s === 'good' ? `<em class="bd g">${T('مناسب لبشرتك', 'Great for you')}</em>` : s === 'avoid' ? `<em class="bd r">${T('لا ننصح به لك', 'Not advised')}</em>` : s === 'weak' ? `<em class="bd y">${T('قد لا يناسبك', 'May not suit')}</em>` : '';
+    return `<div class="rt-c"><h3>${T('كل المنتجات حسب روتينك', 'All products for your routine')}</h3>${rq.skin ? `<p class="em">${T('مرتّبة حسب ملاءمتها لبشرتك: ', 'Sorted by fit for your skin: ')}<b>${T(SKINS.find(x => x[0] === rq.skin)[1], SKINS.find(x => x[0] === rq.skin)[2])}</b></p>` : `<p class="em">${T('حدّدي نوع بشرتك في «روتيني» لترتيب المنتجات لك.', 'Set your skin type in “My routine” to sort products for you.')}</p>`}
+      <input id="rt-pq" type="search" placeholder="${T('ابحثي بالاسم أو الكود أو المكوّن…', 'Search name, code or ingredient…')}" value="${E(pfs.q)}" style="width:100%;padding:12px 14px;border:1px solid #d9cfe8;border-radius:14px;font:inherit">
+      <div class="rt-opts" style="margin:8px 0"><button type="button" data-rt="pstep" data-v="" class="${pfs.step ? '' : 'on'}">${T('الكل', 'All')}</button>${steps.map(s => `<button type="button" data-rt="pstep" data-v="${s[0]}" class="${pfs.step === s[0] ? 'on' : ''}">${T(s[1], s[2])}</button>`).join('')}</div>
+      ${list.map(([p, s]) => `<div class="rt-pw">${badge(s)}${pcard(p, s !== 'avoid')}</div>`).join('') || `<p class="em">${T('لا نتائج', 'No results')}</p>`}</div>`;
+  }
   function askHTML() {
     const p = askP && prodBy(askP);
     const quick = [['هل يناسب بشرتي؟', 'Is it suitable for my skin?'], ['كيف أستخدمه؟', 'How do I use it?'], ['هل فيه مكونات تهيّج؟', 'Any irritating ingredients?'], ['ما بديله؟', 'Any alternative?'], ['هل يناسب الحمل؟', 'Is it pregnancy safe?']];
@@ -189,13 +235,13 @@
   }
   function renderRoutine(sub, u, quiet) {
     rsub = sub || ''; const el = $1('#rtn'); if (!el) return;
-    const tab = rsub === 'ask' ? 'ask' : rsub === 'support' ? 'support' : rsub === 'guide' ? 'guide' : 'quiz';
+    const tab = rsub === 'ask' ? 'ask' : rsub === 'support' ? 'support' : rsub === 'guide' ? 'guide' : rsub === 'products' ? 'products' : 'quiz';
     if (u && u.searchParams.get('p')) { askP = u.searchParams.get('p'); }
     if (tab !== 'support' && window.LCChat) LCChat.unmount();
-    const tabs = [['quiz', '/routine', T('روتيني', 'My routine')], ['guide', '/routine/guide', T('دليل المكونات', 'Ingredients')], ['ask', '/routine/ask', T('اسألي عن منتج', 'Ask about a product')], ['support', '/routine/support', T('الدعم', 'Support')]];
+    const tabs = [['quiz', '/routine', T('روتيني', 'My routine')], ['products', '/routine/products', T('كل المنتجات', 'All products')], ['guide', '/routine/guide', T('دليل المكونات', 'Ingredients')], ['ask', '/routine/ask', T('اسألي عن منتج', 'Ask about a product')], ['support', '/routine/support', T('الدعم', 'Support')]];
     el.innerHTML = `<div class="w"><div class="rh"><h2>${lcIco('flower')} ${T('روتين', 'Routine')}</h2><p>${T('مستشارتك الشخصية للعناية بالبشرة: تحليل بشرتك، اقتراح منتجات، وتحدّثي مع فريقنا.', 'Your personal skincare advisor: analyse your skin, get product picks, and chat with our team.')}</p></div>
       <nav class="rt-tabs" aria-label="Routine">${tabs.map(([k, h, n]) => `<a href="${h}" class="${tab === k ? 'on' : ''}">${n}</a>`).join('')}</nav>
-      <div id="rtb">${tab === 'quiz' ? quizHTML() : tab === 'ask' ? askHTML() : tab === 'guide' ? guideHTML() : `<div id="rt-chat"></div>`}</div></div>`;
+      <div id="rtb">${tab === 'quiz' ? quizHTML() : tab === 'ask' ? askHTML() : tab === 'guide' ? guideHTML() : tab === 'products' ? prodsHTML() : `<div id="rt-chat"></div>`}</div></div>`;
     if (tab === 'support' && window.LCChat) LCChat.mount(document.getElementById('rt-chat'), 'routine');
   }
   function resolveCode(v) {
@@ -206,10 +252,13 @@
   document.addEventListener('click', async e => {
     const b = e.target.closest && e.target.closest('#rtn [data-rt]'); if (!b) return;
     const k = b.dataset.rt, v = b.dataset.v, c = b.dataset.c;
-    if (k === 'skin') { rq.skin = v; res = false; sv(); renderRoutine(rsub, null, true); }
+    if (k === 'skin') { rq.skin = v; if (v !== 'sensitive') rq.sens = rq.sens && v !== 'sensitive'; res = false; sv(); renderRoutine(rsub, null, true); }
     else if (k === 'con') { rq.concerns = rq.concerns.includes(v) ? rq.concerns.filter(x => x !== v) : [...rq.concerns, v]; res = false; sv(); renderRoutine(rsub, null, true); }
     else if (k === 'when') { rq.when = v; sv(); renderRoutine(rsub, null, true); }
     else if (k === 'go') { res = true; renderRoutine(rsub, null, true); const r = document.querySelector('#rtb .rt-c:nth-child(2)'); if (r) r.scrollIntoView({ behavior: 'smooth' }); }
+    else if (k === 'dopen') { diagOpen = true; renderRoutine(rsub, null, true); }
+    else if (k === 'dq') { rq.dq[+b.dataset.q] = +v; for (let i = 0; i < DQ.length; i++) if (rq.dq[i] === undefined) rq.dq[i] = null; const r = diagResult(rq.dq); if (r) { rq.skin = r.skin; rq.sens = r.sens; res = false; } sv(); renderRoutine(rsub, null, true); }
+    else if (k === 'pstep') { pfs.step = v; renderRoutine(rsub, null, true); }
     else if (k === 'preg') { rq.preg = !rq.preg; res = false; sv(); renderRoutine(rsub, null, true); }
     else if (k === 'budget') { rq.budget = rq.budget === 'low' ? '' : 'low'; sv(); renderRoutine(rsub, null, true); }
     else if (k === 'ing') { ingSel = ingSel.includes(v) ? ingSel.filter(x => x !== v) : [...ingSel, v]; renderRoutine(rsub, null, true); }
@@ -249,7 +298,7 @@
     try { await LCChat.send(`${text}`, p.c, 'routine'); askP = ''; toast(T('وصل سؤالك، سيرد عليك الفريق هنا', 'Question sent — our team will reply here')); lcNav('/routine/support'); } catch (x) { toast('error'); }
     btn.disabled = false;
   });
-  document.addEventListener('input', e => { if (e.target.id === 'rt-iq') { ingQ = e.target.value; const p = e.target.selectionStart; renderRoutine(rsub, null, true); const n = $1('#rt-iq'); if (n) { n.focus(); n.setSelectionRange(p, p); } return; } if (e.target.name === 'prod' && e.target.form && e.target.form.id === 'rt-ask') { const p = resolveCode(e.target.value); const code = p ? p.c : ''; if (code !== askP && p && /—/.test(e.target.value)) { askP = code; const t = $1('#rt-ask textarea'), v = t ? t.value : '', n = $1('#rt-ask [name=nm]'), nv = n ? n.value : ''; renderRoutine(rsub, null, true); const t2 = $1('#rt-ask textarea'); if (t2) t2.value = v; const n2 = $1('#rt-ask [name=nm]'); if (n2) n2.value = nv; } } });
+  document.addEventListener('input', e => { if (e.target.id === 'rt-pq') { pfs.q = e.target.value; const p0 = e.target.selectionStart; renderRoutine(rsub, null, true); const n = $1('#rt-pq'); if (n) { n.focus(); n.setSelectionRange(p0, p0); } return; } if (e.target.id === 'rt-iq') { ingQ = e.target.value; const p = e.target.selectionStart; renderRoutine(rsub, null, true); const n = $1('#rt-iq'); if (n) { n.focus(); n.setSelectionRange(p, p); } return; } if (e.target.name === 'prod' && e.target.form && e.target.form.id === 'rt-ask') { const p = resolveCode(e.target.value); const code = p ? p.c : ''; if (code !== askP && p && /—/.test(e.target.value)) { askP = code; const t = $1('#rt-ask textarea'), v = t ? t.value : '', n = $1('#rt-ask [name=nm]'), nv = n ? n.value : ''; renderRoutine(rsub, null, true); const t2 = $1('#rt-ask textarea'); if (t2) t2.value = v; const n2 = $1('#rt-ask [name=nm]'); if (n2) n2.value = nv; } } });
 
 
   /* ================= مركز المساعدة / تتبع الطلب / الإعدادات (صفحات معزولة) ================= */
@@ -260,13 +309,17 @@
     ['كيف أسأل عن منتج؟', 'How do I ask about a product?', 'اضغطي زر «روتين» على بطاقة المنتج أو اكتبي كود المنتج في المحادثة.', 'Tap the “Routine” button on the product card or type its code in the chat.'],
     ['كيف أحصل على الأكواد والعروض؟', 'How do I get codes and offers?', 'فعّلي استلام العروض من «الإعدادات» وستصلك الأكواد على واتساب.', 'Turn on offers in “Settings” and we will send codes on WhatsApp.'],
   ];
-  function renderHelp() {
+  function renderHelp(sub) {
     const el = $1('#hlpg'); if (!el) return;
+    if (sub === 'chat') {
+      el.innerHTML = `<div class="w"><div class="rh"><h2>${lcIco('headset')} ${T('محادثة خدمة الزبائن', 'Customer service chat')}</h2><p><a href="/help">← ${T('مركز المساعدة', 'Help centre')}</a></p></div><div id="hl-chat"></div></div>`;
+      if (window.LCChat) LCChat.mount($1('#hl-chat'), 'service'); return;
+    }
+    if (window.LCChat) LCChat.unmount();
     el.innerHTML = `<div class="w"><div class="rh"><h2>${lcIco('headset')} ${T('مركز المساعدة', 'Help centre')}</h2><p>${T('تحدّثي مع فريق خدمة الزبائن أو ابحثي في الأسئلة الشائعة.', 'Chat with customer service or browse the FAQ.')}</p></div>
-      <div class="hg"><div><div class="tiles2"><a href="/tracking"><b>${lcIco('box')} ${T('تتبع الطلب', 'Track order')}</b><small>${T('برمز الطلب', 'By order code')}</small></a><a href="/routine/support"><b>${lcIco('flower')} ${T('دعم روتين', 'Routine support')}</b><small>${T('استشارة بشرة', 'Skin advice')}</small></a><a href="/account/orders"><b>${lcIco('receipt')} ${T('طلباتي', 'My orders')}</b><small>${T('وإيصالاتي', 'and receipts')}</small></a></div>
-      <h3>${T('أسئلة شائعة', 'FAQ')}</h3><div class="faq">${FAQ.map(f => `<details><summary>${T(f[0], f[1])}</summary><p>${T(f[2], f[3])}</p></details>`).join('')}</div></div>
-      <div id="hl-chat"></div></div></div>`;
-    if (window.LCChat) LCChat.mount($1('#hl-chat'), 'service');
+      <a class="btn" href="/help/chat" style="display:block;text-align:center;margin-bottom:12px">${lcIco('headset')} ${T('ابدأ محادثة مع الدعم', 'Start a chat with support')}</a>
+      <div class="tiles2"><a href="/tracking"><b>${lcIco('box')} ${T('تتبع الطلب', 'Track order')}</b><small>${T('برمز الطلب', 'By order code')}</small></a><a href="/routine/support"><b>${lcIco('flower')} ${T('دعم روتين', 'Routine support')}</b><small>${T('استشارة بشرة', 'Skin advice')}</small></a><a href="/account/orders"><b>${lcIco('receipt')} ${T('طلباتي', 'My orders')}</b><small>${T('وإيصالاتي', 'and receipts')}</small></a></div>
+      <h3>${T('أسئلة شائعة', 'FAQ')}</h3><div class="faq">${FAQ.map(f => `<details><summary>${T(f[0], f[1])}</summary><p>${T(f[2], f[3])}</p></details>`).join('')}</div></div>`;
   }
   function renderTrack(u) {
     const f = $1('#tkf'); if (!f) return; const c = u && u.searchParams.get('c');
