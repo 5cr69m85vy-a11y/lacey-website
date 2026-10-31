@@ -17,6 +17,7 @@ import { authRoutes, sessionCustomer, ageOf, MIN_AGE } from './auth.js';
 import { processQueue } from './wa.js';
 import { quote, shopRoutes } from './shop.js';
 import { extraRoutes } from './extra.js';
+import { opsRoutes, restock, takeStock, stockMap, refreshDeliveries, productPage, sitemap, robots } from './ops.js';
 import { ensureSchema, withIntegrations } from './lib.js';
 import { limit, hit, tooMany, audit, gc, ipOf } from './guard.js';
 
@@ -94,6 +95,7 @@ async function setStatus(env, o, s, actor, note = '') {
   ]);
   await queueNote(env, o.phone, 'order_status', { code: o.code, status: s, text: STATUS_TEXT[s] || '' }, o.customer_id);
   if (s === 2) await issueReceipt(env, o);
+  if (s === 0) await restock(env, o.code);     // إرجاع الكميات للمخزون عند الإلغاء
 }
 
 /* إيصال يُصدر عند تأكيد الطلب */
@@ -121,6 +123,7 @@ async function readCatalog(env, full) {
   const P = (prods.results || []).map(r => jp(r.data, null)).filter(Boolean);
   if (!row && !P.length) return null;
   const B = ((await env.DB.prepare(`SELECT data FROM boxes ${full ? '' : 'WHERE active=1'} ORDER BY sort,id`).all()).results || []).map(r => jp(r.data, null)).filter(Boolean);
+  { const sm = await stockMap(env); for (const x of P) { const s = sm[x.c]; if (s) { x.left = s.qty; x.lw = s.low; } else { delete x.left; delete x.lw; } } }
   const data = { ...(row ? jp(row.value, {}) : {}), P, B };
   if (!full) for (const k of PRIVATE) delete data[k];
   return data;
@@ -133,6 +136,7 @@ async function saveCatalog(env, data) {
     const code = String((p && p.c) ?? '').trim();
     if (!code || seen.has(code)) return;
     seen.add(code);
+    delete p.left; delete p.lw;       // الكمية تُدار من تبويب المخزون فقط
     const json = JSON.stringify(p);
     if (json.length > MAX_PRODUCT_BYTES) throw Object.assign(new Error(`صور المنتج ${code} كبيرة جداً؛ صغّرها`), { status: 413 });
     stmts.push(env.DB.prepare(
@@ -162,7 +166,8 @@ const orderView = r => ({
   id: r.id, code: r.code, name: r.name, ph: r.phone, city: r.city, area: r.area, lm: r.landmark,
   ad: [r.city, r.area, r.landmark].filter(Boolean).join(' - '),
   items: jp(r.items, []), s: r.subtotal, dsc: r.discount, t: r.total, dc: (jp(r.discount_codes, [])[0]) || '',
-  pay: r.pay_method, d: r.created_at, st: r.status,
+  pay: r.pay_method, d: r.created_at, st: r.status, ct: r.city || '',
+  dlv: r.delivery_ref ? { p: r.delivery_provider, r: r.delivery_ref, l: r.delivery_link, s: r.delivery_status } : null,
 });
 async function createOrder(env, b, sess) {
   { const g = ageOf(sess.birth); if (g === null) return J({ error: 'أكمل ملفك الشخصي: أضف تاريخ ميلادك أولاً', need_profile: true }, 403); if (g < MIN_AGE) return J({ error: `الطلب متاح لمن عمره ${MIN_AGE} سنة فأكثر`, need_profile: true }, 403); }
@@ -180,11 +185,12 @@ async function createOrder(env, b, sess) {
   if (existing) return J({ ok: true, code: b.code, duplicate: true });
 
   /* الأسعار والخصومات والتوصيل تُحسب على الخادم لا من المتصفح */
-  const qt = await quote(env, { items: raw, codes: [].concat(b.codes || [], b.dc || []), ph: phone, pay: b.pay });
+  const qt = await quote(env, { items: raw, codes: [].concat(b.codes || [], b.dc || []), ph: phone, pay: b.pay, city });
   if (qt.error) return J({ error: qt.error }, 400);
   const items = qt.lines, subtotal = qt.subtotal, discount = qt.discount, shipping = qt.shipping, total = qt.total;
   const usedCodes = qt.applied.map(a => a.code), payM = qt.pay;
 
+  const tk = await takeStock(env, items, t => tgNotify(env, t)); if (tk.error) return J({ error: tk.error }, 409);
   const seq = await env.DB.prepare("UPDATE counters SET value=value+1 WHERE name='order_seq' RETURNING value").first();
   const id = seq.value, t = now();
 
@@ -203,7 +209,7 @@ async function createOrder(env, b, sess) {
       .bind(b.code, id, customerId, name, phone, city, area, lm, JSON.stringify(items), subtotal, discount, total, JSON.stringify(usedCodes), payM, t),
     env.DB.prepare('INSERT INTO order_events(order_code,status,at,actor,note) VALUES(?,?,?,?,?)').bind(b.code, 1, t, 'customer', ''),
     ...usedCodes.map(c => env.DB.prepare('UPDATE discount_codes SET used=used+1 WHERE code=?').bind(c)),
-    env.DB.prepare('UPDATE orders SET shipping=?,free_shipping=? WHERE code=?').bind(shipping, qt.freeShip ? 1 : 0, b.code),
+    env.DB.prepare('UPDATE orders SET shipping=?,free_shipping=?,stock_taken=? WHERE code=?').bind(shipping, qt.freeShip ? 1 : 0, tk.taken ? 1 : 0, b.code),
   ]);
   await queueNote(env, phone, 'order_received', { code: b.code, total }, customerId);
 
@@ -233,7 +239,7 @@ export default {
     let env = rawEnv; try { env = request.method === 'OPTIONS' ? rawEnv : await withIntegrations(rawEnv); } catch (e) {}
     return corsFilter(request, env, res);
   },
-  async scheduled(event, rawEnv) { await ensureSchema(rawEnv); const env = await withIntegrations(rawEnv); await sweep(env); await processQueue(env, 50); if (new Date().getMinutes() % 30 === 0) await gc(env); },
+  async scheduled(event, rawEnv) { await ensureSchema(rawEnv); const env = await withIntegrations(rawEnv); await sweep(env); try { await refreshDeliveries(env, setStatus); } catch (e) { console.error('delivery refresh', e && e.message); } await processQueue(env, 50); if (new Date().getMinutes() % 30 === 0) await gc(env); },
 };
 
 async function handle(request, rawEnv, ctx) {
@@ -253,6 +259,7 @@ async function handle(request, rawEnv, ctx) {
 
     try {
       { const er = await extraRoutes({ env, request, url, p, M, body, authed, ctx, tg: t => tgNotify(env, t), sess: (p.startsWith('/chat/') ? await sessionCustomer(env, request) : null) }); if (er) return er; }
+      { const orr = await opsRoutes({ env, request, url, p, M, body, authed, setStatus, tg: t => tgNotify(env, t) }); if (orr) return orr; }
       { const sr = await shopRoutes({ env, request, p, M, body, url }, authed); if (sr) return sr; }
       { const ar = await authRoutes({ env, request, url, p, M, body, ctx }); if (ar) return ar; }
 
@@ -413,6 +420,13 @@ async function handle(request, rawEnv, ctx) {
       return J({ error: 'server error' }, 500);
     }
 
+    /* SEO: صفحة مستقلة لكل منتج + sitemap + robots */
+    if (env.ASSETS && M === 'GET') {
+      const pm = /^\/p\/([^/]+)\/?$/.exec(p);
+      if (pm) { try { return await productPage(env, request, decodeURIComponent(pm[1])); } catch (e) { console.error(e); } }
+      if (p === '/sitemap.xml') return sitemap(env, request);
+      if (p === '/robots.txt') return robots(env, request);
+    }
     /* صفحات المتجر الفرعية: كلها تخدم نفس index.html والمتصفح يعرض الصفحة المطلوبة */
     if (env.ASSETS && M === 'GET' && PAGE_ROUTES.test(p)) return env.ASSETS.fetch(new Request(new URL('/', request.url), { headers: request.headers }));
     if (env.ASSETS) return env.ASSETS.fetch(request);

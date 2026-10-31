@@ -31,5 +31,9 @@ export const MIGRATIONS = [
  [
   "0008_depts_routine.sql",
   "-- 0008: أقسام الدعم (خدمة العملاء / روتين)، إيصالات القراءة، مؤشر الكتابة، روتين محفوظ، موافقة التسويق\nALTER TABLE chats ADD COLUMN dept TEXT NOT NULL DEFAULT 'service';\nALTER TABLE chats ADD COLUMN staff_seen_at INTEGER NOT NULL DEFAULT 0;\nALTER TABLE chats ADD COLUMN cust_seen_at INTEGER NOT NULL DEFAULT 0;\nALTER TABLE chats ADD COLUMN staff_typing_at INTEGER NOT NULL DEFAULT 0;\nALTER TABLE customers ADD COLUMN routine TEXT NOT NULL DEFAULT '';\nALTER TABLE customers ADD COLUMN mkt INTEGER NOT NULL DEFAULT 0;\nCREATE INDEX IF NOT EXISTS idx_chats_dept ON chats(dept, status);\n"
+ ],
+ [
+  "0009_stock_delivery.sql",
+  "-- 0009: المخزون، وربط شركات التوصيل\nCREATE TABLE IF NOT EXISTS stock (code TEXT PRIMARY KEY, qty INTEGER NOT NULL DEFAULT 0, low INTEGER NOT NULL DEFAULT 5, updated_at INTEGER NOT NULL DEFAULT 0);\nALTER TABLE orders ADD COLUMN stock_taken INTEGER NOT NULL DEFAULT 0;\nALTER TABLE orders ADD COLUMN delivery_provider TEXT NOT NULL DEFAULT '';\nALTER TABLE orders ADD COLUMN delivery_ref TEXT NOT NULL DEFAULT '';\nALTER TABLE orders ADD COLUMN delivery_link TEXT NOT NULL DEFAULT '';\nALTER TABLE orders ADD COLUMN delivery_status TEXT NOT NULL DEFAULT '';\nALTER TABLE orders ADD COLUMN delivery_at INTEGER;\nCREATE INDEX IF NOT EXISTS idx_orders_delivery ON orders(delivery_provider, status);\n"
  ]
 ];

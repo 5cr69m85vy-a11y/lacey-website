@@ -5,8 +5,8 @@
   const E = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const $1 = s => document.querySelector(s);
   const ls = { get: k => { try { return localStorage.getItem(k) } catch (e) { return null } }, set: (k, v) => { try { localStorage.setItem(k, v) } catch (e) {} } };
-  const PAGES = { '': 'home', categories: 'categories', offers: 'offers', routine: 'routine', help: 'help', tracking: 'tracking', preferences: 'preferences', cart: 'cart', checkout: 'checkout', account: 'account', support: 'support' };
-  const TITLES = { home: 'Lacey Skincare', categories: 'الفئات | Lacey', offers: 'عروضنا | Lacey', routine: 'روتين | Lacey', cart: 'السلة | Lacey', checkout: 'إتمام الطلب | Lacey', account: 'حسابي | Lacey', support: 'الدعم | Lacey', help: 'مركز المساعدة | Lacey', tracking: 'تتبع الطلب | Lacey', preferences: 'الإعدادات | Lacey' };
+  const PAGES = { '': 'home', categories: 'categories', offers: 'offers', routine: 'routine', help: 'help', tracking: 'tracking', preferences: 'preferences', p: 'product', cart: 'cart', checkout: 'checkout', account: 'account', support: 'support' };
+  const TITLES = { home: 'Lacey Skincare', categories: 'الفئات | Lacey', offers: 'عروضنا | Lacey', routine: 'روتين | Lacey', cart: 'السلة | Lacey', checkout: 'إتمام الطلب | Lacey', account: 'حسابي | Lacey', support: 'الدعم | Lacey', product: 'Lacey', help: 'مركز المساعدة | Lacey', tracking: 'تتبع الطلب | Lacey', preferences: 'الإعدادات | Lacey' };
   const OVERLAY = ['cart', 'checkout', 'account'];
   const hdr = document.getElementById('hlp'); if (hdr) hdr.addEventListener('click', e => { e.preventDefault(); lcNav('/help'); });
   let cur = '', prevPath = '/', bn = null;
@@ -47,6 +47,7 @@
     if (page === 'account' && window.accountShow) accountShow({ '': 'p', orders: 'o', receipts: 'r', alerts: 'n' }[sub] || 'p');
     if (page === 'routine') renderRoutine(sub, u);
     if (page === 'help') renderHelp(sub);
+    if (page === 'product') renderProduct(sub);
     if (page === 'tracking') renderTrack(u);
     if (page === 'preferences') renderPrefs();
     if (!(was === page && page === 'routine')) scrollTo(0, 0);
@@ -70,19 +71,56 @@
     A.bag = () => lcNav('/cart');
     A.vf = () => { if (typeof needLogin == 'function' && needLogin()) return; lcNav('/checkout'); };
     A.vb = () => lcNav('/cart');
+    A.pg = () => A.x();
+    /* إعادة رسم نموذج الطلب عند وصول سعر التوصيل لا تُفقد ما كتبه الزبون ولا موضع المؤشر */
+    const rc0 = window.rc; window.rc = function () {
+      const f = document.querySelector('#of'); if (!(f && typeof view !== 'undefined' && view === 'form')) return rc0.apply(this, arguments);
+      const ae = document.activeElement, nm = ae && f.contains(ae) ? ae.name : '', ss = ae && ae.selectionStart;
+      ff = { ...ff, name: f.name.value, ph: f.ph.value, ci: f.ci.value, ae: f.ae.value, lm: f.lm.value };
+      const r = rc0.apply(this, arguments), f2 = document.querySelector('#of');
+      if (f2 && nm && f2.elements[nm]) { const n = f2.elements[nm]; n.focus(); try { if (ss != null) n.setSelectionRange(ss, ss); } catch (x) {} }
+      return r;
+    };
     A.rtn = c => lcNav('/routine/ask?p=' + encodeURIComponent(c));
     const ox = A.x; A.x = function () { ox.apply(this, arguments); if (OVERLAY.includes(cur)) lcNav(prevPath || '/'); };
     const ogo = A.go, MAP = { shop: 'categories', dpt: 'categories', offers: 'offers', best: 'home', half: 'home', delivery: 'home', how: 'home', reviews: 'home', top: 'home', trk: 'tracking' };
     A.go = c => { const pg = MAP[c]; if (pg && cur !== pg) { lcNav(pg === 'home' ? '/' : '/' + pg); setTimeout(() => ogo(c), 80); return; } ogo(c); };
     window.openAccount = t => lcNav('/account' + ({ o: '/orders', r: '/receipts', n: '/alerts' }[t] || ''));
     const sq = $1('#sq'); if (sq) sq.addEventListener('input', () => { if (sq.value.trim() && cur !== 'categories') lcNav('/categories'); });
-    const r0 = window.render; window.render = function () { r0.apply(this, arguments); langBar(); if (cur === 'routine') renderRoutine(rsub, null, true); };
+    const r0 = window.render; window.render = function () { r0.apply(this, arguments); langBar(); if (cur === 'product') renderProduct(psub, true); if (cur === 'routine') renderRoutine(rsub, null, true); };
     const ls0 = $1('#lsw'); if (ls0) ls0.addEventListener('change', () => setTimeout(() => { langBar(); if (cur === 'routine') renderRoutine(rsub, null, true); }, 50));
     const pm = $1('#pm'); if (pm) new MutationObserver(() => {
       const md = pm.querySelector('.md'), add = md && md.querySelector('[data-a=add]');
       if (add && !md.querySelector('.rtq')) { const pp = prodBy(add.dataset.c); if (pp && ingOf(pp).length) add.insertAdjacentHTML('beforebegin', `<div class="ingl"><b>${T('المكونات الفعالة', 'Active ingredients')}</b>${ingHTML(pp)}</div>`); } add.insertAdjacentHTML('afterend', `<button class="rtq" data-a="rtn" data-c="${E(add.dataset.c)}"><svg class="ico" viewBox="0 0 24 24"><path d="M12 3c3 4 6 7 6 10.500a6 6 0 01-12 0C6 10 9 7 12 3z"/></svg> ${T('روتين — اسأل عن هذا المنتج', 'Routine — ask about this product')}</button>`);
     }).observe(pm, { childList: true, subtree: true });
   }
+
+  /* ================= صفحة المنتج المستقلة /p/CODE ================= */
+  let psub = '', pimg = 0;
+  function renderProduct(code, quiet) {
+    psub = decodeURIComponent(code || ''); const el = $1('#prd'); if (!el) return;
+    const pd = prodBy(psub);
+    if (!pd) { if (!prodList().length) return; el.innerHTML = `<div class="w"><p class="em">${T('هذا المنتج غير موجود', 'This product does not exist')}</p><a class="btn" href="/categories">${T('تصفّحي المتجر', 'Browse the shop')}</a></div>`; return; }
+    document.title = pd.n + ' | Lacey';
+    const gal = [pd.i, ...(pd.im || [])].filter(Boolean), im = gal[pimg] || gal[0], b = typeof brd == 'function' ? brd(pd) : null;
+    const low = pd.left > 0 && pd.left <= (pd.lw ?? 5), same = prodList().filter(x => x.c !== pd.c && x.k === pd.k).slice(0, 4);
+    el.innerHTML = `<div class="w"><p><a href="/categories">← ${T('المتجر', 'Shop')}</a></p><div class="pgd"><div><div class="pim" style="${im ? `background-image:url('${E(im)}')` : ''}"></div>${gal.length > 1 ? `<div class="pth">${gal.map((u, k) => `<button data-pi="${k}" class="${k === pimg ? 'on' : ''}" style="background-image:url('${E(u)}')" aria-label="${k + 1}"></button>`).join('')}</div>` : ''}</div>
+      <div><small>${E(pd.c)}${b ? ' · ' + E(b.n) : ''}${pd.k ? ' · ' + E(pd.k) : ''}</small><h1>${E(pd.n)}</h1><div class="pr">${fmM(pd.p)}${pd.o > pd.p ? ` <s>${fmM(pd.o)}</s>` : ''}</div>
+      ${pd.left === 0 ? `<p class="so2">${T('نفد من المخزون', 'Sold out')}</p>` : low ? `<p class="lw2">${T('متبقي ' + pd.left + ' قطع فقط', 'Only ' + pd.left + ' left')}</p>` : ''}
+      ${ingOf(pd).length ? `<h3>${T('المكونات الفعالة', 'Active ingredients')}</h3>${ingHTML(pd)}` : ''}
+      ${typeof descHTML == 'function' ? descHTML(pd) : ''}
+      <div class="row2"><button class="btn" data-a="add" data-c="${E(pd.c)}" ${pd.left === 0 ? 'disabled' : ''}>${T('أضف إلى السلة', 'Add to bag')}</button><button class="btn g" data-a="rtn" data-c="${E(pd.c)}">${T('اسأل روتين', 'Ask Routine')}</button><button class="btn g" data-pcopy="1">${T('نسخ الرابط', 'Copy link')}</button></div></div></div>
+      ${same.length ? `<h3>${T('منتجات مشابهة', 'Similar products')}</h3><div class="grid">${same.map(card).join('')}</div>` : ''}</div>`;
+  }
+  document.addEventListener('click', e => {
+    const t = e.target.closest && e.target.closest('#prd [data-pi],#prd [data-pcopy]'); if (!t) return;
+    if (t.dataset.pi !== undefined) { pimg = +t.dataset.pi; renderProduct(psub, true); }
+    else { try { navigator.clipboard.writeText(location.origin + '/p/' + encodeURIComponent(psub)); toast(T('تم نسخ الرابط', 'Link copied')); } catch (x) {} }
+  });
+  document.addEventListener('change', e => {
+    const t = e.target; if (!(t && t.matches && t.matches('#of select[name=ci]'))) return;
+    QK = ''; rc();
+  });
 
   /* ================= قسم روتين ================= */
   const SKINS = [['oily', 'دهنية', 'Oily'], ['dry', 'جافة', 'Dry'], ['combo', 'مختلطة', 'Combination'], ['sensitive', 'حساسة', 'Sensitive'], ['normal', 'عادية', 'Normal']];

@@ -1,6 +1,7 @@
 /* shop.js — تسعير السلة على الخادم: منتجات + بوكسات + أكواد خصم متعددة + توصيل مجاني */
 import { audit, limit } from './guard.js';
 import { J, now, jp, cfgOf } from './lib.js';
+import { feeFor, checkStock } from './ops.js';
 
 export async function priceLines(env, raw) {
   raw = Array.isArray(raw) ? raw : [];
@@ -28,8 +29,9 @@ export async function priceLines(env, raw) {
 export async function quote(env, b) {
   const pr = await priceLines(env, b.items);
   if (pr.error) return { error: pr.error };
+  const stErr = await checkStock(env, pr.lines); if (stErr) return { error: stErr };
   const lines = pr.lines, subtotal = lines.reduce((a, l) => a + l.p * l.q, 0);
-  const cfg = await cfgOf(env), fee = Math.max(0, Math.round(+cfg.sf || 0)), phone = String(b.ph || '');
+  const cfg = await cfgOf(env), fee = feeFor(cfg, b.city), phone = String(b.ph || '');
   const applied = [], rejected = [], seen = new Set();
   let disc = 0, free = false;
   for (const raw of [].concat(b.codes || []).slice(0, 8)) {

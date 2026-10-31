@@ -1,0 +1,9 @@
+-- 0009: المخزون، وربط شركات التوصيل
+CREATE TABLE IF NOT EXISTS stock (code TEXT PRIMARY KEY, qty INTEGER NOT NULL DEFAULT 0, low INTEGER NOT NULL DEFAULT 5, updated_at INTEGER NOT NULL DEFAULT 0);
+ALTER TABLE orders ADD COLUMN stock_taken INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE orders ADD COLUMN delivery_provider TEXT NOT NULL DEFAULT '';
+ALTER TABLE orders ADD COLUMN delivery_ref TEXT NOT NULL DEFAULT '';
+ALTER TABLE orders ADD COLUMN delivery_link TEXT NOT NULL DEFAULT '';
+ALTER TABLE orders ADD COLUMN delivery_status TEXT NOT NULL DEFAULT '';
+ALTER TABLE orders ADD COLUMN delivery_at INTEGER;
+CREATE INDEX IF NOT EXISTS idx_orders_delivery ON orders(delivery_provider, status);

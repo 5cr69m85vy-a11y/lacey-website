@@ -2,7 +2,7 @@
   "name": "lacey-store",
   "private": true,
   "scripts": {
-    "test": "node --no-warnings test/schema.test.js && node --no-warnings test/worker.test.js && node --no-warnings test/auth.test.js && node --no-warnings test/shop.test.js && node --no-warnings test/extra.test.js && node --no-warnings test/security.test.js && node --no-warnings test/e2e.js",
+    "test": "node --no-warnings test/schema.test.js && node --no-warnings test/worker.test.js && node --no-warnings test/auth.test.js && node --no-warnings test/shop.test.js && node --no-warnings test/extra.test.js && node --no-warnings test/ops.test.js && node --no-warnings test/security.test.js && node --no-warnings test/e2e.js",
     "deploy": "wrangler deploy"
   }
 }
