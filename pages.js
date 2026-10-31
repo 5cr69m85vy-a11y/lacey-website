@@ -16,8 +16,7 @@
   /* ---------- الشريط السفلي ---------- */
   function buildBar() {
     bn = $1('#bnav'); if (!bn) return;
-    const acc = document.getElementById('accb'); if (acc) { acc.dataset.p = 'account'; bn.appendChild(acc); }
-    const cn = document.getElementById('cn'); if (cn) { const z = () => { cn.dataset.z = cn.textContent.trim() === '0' ? '1' : ''; }; new MutationObserver(z).observe(cn, { childList: true, characterData: true, subtree: true }); z(); }
+        const cn = document.getElementById('cn'); if (cn) { const z = () => { cn.dataset.z = cn.textContent.trim() === '0' ? '1' : ''; }; new MutationObserver(z).observe(cn, { childList: true, characterData: true, subtree: true }); z(); }
     bn.addEventListener('click', e => {
       const a = e.target.closest('a[data-p]'); if (!a) return;
       e.preventDefault(); e.stopPropagation(); lcNav(a.getAttribute('href'));
@@ -43,7 +42,7 @@
     if (!dept && (location.hash || '') === '' && was === 'categories' && page !== 'categories') { try { dispatchEvent(new HashChangeEvent('hashchange')); } catch (e) {} }
     cur = page; document.body.dataset.pg = page; document.title = TITLES[page] || TITLES.home;
     secVisible(page);
-    if (bn) { bn.querySelectorAll('a[data-p]').forEach(a => { const on = a.dataset.p === page || (page === 'checkout' && a.dataset.p === 'cart'); a.classList.toggle('on', on); on ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'); }); const ac = document.getElementById('accb'); if (ac) ac.classList.toggle('cur', page === 'account'); }
+    if (bn) { bn.querySelectorAll('a[data-p]').forEach(a => { const on = a.dataset.p === 'orders' ? (page === 'tracking' || (page === 'account' && sub === 'orders')) : (a.dataset.p === page || (page === 'checkout' && a.dataset.p === 'cart')); a.classList.toggle('on', on); on ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'); }); const ac = document.getElementById('accb'); if (ac) ac.classList.toggle('cur', page === 'account' && sub !== 'orders'); }
     if (page === 'cart' || page === 'checkout') { try { view = page === 'cart' ? 'bag' : 'form'; rc(); const cv = $1('#cv'); cv.classList.add('on', 'pgv'); } catch (e) { console.error(e); } }
     if (page === 'account' && window.accountShow) accountShow({ '': 'p', orders: 'o', receipts: 'r', alerts: 'n' }[sub] || 'p');
     if (page === 'routine') renderRoutine(sub, u);

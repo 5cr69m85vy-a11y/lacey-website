@@ -293,3 +293,6 @@ body[data-pg=help] #hlp,body[data-pg=routine] #hlp{background:var(--ac);color:#f
 .dp{padding:1px 8px;border-radius:99px;background:#e6f0f0}.dp.routine{background:#efe6fb;color:#5b2d8a}
 #stf .inf{display:flex;gap:8px;flex-wrap:wrap;margin:4px 0 8px;font-size:12px}#stf .inf span{background:#f3f7f7;border-radius:99px;padding:3px 10px}#stf #stq{padding:6px;border-radius:10px;border:1px solid #d9e3e3;margin:6px 0}
 .tiles2 a,.tiles2 a:hover{text-decoration:none}.tiles2 a small{text-decoration:none}
+
+header #accb{width:40px;height:40px;border-radius:50%;overflow:hidden;padding:0;display:inline-flex;align-items:center;justify-content:center;background:var(--mist);border:0}header #accb .avs,header #accb img{width:100%;height:100%;object-fit:cover}header #accb.cur{box-shadow:0 0 0 2px var(--ac)}
+header #accb small{display:none}header #accb .bni{width:100%;height:100%;border-radius:50%;display:flex;align-items:center;justify-content:center;background:transparent;box-shadow:none;transform:none;position:static}header #accb .bni svg{width:24px;height:24px}header #accb .avs{width:100%;height:100%}
