@@ -80,7 +80,7 @@
     const ls0 = $1('#lsw'); if (ls0) ls0.addEventListener('change', () => setTimeout(() => { langBar(); if (cur === 'routine') renderRoutine(rsub, null, true); }, 50));
     const pm = $1('#pm'); if (pm) new MutationObserver(() => {
       const md = pm.querySelector('.md'), add = md && md.querySelector('[data-a=add]');
-      if (add && !md.querySelector('.rtq')) { const pp = prodBy(add.dataset.c); if (pp && ingOf(pp).length) add.insertAdjacentHTML('beforebegin', `<div class="ingl"><b>${T('المكونات الفعالة', 'Active ingredients')}</b>${ingHTML(pp)}</div>`); } add.insertAdjacentHTML('afterend', `<button class="rtq" data-a="rtn" data-c="${E(add.dataset.c)}">${lcIco('flower')} ${T('روتين — اسأل عن هذا المنتج', 'Routine — ask about this product')}</button>`);
+      if (add && !md.querySelector('.rtq')) { const pp = prodBy(add.dataset.c); if (pp && ingOf(pp).length) add.insertAdjacentHTML('beforebegin', `<div class="ingl"><b>${T('المكونات الفعالة', 'Active ingredients')}</b>${ingHTML(pp)}</div>`); } add.insertAdjacentHTML('afterend', `<button class="rtq" data-a="rtn" data-c="${E(add.dataset.c)}"><svg class="ico" viewBox="0 0 24 24"><path d="M12 3c3 4 6 7 6 10.500a6 6 0 01-12 0C6 10 9 7 12 3z"/></svg> ${T('روتين — اسأل عن هذا المنتج', 'Routine — ask about this product')}</button>`);
     }).observe(pm, { childList: true, subtree: true });
   }
 
