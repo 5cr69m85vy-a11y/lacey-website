@@ -5,6 +5,17 @@ import { limit, hit, tooMany, audit } from './guard.js';
 
 export const AVATAR = /^av(?:[1-9]|[12]\d|3[0-6])$/;   // 36 شخصية جاهزة
 
+export const MIN_AGE = 15;
+/* العمر بالسنوات من YYYY-MM-DD؛ null إن كان غير صالح */
+export function ageOf(birth, at = new Date()) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(birth || '')); if (!m) return null;
+  const y = +m[1], mo = +m[2], d = +m[3], dt = new Date(Date.UTC(y, mo - 1, d));
+  if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== d || y < 1920 || dt > at) return null;
+  let age = at.getUTCFullYear() - y; if (at.getUTCMonth() + 1 < mo || (at.getUTCMonth() + 1 === mo && at.getUTCDate() < d)) age--;
+  return age;
+}
+const birthErr = b => { const g = ageOf(b); return g === null ? 'أدخل تاريخ ميلاد صحيحاً' : g < MIN_AGE ? `لا يمكن إنشاء حساب لمن عمره أقل من ${MIN_AGE} سنة` : ''; };
+export const SKINS = ['oily', 'dry', 'combo', 'sensitive', 'normal'];
 const SESSION_MS = 90 * 864e5;
 const OTP_MS = 10 * 60 * 1000;
 const PHONE = /^07\d{9}$/, EMAIL = /^[^\s@]{1,64}@[^\s@]{1,190}\.[^\s@]{2,}$/;
@@ -30,7 +41,7 @@ export async function sessionCustomer(env, request) {
   if (row) env.DB.prepare('UPDATE customers SET last_seen_at=? WHERE id=?').bind(now(), row.id).run().catch(() => {});
   return row || null;
 }
-const pub = c => ({ id: c.id, name: c.name, ph: c.phone || '', email: c.email || '', city: c.city, area: c.area, lm: c.landmark, wa: !!c.wa_verified, pw: !!c.pw_hash, google: !!c.google_sub, orders: c.orders_count, avatar: c.avatar || '' });
+const pub = c => ({ id: c.id, name: c.name, ph: c.phone || '', email: c.email || '', city: c.city, area: c.area, lm: c.landmark, wa: !!c.wa_verified, pw: !!c.pw_hash, google: !!c.google_sub, orders: c.orders_count, birth: c.birth || '', age: ageOf(c.birth), skin: c.skin || '', avatar: c.avatar || '' });
 
 async function welcomeOnce(env, c, origin, ctx) {
   if (c.welcomed || !c.phone) return;
@@ -90,7 +101,7 @@ export async function authRoutes(c) {
     return J({ ok: true });
   }
   if (p === '/auth/otp/verify' && M === 'POST') {
-    const { ph, code, name } = await body();
+    const { ph, code, name, birth } = await body();
     if (!PHONE.test(String(ph || '')) || !/^\d{6}$/.test(String(code || ''))) return J({ error: 'رمز غير صحيح' }, 400);
     { const lim = await limit(env, request, 'otp-verify', 30, 15 * 60e3); if (lim) return lim; }
     const o = await env.DB.prepare('SELECT * FROM otp_codes WHERE phone=? AND expires_at>? ORDER BY id DESC LIMIT 1').bind(ph, now()).first();
@@ -99,6 +110,8 @@ export async function authRoutes(c) {
       await env.DB.prepare('UPDATE otp_codes SET attempts=attempts+1 WHERE id=?').bind(o.id).run();
       return J({ error: 'الرمز غير صحيح' }, 401);
     }
+    const isNew = !(await env.DB.prepare('SELECT 1 x FROM customers WHERE phone=?').bind(ph).first()), cur0 = await sessionCustomer(env, request);
+    if (isNew && !(cur0 && cur0.birth)) { const e = birthErr(birth); if (e) return J({ error: e, need_birth: true }, 400); }
     await env.DB.prepare('DELETE FROM otp_codes WHERE phone=?').bind(ph).run();
     const nm = String(name || '').trim().slice(0, 80);
     const cur = await sessionCustomer(env, request);
@@ -109,7 +122,7 @@ export async function authRoutes(c) {
     } else {
       const ex = await env.DB.prepare('SELECT id FROM customers WHERE phone=?').bind(ph).first();
       if (ex) { id = ex.id; await env.DB.prepare("UPDATE customers SET wa_verified=1,name=CASE WHEN name='' THEN ? ELSE name END WHERE id=?").bind(nm, id).run(); }
-      else id = (await env.DB.prepare('INSERT INTO customers(phone,name,wa_verified,created_at,last_seen_at) VALUES(?,?,1,?,?) RETURNING id').bind(ph, nm, now(), now()).first()).id;
+      else id = (await env.DB.prepare('INSERT INTO customers(phone,name,wa_verified,birth,created_at,last_seen_at) VALUES(?,?,1,?,?,?) RETURNING id').bind(ph, nm, String(birth || ''), now(), now()).first()).id;
     }
     return done(id);
   }
@@ -123,9 +136,10 @@ export async function authRoutes(c) {
     if (pw.length < 8 || pw.length > 128) return J({ error: 'كلمة السر بين 8 و128 حرفاً' }, 400);
     if (/^(\d+|(.)\2+|password|12345678|qwertyui)$/i.test(pw)) return J({ error: 'كلمة السر ضعيفة جداً' }, 400);
     if (name.length < 2) return J({ error: 'الاسم مطلوب' }, 400);
+    { const e = birthErr(b.birth); if (e) return J({ error: e }, 400); }
     if (await env.DB.prepare('SELECT 1 x FROM customers WHERE email=?').bind(email).first()) return J({ error: 'هذا البريد مسجّل مسبقاً' }, 409);
     const salt = randHex(16), h = await pbkdf2(pw, salt);
-    const id = (await env.DB.prepare('INSERT INTO customers(email,name,pw_hash,pw_salt,avatar,created_at,last_seen_at) VALUES(?,?,?,?,?,?,?) RETURNING id').bind(email, name, h, salt, AVATAR.test(String(b.avatar || '')) ? b.avatar : '', now(), now()).first()).id;
+    const id = (await env.DB.prepare('INSERT INTO customers(email,name,pw_hash,pw_salt,avatar,birth,created_at,last_seen_at) VALUES(?,?,?,?,?,?,?,?) RETURNING id').bind(email, name, h, salt, AVATAR.test(String(b.avatar || '')) ? b.avatar : '', String(b.birth), now(), now()).first()).id;
     return done(id);
   }
   if (p === '/auth/login' && M === 'POST') {
@@ -172,6 +186,9 @@ export async function authRoutes(c) {
     if (p === '/me' && M === 'POST') {
       const b = await body();
       if (b.avatar !== undefined && b.avatar !== '' && !AVATAR.test(String(b.avatar))) return J({ error: 'شخصية غير صالحة' }, 400);
+      if (b.birth !== undefined && b.birth !== '' && !me.birth) { const e = birthErr(b.birth); if (e) return J({ error: e }, 400); await env.DB.prepare('UPDATE customers SET birth=? WHERE id=?').bind(String(b.birth), me.id).run(); }
+      if (b.skin !== undefined && b.skin !== '' && !SKINS.includes(String(b.skin))) return J({ error: 'نوع بشرة غير صالح' }, 400);
+      if (b.skin !== undefined) await env.DB.prepare('UPDATE customers SET skin=? WHERE id=?').bind(String(b.skin), me.id).run();
       await env.DB.prepare('UPDATE customers SET name=?,city=?,area=?,landmark=?,avatar=? WHERE id=?')
         .bind(String(b.name ?? me.name).trim().slice(0, 80), String(b.city ?? me.city).slice(0, 80), String(b.area ?? me.area).slice(0, 120), String(b.lm ?? me.landmark).slice(0, 160), b.avatar === undefined ? (me.avatar || '') : String(b.avatar), me.id).run();
       return J({ ok: true });

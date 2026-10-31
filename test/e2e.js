@@ -23,6 +23,7 @@ const assert = require('assert');
   assert(names.some(t => t.includes('منتج جديد'))); assert(!names.some(t => t.includes('soft glow blush'))); ok('visitor in another browser sees announcement + product changes');
 
   /* --- cart: + asks for confirmation --- */
+  await vis.evaluate(() => lcNav('/categories')); assert.strictEqual(new URL(vis.url()).pathname, '/categories'); ok('الفئات page has its own link');
   await vis.evaluate(() => { document.querySelector('#shop').scrollIntoView() });
   await vis.click('#grid .card [data-a=add] >> nth=0');
   await vis.waitForSelector('#cfm.on'); assert((await vis.textContent('#cfb')).includes('إضافة هذا المنتج')); await vis.click('[data-a=addn]');
@@ -31,11 +32,11 @@ const assert = require('assert');
   assert.strictEqual(await vis.textContent('#cn'), '1'); ok('"Yes" adds exactly one');
 
   /* --- checkout: 10 s countdown, skip, tracker --- */
-  await vis.click('.cb2[data-a=bag]'); await vis.click('[data-a=vf]');
+  await vis.click('#bnav [data-a=bag]'); await vis.click('[data-a=vf]');
   /* guest is stopped at checkout and must sign in; the bag survives and checkout resumes */
   await vis.waitForSelector('#acv.on'); assert.strictEqual(await vis.$('#of'), null); ok('guest at checkout is asked to sign in (no order form)');
   await vis.click('#acv [data-x=mode][data-v=em]'); await vis.click('#acv [data-x=sub][data-v=reg]');
-  await vis.fill('#af-reg [name=name]', 'علي'); await vis.fill('#af-reg [name=email]', 'ali@example.com'); await vis.fill('#af-reg [name=pw]', 'Str0ng-pass1'); await vis.click('#af-reg .av[data-v=av5]'); await vis.click('#af-reg button.btn');
+  await vis.fill('#af-reg [name=name]', 'علي'); await vis.fill('#af-reg [name=email]', 'ali@example.com'); await vis.fill('#af-reg [name=pw]', 'Str0ng-pass1'); await vis.fill('#af-reg [name=birth]', '2014-01-01'); assert.strictEqual(await vis.$eval('#af-reg [name=birth]', e => e.validity.valid), false); ok('under-15 birth date is refused at sign-up'); await vis.fill('#af-reg [name=birth]', '2000-01-01'); await vis.click('#af-reg .av[data-v=av5]'); await vis.click('#af-reg button.btn');
   await vis.waitForSelector('#of'); assert.strictEqual(await vis.textContent('#cn'), '1'); assert(await vis.$('#accb .avs')); ok('after sign-up checkout resumes, bag kept, avatar in header');
   await vis.fill('#of [name=name]', 'علي'); await vis.fill('#of [name=ph]', '07701234567'); await vis.selectOption('#of [name=ci]', { index: 1 }); await vis.fill('#of [name=ae]', 'الكرادة'); await vis.fill('#of [name=lm]', 'قرب المدرسة');
   await vis.click('#of [type=submit]'); await vis.waitForSelector('#c10n');
@@ -53,7 +54,7 @@ const assert = require('assert');
   await vis.waitForSelector('#trkbox .er2'); assert.strictEqual(db.prepare('select status from orders').get().status, 0); ok('customer cancel within the window → cancelled');
 
   /* --- second order: Skip button, auto-confirm after 10 min, admin advances it --- */
-  await vis.click('[data-a=x]'); await vis.click('#grid .card [data-a=add] >> nth=1'); await vis.click('[data-a=addy]'); await vis.click('.cb2[data-a=bag]'); await vis.click('[data-a=vf]');
+  await vis.click('#cb .btn[data-a=x]'); await vis.click('#grid .card [data-a=add] >> nth=1'); await vis.click('[data-a=addy]'); await vis.click('#bnav [data-a=bag]'); await vis.click('[data-a=vf]');
   await vis.fill('#of [name=name]', 'علي'); await vis.fill('#of [name=ph]', '07701234567'); await vis.selectOption('#of [name=ci]', { index: 1 }); await vis.fill('#of [name=ae]', 'الكرادة'); await vis.fill('#of [name=lm]', 'قرب المدرسة');
   await vis.click('#of [type=submit]'); await vis.click('[data-a=c10s]'); await vis.waitForSelector('#trkbox .tl');
   const code = db.prepare('select code from orders where status=1').get().code; ok('"Skip" sends immediately');
@@ -72,7 +73,7 @@ const assert = require('assert');
   let devCode = ''; cu.on('response', async r => { if (r.url().endsWith('/auth/otp/send')) { try { devCode = (await r.json()).dev || ''; } catch (e) {} } });
   await cu.click('#accb'); await cu.waitForSelector('#af-otps'); await cu.fill('#af-otps input[name=ph]', '07709990001'); await cu.click('#af-otps button.btn');
   await cu.waitForSelector('#af-otpv'); await cu.waitForFunction(() => true); for (let i = 0; i < 20 && !devCode; i++) await new Promise(r => setTimeout(r, 100));
-  await cu.fill('#af-otpv input[name=code]', devCode); await cu.fill('#af-otpv input[name=name]', 'سارة'); await cu.click('#af-otpv button.btn');
+  await cu.fill('#af-otpv input[name=code]', devCode); await cu.fill('#af-otpv input[name=name]', 'سارة'); await cu.fill('#af-otpv input[name=birth]', '2000-05-05'); await cu.click('#af-otpv button.btn');
   await cu.waitForSelector('#af-prof'); assert.strictEqual(await cu.$eval('#af-prof input[name=name]', e => e.value), 'سارة'); ok('phone sign-in with WhatsApp code creates an account');
   assert.strictEqual(db.prepare("select wa_verified w, welcomed d from customers where phone='07709990001'").get().w, 1); ok('account is WhatsApp-verified');
   await cu.fill('#af-prof input[name=city]', 'بغداد'); await cu.click('#af-prof button.btn'); await new Promise(r => setTimeout(r, 400));
@@ -89,13 +90,13 @@ const assert = require('assert');
   const v3 = await mk(); await v3.goto(base + '/'); await v3.waitForSelector('.bxc', { timeout: 8000 }); ok('visitor sees the Boxes section');
   assert((await v3.$eval('.bxc', e => e.textContent)).includes('بوكس الهدية')); assert(await v3.$('#hd.hm img')); ok('hero shows uploaded media');
   await v3.click('.bxc [data-a=add]'); await v3.click('[data-a=addy]'); assert.strictEqual(await v3.textContent('#cn'), '1'); ok('box is added to the bag in one click');
-  await v3.click('.cb2[data-a=bag]'); await v3.waitForSelector('#cd'); await v3.waitForFunction(() => document.querySelector('#cb').textContent.includes('التوصيل') || document.querySelector('#cb').textContent.includes('Shipping'));
+  await v3.click('#bnav [data-a=bag]'); await v3.waitForSelector('#cd'); await v3.waitForFunction(() => document.querySelector('#cb').textContent.includes('التوصيل') || document.querySelector('#cb').textContent.includes('Shipping'));
   await v3.fill('#cd input', 'save10'); await v3.click('#cd button'); await v3.waitForFunction(() => document.querySelector('#cb').textContent.includes('SAVE10'));
   await v3.fill('#cd input', 'freeship'); await v3.click('#cd button'); await v3.waitForFunction(() => /FREESHIP/.test(document.querySelector('#cb').textContent));
   const tot = await v3.$eval('#cb .tt.b', e => e.textContent.replace(/[^0-9]/g, '')); assert.strictEqual(tot, '8100'); ok('two codes stack (10% + free shipping): 9000 − 900 = 8100');
   await v3.click('[data-a=rmc][data-c=FREESHIP]'); await v3.waitForFunction(() => { const t = document.querySelector('#cb').textContent; return !/FREESHIP/.test(t) && /SAVE10/.test(t); }); assert.strictEqual(await v3.$eval('#cb .tt.b', e => e.textContent.replace(/[^0-9]/g, '')), '13100'); ok('removing free-shipping code restores the 5000 fee');
-  await v3.evaluate(async () => { const r = await (await fetch('/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'mona@example.com', pw: 'Str0ng-pass2', name: 'منى' }) })).json(); localStorage.setItem('lc_ct', r.token); localStorage.setItem('lc_me', JSON.stringify(r.customer)); });
-  const cartSave = await v3.evaluate(() => JSON.stringify(cart)); await v3.reload(); await v3.waitForSelector('#accb.on'); await v3.evaluate(c => { cart = JSON.parse(c); save(); rcount(); }, cartSave); await v3.click('.cb2[data-a=bag]'); await v3.fill('#cd input', 'save10'); await v3.click('#cd button'); await v3.waitForFunction(() => document.querySelector('#cb').textContent.includes('SAVE10'));
+  await v3.evaluate(async () => { const r = await (await fetch('/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'mona@example.com', pw: 'Str0ng-pass2', name: 'منى', birth: '2001-02-03' }) })).json(); localStorage.setItem('lc_ct', r.token); localStorage.setItem('lc_me', JSON.stringify(r.customer)); });
+  const cartSave = await v3.evaluate(() => JSON.stringify(cart)); await v3.reload(); await v3.waitForSelector('#accb.on'); await v3.evaluate(c => { cart = JSON.parse(c); save(); rcount(); }, cartSave); await v3.click('#bnav [data-a=bag]'); await v3.fill('#cd input', 'save10'); await v3.click('#cd button'); await v3.waitForFunction(() => document.querySelector('#cb').textContent.includes('SAVE10'));
   await v3.click('[data-a=vf]'); assert.strictEqual(await v3.$$eval('#of [name=pay] option', o => o.length), 2); assert.strictEqual(await v3.$eval('#of [name=pay]', s => s.value), 'cod'); ok('payment method defaults to cash on delivery, extra method offered');
   await v3.fill('#of [name=name]', 'منى'); await v3.fill('#of [name=ph]', '07702223333'); await v3.selectOption('#of [name=ci]', { index: 1 }); await v3.fill('#of [name=ae]', 'x'); await v3.fill('#of [name=lm]', 'y');
   await v3.selectOption('#of [name=pay]', 'zain'); assert.strictEqual(await v3.inputValue('#of [name=name]'), 'منى'); await v3.click('#of [type=submit]'); await v3.click('[data-a=c10s]'); await v3.waitForSelector('#trkbox .tl', { timeout: 8000 });
@@ -103,16 +104,16 @@ const assert = require('assert');
   /* description images */
   await v3.evaluate(() => { A.x(); }); const dh = await v3.evaluate(() => descHTML(S.P[0])); assert(/<p>سطر 1<\/p><img[^>]*width:40%;margin:8px auto 8px 0[^>]*><p>سطر 2/.test(dh), dh); ok('rich description: image in the middle, 40% wide, left-aligned');
   /* chat */
-  await v3.click('#chfab'); await v3.fill('#scf input', 'هل المنتج مناسب للبشرة الدهنية؟'); await v3.click('#scf button'); await v3.waitForSelector('.m.customer', { timeout: 6000 }).catch(async x => { console.log('CHATDBG', await v3.$eval('#chp', n => n.innerText), v3.errs); throw x; });
+  await v3.evaluate(() => lcNav('/routine/support')); await v3.waitForSelector('#scf input'); await v3.fill('#scf input', 'هل المنتج مناسب للبشرة الدهنية؟'); await v3.click('#scf button'); await v3.waitForSelector('.m.customer', { timeout: 6000 }).catch(async x => { console.log('CHATDBG', await v3.$eval('#chp', n => n.innerText), v3.errs); throw x; });
   const chatId = db.prepare('select id from chats where channel=\'support\'').get().id; ok('customer sends a support message');
   await adm.evaluate(async id => { await apiJ('/adm/chat/reply', { method: 'POST', body: JSON.stringify({ id, text: 'نعم مناسب' }) }); await apiJ('/adm/chat/close', { method: 'POST', body: JSON.stringify({ id }) }); }, chatId);
   await v3.waitForSelector('.m.admin', { timeout: 8000 }); await v3.waitForSelector('.stars', { timeout: 8000 }); ok('admin reply appears, closing shows the rating form');
   await v3.click('.stars button >> nth=3'); await v3.fill('#chc', 'ممتاز'); await v3.click('[data-c=rate]'); await v3.waitForTimeout(500);
   assert.deepStrictEqual({ ...db.prepare('select rating,comment from reviews').get() }, { rating: 4, comment: 'ممتاز' }); ok('rating saved (4 stars + comment)');
   /* --- smart support: reason buttons, staff takes over by name, bell notification --- */
-  const sp = await mk(); await sp.goto(base + '/'); await sp.click('#chfab'); await sp.waitForSelector('.chips button');
-  await sp.fill('#scn', 'نور'); await sp.click('.chips button[data-k=track]'); await sp.waitForSelector('#chp .m.customer + .m.bot', { timeout: 8000 }); ok('reason buttons ("أين طلبي؟") get an automatic answer');
-  await sp.click('.chips button[data-k=human]'); await sp.waitForFunction(() => document.querySelector('#chp .chh small').textContent.includes('بانتظار'), null, { timeout: 8000 }); ok('"الاتصال بموظف" hands the chat to a human');
+  const sp = await mk(); await sp.goto(base + '/'); await sp.evaluate(() => lcNav('/routine/support')); await sp.waitForSelector('#scf input'); await sp.waitForSelector('#chp .chips button');
+  await sp.fill('#scn', 'نور'); await sp.click('#chp .chips button[data-k=track]'); await sp.waitForSelector('#chp .m.customer + .m.bot', { timeout: 8000 }); ok('reason buttons ("أين طلبي؟") get an automatic answer');
+  await sp.click('#chp .chips button[data-k=human]'); await sp.waitForFunction(() => document.querySelector('#chp .chh small').textContent.includes('بانتظار'), null, { timeout: 8000 }); ok('"الاتصال بموظف" hands the chat to a human');
   await adm.evaluate(async () => { await apiJ('/adm/staff', { method: 'POST', body: JSON.stringify({ name: 'سارة', username: 'sara', pw: 'sara1234' }) }); });
   const st = await mk(); await st.goto(base + '/#staff'); await st.waitForSelector('#stl'); await st.fill('#stl [name=username]', 'sara'); await st.fill('#stl [name=pw]', 'sara1234'); await st.click('#stl button');
   await st.waitForSelector('#stc .row'); await st.click('#stc .row >> nth=0'); await st.waitForSelector('#str input'); await st.click('[data-s=claim]'); await st.waitForFunction(() => document.querySelector('#stm').textContent.includes('سارة') || true); await new Promise(r => setTimeout(r, 1200)); await st.fill('#str input', 'أهلاً نور، أنا سارة'); await st.click('#str .btn >> nth=0');
@@ -126,6 +127,20 @@ const assert = require('assert');
   assert((await v3.request.get(base + '/sw.js')).ok() && (await v3.request.get(base + '/icons/icon-512.png')).ok()); ok('service worker + brand icons are served');
   /* admin tabs render */
   for (const t of ['db', 'au', 'st', 'cp', 'bx', 'hr', 'wm', 'ch', 'pm', 'ig', 'sf']) { await adm.evaluate(t => A.tab(t), t); await adm.waitForTimeout(500); assert((await adm.$eval('#ab', e => e.textContent)).length > 20, t); }
+  /* bottom bar: isolated pages with their own links; Routine = quiz + product questions + support */
+  const rp = await mk(); await rp.goto(base + '/');
+  assert.strictEqual(await rp.$$eval('#bnav a[data-p], #bnav #accb', e => e.length), 6);
+  for (const [p, path] of [['categories', '/categories'], ['offers', '/offers'], ['routine', '/routine'], ['cart', '/cart'], ['home', '/']]) { await rp.click(`#bnav a[data-p=${p}]`); await rp.waitForFunction(x => location.pathname === x, path); assert.strictEqual(await rp.evaluate(() => document.body.dataset.pg), p === 'cart' ? 'cart' : p); }
+  ok('bottom bar: 6 entries, each opens its own page/link');
+  await rp.goto(base + '/routine'); await rp.waitForSelector('#rtn [data-rt=skin][data-v=oily]'); await rp.click('#rtn [data-rt=skin][data-v=oily]'); await rp.click('#rtn [data-rt=go]'); await rp.waitForSelector('#rtn .rt-step');
+  assert((await rp.$$eval('#rtn .rt-step', e => e.length)) >= 3); ok('Routine: skin quiz shows a step-by-step routine with products');
+  await rp.goto(base + '/routine/ask?p=NEW1'); await rp.waitForSelector('#rt-ask textarea'); assert((await rp.inputValue('#rt-ask [name=prod]')).includes('NEW1'));
+  await rp.fill('#rt-ask textarea', 'هل يناسب البشرة الحساسة؟'); await rp.click('#rt-ask .btn'); await rp.waitForFunction(() => location.pathname === '/routine/support', null, { timeout: 8000 });
+  const pq = db.prepare("select topic,mode from chats where topic like 'product:%'").get(); assert.strictEqual(pq.topic, 'product:NEW1'); assert.strictEqual(pq.mode, 'human');
+  assert(db.prepare("select meta from chat_messages where meta like '%NEW1%'").get()); ok('product question (code + text) → human chat with the product card attached');
+  await st.waitForSelector('#stc .row:has-text("استفسار منتج")', { timeout: 10000 }); await st.click('#stc .row:has-text("استفسار منتج")'); await st.waitForSelector('#stm .pc', { timeout: 8000 }); ok('staff console shows the product card of the question');
+  const kid = await rp.evaluate(async () => (await fetch('/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'kid@example.com', pw: 'Str0ng-pass9', name: 'k', birth: new Date(Date.now() - 14 * 365.25 * 864e5).toISOString().slice(0, 10) }) })).status);
+  assert.strictEqual(kid, 400); assert.strictEqual(db.prepare("select count(*) n from customers where email='kid@example.com'").get().n, 0); ok('account under 15 is refused by the server');
   /* live dashboard charts + confirmation of settings changes */
   await adm.evaluate(() => A.grp(0)); await adm.waitForSelector('#lvb .kg .kc', { timeout: 8000 }); assert((await adm.$$eval('#lvb svg', e => e.length)) >= 6); ok('live dashboard: KPI cards with sparklines + charts render');
   await adm.evaluate(() => A.tab('hl')); await adm.waitForSelector('#hlb .ck', { timeout: 8000 }); assert((await adm.$$eval('#hlb .ck', e => e.length)) >= 10); ok('store readiness checklist renders');

@@ -9,7 +9,8 @@
       "/login", "/catalog", "/settings", "/code", "/visit", "/stats",
       "/order", "/order/*", "/orders", "/status", "/track",
       "/customers", "/customer", "/discount", "/discounts",
-      "/auth/*", "/staff/*", "/chat/*", "/adm/*", "/media", "/media/*", "/manifest.json", "/quote", "/codes", "/me", "/me/*"
+      "/auth/*", "/staff/*", "/chat/*", "/adm/*", "/media", "/media/*", "/manifest.json", "/quote", "/codes", "/me", "/me/*",
+      "/categories", "/offers", "/routine", "/routine/*", "/cart", "/checkout", "/account", "/account/*", "/support"
     ]
   },
   "d1_databases": [

@@ -21,7 +21,7 @@ const { makeDB } = require('./d1shim');
   });
   await ok('OTP: wrong code counted, right code logs in, welcome WhatsApp with store link', async () => {
     assert.strictEqual((await post('/auth/otp/verify', { ph, code: '000000' })).status, 401);
-    const r = await post('/auth/otp/verify', { ph, code: code(), name: 'Sara' }); const j = await r.json();
+    const r = await post('/auth/otp/verify', { ph, code: code(), name: 'Sara', birth: '2000-05-05' }); const j = await r.json();
     assert(j.token.startsWith('c.')); tok = j.token; assert.strictEqual(j.customer.name, 'Sara'); assert(j.customer.wa);
     assert(wa.some(m => m.type === 'text' && m.text.body.includes('https://shop.test')), 'welcome w/ link');
     assert.strictEqual((await post('/auth/otp/verify', { ph, code: code() })).status, 410, 'code single-use');
@@ -51,9 +51,9 @@ const { makeDB } = require('./d1shim');
     assert(wa.some(m => m.text && m.text.body.includes('LC-ABC123')), 'status sent on WhatsApp');
   });
   await ok('email: register, duplicate, weak password, login wrong/right', async () => {
-    const r = await post('/auth/register', { email: 'A@B.com', pw: 'password1', name: 'Noor' }); assert.strictEqual(r.status, 200);
-    assert.strictEqual((await post('/auth/register', { email: 'a@b.com', pw: 'password1', name: 'Nn' })).status, 409);
-    assert.strictEqual((await post('/auth/register', { email: 'c@d.com', pw: 'short', name: 'Noor' })).status, 400);
+    const r = await post('/auth/register', { email: 'A@B.com', pw: 'password1', name: 'Noor', birth: '2000-05-05' }); assert.strictEqual(r.status, 200);
+    assert.strictEqual((await post('/auth/register', { email: 'a@b.com', pw: 'password1', name: 'Nn', birth: '2000-05-05' })).status, 409);
+    assert.strictEqual((await post('/auth/register', { email: 'c@d.com', pw: 'short', name: 'Noor', birth: '2000-05-05' })).status, 400);
     assert.strictEqual((await post('/auth/login', { email: 'a@b.com', pw: 'nope' })).status, 401);
     const l = await (await post('/auth/login', { email: 'a@b.com', pw: 'password1' })).json(); assert.strictEqual(l.customer.name, 'Noor');
   });

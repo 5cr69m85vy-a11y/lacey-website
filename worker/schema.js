@@ -23,5 +23,9 @@ export const MIGRATIONS = [
  [
   "0006_security_audit.sql",
   "-- 0006: حدود المحاولات، سجل التدقيق، أفتار الزبون\nCREATE TABLE IF NOT EXISTS rate_limits (k TEXT PRIMARY KEY, n INTEGER NOT NULL DEFAULT 0, reset_at INTEGER NOT NULL);\nCREATE INDEX IF NOT EXISTS idx_rate_reset ON rate_limits(reset_at);\nCREATE TABLE IF NOT EXISTS audit_log (id INTEGER PRIMARY KEY AUTOINCREMENT, at INTEGER NOT NULL, actor TEXT NOT NULL, action TEXT NOT NULL, entity TEXT NOT NULL DEFAULT '', before TEXT, after TEXT, ip TEXT NOT NULL DEFAULT '');\nCREATE INDEX IF NOT EXISTS idx_audit_at ON audit_log(at);\nALTER TABLE customers ADD COLUMN avatar TEXT NOT NULL DEFAULT '';\nCREATE INDEX IF NOT EXISTS idx_orders_customer ON orders(customer_id, created_at);\nCREATE INDEX IF NOT EXISTS idx_sessions_exp ON sessions(expires_at);\n"
+ ],
+ [
+  "0007_birth_skin.sql",
+  "-- 0007: تاريخ الميلاد (الحد الأدنى 15 سنة) ونوع البشرة للروتين\nALTER TABLE customers ADD COLUMN birth TEXT NOT NULL DEFAULT '';\nALTER TABLE customers ADD COLUMN skin TEXT NOT NULL DEFAULT '';\n"
  ]
 ];

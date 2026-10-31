@@ -5,7 +5,7 @@ module.exports = async function authFor(env, ph) {
   if (cache.has(k)) return cache.get(k);
   const { newSession } = await import('../worker/auth.js');
   let c = await env.DB.prepare('SELECT id FROM customers WHERE phone=?').bind(ph).first();
-  if (!c) c = await env.DB.prepare("INSERT INTO customers(phone,name,wa_verified,created_at,last_seen_at) VALUES(?,'t',1,?,?) RETURNING id").bind(ph, Date.now(), Date.now()).first();
+  if (!c) c = await env.DB.prepare("INSERT INTO customers(phone,name,wa_verified,birth,created_at,last_seen_at) VALUES(?,'t',1,'2000-01-01',?,?) RETURNING id").bind(ph, Date.now(), Date.now()).first();
   const h = { Authorization: 'Bearer ' + await newSession(env, c.id) };
   cache.set(k, h); return h;
 };

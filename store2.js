@@ -8,7 +8,7 @@
 
   /* ---------- البوكسات ---------- */
   const shop = document.getElementById('shop');
-  const sec = document.createElement('section'); sec.id = 'bxs'; sec.className = 'w bxs'; sec.style.display = 'none';
+  const sec = document.createElement('section'); sec.id = 'bxs'; sec.dataset.pg = 'home categories'; sec.className = 'w bxs'; sec.style.display = 'none';
   if (shop) shop.parentNode.insertBefore(sec, shop); else document.querySelector('main').appendChild(sec);
   function drawBoxes() {
     const bs = (S.B || []).filter(b => b.on !== 0 && (b.it || []).length);
@@ -43,7 +43,8 @@
   const hdrs = () => ({ 'Content-Type': 'application/json', ...(typeof custAuth == 'function' ? custAuth() : {}) });
   async function chat(path, body) { const r = await fetch(base() + path, { method: body ? 'POST' : 'GET', headers: hdrs(), body: body ? JSON.stringify(body) : undefined }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'error'); return j; }
   const who = () => mode == 'human' ? (staffN ? T('يرد عليك: ', 'Replying: ') + staffN : T('بانتظار موظف…', 'Waiting for an agent…')) : T('المساعد الذكي', 'Smart assistant');
-  const bubble = m => m.sender == 'customer' ? `<div class="m customer">${E(m.body)}</div>` : `<div class="m ${m.sender}"><small class="au">${E(m.sender == 'bot' ? (m.author || T('المساعد الذكي', 'Assistant')) : m.author || T('فريق الدعم', 'Support'))}</small>${E(m.body)}</div>`;
+  const pcard = m => { const p = m.meta && m.meta.product; return p ? `<a class="pc" href="/routine/ask?p=${encodeURIComponent(p.c)}" data-pc="${E(p.c)}"><i style="${p.i ? `background-image:url('${E(p.i)}')` : ''}"></i><span><b>${E(p.n)}</b><small>${E(p.c)}</small></span></a>` : ''; };
+  const bubble = m => m.sender == 'customer' ? `<div class="m customer">${pcard(m)}${E(m.body)}</div>` : `<div class="m ${m.sender}"><small class="au">${E(m.sender == 'bot' ? (m.author || T('المساعد الذكي', 'Assistant')) : m.author || T('فريق الدعم', 'Support'))}</small>${E(m.body)}</div>`;
   function shell(inner) { pn.innerHTML = `<div class="chh"><div><b>${T('خدمة الزبائن', 'Customer support')}</b><small>${E(who())}</small></div><span><button data-c="end" title="${T('إنهاء المحادثة', 'End chat')}">✓</button><button data-c="x">×</button></span></div>${inner}`; }
   function draw() {
     const ml = `<div class="msgs" id="chmsgs">${all.length ? all.map(bubble).join('') : `<div class="m bot"><small class="au">${T('المساعد الذكي', 'Assistant')}</small>${T('أهلاً بك في لاسي 🌸 كيف أستطيع مساعدتك؟ اختر السبب أدناه أو اكتب سؤالك.', 'Welcome to Lacey 🌸 How can we help? Pick a reason below or type your question.')}</div>`}</div>`;
@@ -69,15 +70,20 @@
       seen = after; ls.set('lc_chs', String(seen));
     } catch (e) {}
   }
-  const open = () => { openP = true; pn.classList.add('on'); fab.classList.add('hide'); document.getElementById('chdot').style.display = 'none'; all = []; after = 0; draw(); refresh(); clearInterval(poll); poll = setInterval(refresh, 4000); };
+  const open = () => { openP = true; { const a = document.querySelector('#bnav [data-p=routine]'); if (a) a.classList.remove('dot'); } pn.classList.add('on'); fab.classList.add('hide'); document.getElementById('chdot').style.display = 'none'; all = []; after = 0; draw(); refresh(); clearInterval(poll); poll = setInterval(refresh, 4000); };
   const close = () => { openP = false; pn.classList.remove('on'); fab.classList.remove('hide'); clearInterval(poll); poll = setInterval(dotCheck, 20000); };
-  async function dotCheck() { if (openP || !tk && !(typeof custAuth == 'function' && custAuth().Authorization)) return; try { const j = await chat('/chat/poll?token=' + encodeURIComponent(tk) + '&after=' + seen); if (j.messages.some(m => m.sender != 'customer' && m.id > seen)) document.getElementById('chdot').style.display = 'block'; } catch (e) {} }
+  async function dotCheck() { if (openP || !tk && !(typeof custAuth == 'function' && custAuth().Authorization)) return; try { const j = await chat('/chat/poll?token=' + encodeURIComponent(tk) + '&after=' + seen); if (j.messages.some(m => m.sender != 'customer' && m.id > seen)) { document.getElementById('chdot').style.display = 'block'; const a = document.querySelector('#bnav [data-p=routine]'); if (a) a.classList.add('dot'); } } catch (e) {} }
   poll = setInterval(dotCheck, 20000); setTimeout(dotCheck, 3000);
   fab.addEventListener('click', open);
-  async function sendMsg(text, intent) {
+  /* صفحة روتين: تركيب لوحة الدعم داخل الصفحة بدل الزر العائم */
+  window.chatMount = el => { if (!el) return; el.appendChild(pn); pn.classList.add('inl'); open(); };
+  window.chatUnmount = () => { if (pn.parentNode !== document.body) document.body.appendChild(pn); pn.classList.remove('inl'); close(); };
+  window.chatSend = (text, product) => sendMsg(text, '', product);
+  window.chatDot = () => { const a = document.querySelector('#bnav [data-p=routine]'); return a; };
+  async function sendMsg(text, intent, product) {
     const me = typeof custMe == 'function' ? custMe() : null, nmI = pn.querySelector('#scn'), nm = (me && me.name) || (nmI && nmI.value.trim()) || ls.get('lc_cn') || '';
     if (nmI && nmI.value.trim()) ls.set('lc_cn', nmI.value.trim());
-    try { const j = await chat('/chat/send', { text, intent: intent || '', token: tk, name: nm, ph: (me && me.ph) || '' }); if (j.token && j.token !== tk) { tk = j.token; ls.set('lc_ch', tk); } status = 'open'; await refresh(); } catch (x) { toast(x.message); }
+    try { const j = await chat('/chat/send', { text, intent: intent || '', token: tk, name: nm, ph: (me && me.ph) || '', product: product || '' }); if (j.token && j.token !== tk) { tk = j.token; ls.set('lc_ch', tk); } status = 'open'; await refresh(); } catch (x) { toast(x.message); }
   }
   pn.addEventListener('click', async e => {
     const b = e.target.closest('[data-c]'); if (!b) return; const c = b.dataset.c;

@@ -31,13 +31,13 @@
   const tl = k => (TABS.find(t => t[0] === k) || [k, k])[1];
   window.navHTML = () => {
     const gi = Math.max(0, GROUPS.findIndex(g => g[2].includes(at))), g = GROUPS[gi];
-    return '<nav class="gn" aria-label="الأقسام">' + GROUPS.map((x, i) => `<button data-a="grp" data-c="${i}" class="${i == gi ? 'on' : ''}">${x[1]}<i class="bd" data-g="${x[0]}" hidden></i></button>`).join('') + '</nav>'
+    return '<nav class="gn" aria-label="الأقسام">' + GROUPS.map((x, i) => `<button data-a="grp" data-c="${i}" class="${i == gi ? 'on' : ''}">${x[1]}<i class="abd" data-g="${x[0]}" hidden></i></button>`).join('') + '</nav>'
       + (g[2].length > 1 ? '<nav class="sn">' + g[2].map(k => `<button data-a="tab" data-c="${k}" class="${at == k ? 'on' : ''}">${tl(k)}</button>`).join('') + '</nav>' : '');
   };
   A.grp = c => { const g = GROUPS[+c]; if (!g) return; at = g[2][0]; ed = null; ea = null; es = null; upl = ''; ups = []; ra(); };
   window.loadBadges = async () => {
     try {
-      const d = await J('/adm/dashboard'), set = (g, n) => { const e = document.querySelector(`.bd[data-g=${g}]`); if (e) { e.textContent = n > 99 ? '99+' : n; e.hidden = !n; } };
+      const d = await J('/adm/dashboard'), set = (g, n) => { const e = document.querySelector(`.abd[data-g=${g}]`); if (e) { e.textContent = n > 99 ? '99+' : n; e.hidden = !n; } };
       set('orders', d.new_orders); set('support', d.unread_support);
     } catch (e) {}
   };

@@ -41,15 +41,15 @@ const authFor = require('./sess');
     assert.strictEqual(last, 429);
   });
   await ok('customer login/register throttled; avatar validated and persisted; weak passwords refused', async () => {
-    assert.strictEqual((await post('/auth/register', { email: 'a@b.co', pw: '11111111', name: 'Ann' })).status, 400);
-    const r = await post('/auth/register', { email: 'a@b.co', pw: 'Str0ng-pass', name: 'Ann', avatar: 'av7' }); const j = await r.json();
+    assert.strictEqual((await post('/auth/register', { email: 'a@b.co', pw: '11111111', name: 'Ann', birth: '2001-02-03' })).status, 400);
+    const r = await post('/auth/register', { email: 'a@b.co', pw: 'Str0ng-pass', name: 'Ann', avatar: 'av7', birth: '2001-02-03' }); const j = await r.json();
     assert.strictEqual(j.customer.avatar, 'av7'); const H = { Authorization: 'Bearer ' + j.token };
     assert.strictEqual((await post('/me', { avatar: '<script>' }, H)).status, 400); assert.strictEqual((await post('/me', { avatar: 'av37' }, H)).status, 400);
     assert.strictEqual((await post('/me', { avatar: 'av36' }, H)).status, 200);
     assert.strictEqual((await (await call('/me', {}, H)).json()).customer.avatar, 'av36');
     for (let i = 0; i < 8; i++) await post('/auth/login', { email: 'a@b.co', pw: 'wrong' + i });
     assert.strictEqual((await post('/auth/login', { email: 'a@b.co', pw: 'Str0ng-pass' })).status, 429);
-    assert.strictEqual((await post('/auth/register', { email: 'x@y.co', pw: 'x'.repeat(500), name: 'Ann' })).status, 400);
+    assert.strictEqual((await post('/auth/register', { email: 'x@y.co', pw: 'x'.repeat(500), name: 'Ann', birth: '2001-02-03' })).status, 400);
   });
   await ok('OTP sends limited per IP; chat flood limited', async () => {
     let s = 0; for (let i = 0; i < 12; i++) s = (await post('/auth/otp/send', { ph: '0770123' + String(1000 + i) })).status;
@@ -83,6 +83,34 @@ const authFor = require('./sess');
     assert.strictEqual((await up(A1)).status, 200); assert.deepStrictEqual(photos, [900]);
     assert.strictEqual((await (await up(A1)).json()).duplicate, true); assert.strictEqual(photos.length, 1);
     global.fetch = prev; delete env.BOT_TOKEN; delete env.CHAT_ID;
+  });
+  await ok('accounts need a birth date and age 15+; ordering requires it; birth cannot be changed later', async () => {
+    const reg = (birth, email) => post('/auth/register', { email, pw: 'Str0ng-pass9', name: 'Lina', birth });
+    const yr = new Date().getUTCFullYear();
+    assert.strictEqual((await reg('', 'k1@x.co')).status, 400);
+    assert.strictEqual((await reg('2999-01-01', 'k2@x.co')).status, 400);
+    assert.strictEqual((await reg('2031-02-30', 'k3@x.co')).status, 400);
+    assert.strictEqual((await reg(`${yr - 14}-01-01`, 'k4@x.co')).status, 400, '14 years old refused');
+    const ok15 = await reg(`${yr - 16}-01-01`, 'k5@x.co'); assert.strictEqual(ok15.status, 200); const j = await ok15.json(); assert.strictEqual(j.customer.age, 16);
+    const H = { Authorization: 'Bearer ' + j.token };
+    assert.strictEqual((await post('/me', { birth: `${yr - 40}-01-01` }, H)).status, 200);
+    assert.strictEqual((await (await call('/me', {}, H)).json()).customer.age, 16, 'birth is set once');
+    const old = await env.DB.prepare("INSERT INTO customers(email,name,created_at,last_seen_at) VALUES('nb@x.co','NB',1,1) RETURNING id").first();
+    const { newSession } = await import('../worker/auth.js'); const H2 = { Authorization: 'Bearer ' + await newSession(env, old.id) };
+    const r = await post('/order', order('LC-NOBRTH', '07705551234'), H2); assert.strictEqual(r.status, 403); assert.strictEqual((await r.json()).need_profile, true);
+    assert.strictEqual((await post('/me', { birth: `${yr - 20}-06-06`, skin: 'oily' }, H2)).status, 200);
+    assert.strictEqual((await post('/me', { skin: 'bogus' }, H2)).status, 400);
+    assert.strictEqual((await post('/order', order('LC-NOBRTH', '07705551234'), H2)).status, 200);
+  });
+  await ok('page routes serve the storefront; product inquiry attaches a product card and goes to staff', async () => {
+    for (const p of ['/routine', '/categories', '/offers', '/cart', '/checkout', '/account', '/account/orders', '/support']) { const r = await call(p); assert.strictEqual(r.status, 200, p); }
+    await post('/settings', { data: { P: [{ c: 'LC101', n: 'Foaming Cleanser', p: 12000, i: '' }] } }, adm);
+    const IP = { 'CF-Connecting-IP': '9.9.9.9' };
+    const s = await (await post('/chat/send', { text: 'هل LC101 مناسب للبشرة الدهنية؟', name: 'Sara' }, IP)).json();
+    const pl = await (await call('/chat/poll?token=' + s.token, {}, IP)).json();
+    assert.strictEqual(pl.mode, 'human'); const cm = pl.messages.find(m => m.sender === 'customer'); assert.strictEqual(cm.meta.product.c, 'LC101');
+    const s2 = await (await post('/chat/send', { text: 'سؤال', product: 'lc101', token: s.token }, IP)).json(); assert.strictEqual(s2.chat, s.chat);
+    const none = await (await post('/chat/send', { text: 'هل XX999 جيد؟', name: 'Z' }, IP)).json(); const p2 = await (await call('/chat/poll?token=' + none.token, {}, IP)).json(); assert(!p2.messages.some(m => m.meta && m.meta.product));
   });
   console.log(n + ' security tests passed');
 })().catch(e => { console.error('FAIL', e); process.exit(1); });

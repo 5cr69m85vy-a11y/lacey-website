@@ -10,16 +10,17 @@
   const out = () => { tok = ''; try { sessionStorage.removeItem('lc_st'); } catch (e) {} clearInterval(timer); draw(); };
   const dt = t => new Date(t).toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' });
   function draw() {
-    if (location.hash !== '#staff') { ov.classList.remove('on'); clearInterval(timer); return; }
+    if (location.hash !== '#staff' && location.pathname !== '/support') { ov.classList.remove('on'); clearInterval(timer); return; }
     ov.classList.add('on');
     if (!tok) { ov.innerHTML = `<form id="stl" class="stc"><h2>دخول الموظفين</h2><input name="username" dir="ltr" placeholder="اسم المستخدم" required autocomplete="username"><input name="pw" type="password" placeholder="كلمة السر" required autocomplete="current-password"><button class="btn">دخول</button><small class="er" id="ster"></small></form>`; return; }
     ov.innerHTML = `<div class="sth"><b>مرحباً ${E(name)}</b><span><a href="#" data-s="home">المتجر</a> · <button data-s="out">خروج</button></span></div><div class="stg"><div id="stc"></div><div id="stm"><p class="em">اختر محادثة</p></div></div>`;
     load(); clearInterval(timer); timer = setInterval(() => { load(); if (cur) open(cur, true); }, 5000);
   }
+  const pc = m => { let x = null; try { x = m.meta && JSON.parse(m.meta).product } catch (e) {} return x ? `<div class="pc"><i style="${x.i ? `background-image:url('${E(x.i)}')` : ''}"></i><span><b>${E(x.n)}</b><small>${E(x.c)} · ${Number(x.p || 0).toLocaleString('en-US')} د.ع</small></span></div>` : ''; };
   async function load() {
     try { chats = (await api('/adm/chats?channel=support')).chats; } catch (e) { return; }
     const el = document.getElementById('stc'); if (!el) return;
-    el.innerHTML = chats.map(c => `<div class="row ${c.id == cur ? 'sel' : ''}" data-s="open" data-id="${c.id}"><span><b>${E(c.name || 'زائر')}</b> ${c.status == 'open' ? '' : '<small>(منتهية)</small>'}<br><small>${c.mode == 'human' ? '👤 ' + E(c.staff || 'بانتظار موظف') : '🤖 المساعد'} — ${E(c.last.slice(0, 40))}</small></span>${c.status == 'open' && (c.lastby == 'customer' || c.mode == 'human' && !c.staff) ? '<i class="dot"></i>' : ''}</div>`).join('') || '<p class="em">لا محادثات</p>';
+    el.innerHTML = chats.map(c => `<div class="row ${c.id == cur ? 'sel' : ''}" data-s="open" data-id="${c.id}"><span><b>${E(c.name || 'زائر')}</b> ${(c.topic || '').startsWith('product:') ? '<small>🛍 استفسار منتج ' + E(c.topic.slice(8)) + '</small>' : ''} ${c.status == 'open' ? '' : '<small>(منتهية)</small>'}<br><small>${c.mode == 'human' ? '👤 ' + E(c.staff || 'بانتظار موظف') : '🤖 المساعد'} — ${E(c.last.slice(0, 40))}</small></span>${c.status == 'open' && (c.lastby == 'customer' || c.mode == 'human' && !c.staff) ? '<i class="dot"></i>' : ''}</div>`).join('') || '<p class="em">لا محادثات</p>';
   }
   async function open(id, quiet) {
     cur = id; let j; try { j = await api('/adm/chat?id=' + id); } catch (e) { return; }
@@ -27,7 +28,7 @@
     const typed = el.querySelector('input[name=text]'), keep = typed ? typed.value : '', focus = typed && document.activeElement === typed;
     const c = j.chat, mine = c.staff == name;
     el.innerHTML = `<div class="chhd"><b>${E(c.name || 'زائر')}</b> ${E(c.ph || '')} · ${c.mode == 'human' ? '👤 ' + E(c.staff || 'بانتظار موظف') : '🤖 المساعد'} ${c.status == 'closed' ? '(منتهية)' : ''}</div>
-      <div class="msgs">${j.messages.map(m => `<div class="m ${m.sender}"><small class="au">${E(m.author || '')}</small>${E(m.body)}<small>${dt(m.at)}</small></div>`).join('')}</div>
+      <div class="msgs">${j.messages.map(m => `<div class="m ${m.sender}"><small class="au">${E(m.author || '')}</small>${pc(m)}${E(m.body)}<small>${dt(m.at)}</small></div>`).join('')}</div>
       ${c.status == 'open' ? `<form id="str" class="fm" style="grid-template-columns:1fr auto auto auto"><input name="text" placeholder="${mine || !c.staff ? 'اكتب رداً باسمك…' : 'المحادثة بيد ' + E(c.staff)}" autocomplete="off"><button class="btn">إرسال</button>${mine ? '' : '<button type="button" class="btn g" data-s="claim">استلام</button>'}<button type="button" class="btn g" data-s="close">إنهاء</button></form>` : ''}`;
     const ms = el.querySelector('.msgs'); ms.scrollTop = ms.scrollHeight;
     const i = el.querySelector('input[name=text]'); if (i && keep) { i.value = keep; if (focus) i.focus(); }
@@ -35,7 +36,7 @@
   ov.addEventListener('click', async e => {
     const b = e.target.closest('[data-s]'); if (!b) return; const s = b.dataset.s;
     if (s == 'out') { await api('/staff/me').catch(() => {}); out(); }
-    else if (s == 'home') { e.preventDefault(); location.hash = ''; }
+    else if (s == 'home') { e.preventDefault(); if (location.pathname === '/support') location.href = '/'; else location.hash = ''; }
     else if (s == 'open') { cur = +b.dataset.id; load(); open(cur); }
     else if (s == 'claim') { try { await api('/adm/chat/claim', { id: cur, force: true }); open(cur); load(); } catch (x) { toast(x.message); } }
     else if (s == 'close') { await api('/adm/chat/close', { id: cur }); open(cur); load(); }

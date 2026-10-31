@@ -14,6 +14,7 @@ async function guestChat(env, token, create, sess, extra = {}) {
   let ch = null;
   if (sess) ch = await env.DB.prepare("SELECT * FROM chats WHERE customer_id=? AND channel='support' ORDER BY id DESC LIMIT 1").bind(sess.id).first();
   if (!ch && token) ch = await env.DB.prepare("SELECT * FROM chats WHERE guest_token=? AND channel='support' ORDER BY id DESC LIMIT 1").bind(await sha256(token)).first();
+  if (ch && sess && !ch.customer_id) { await env.DB.prepare('UPDATE chats SET customer_id=?,name=CASE WHEN name=\'\' THEN ? ELSE name END,phone=CASE WHEN phone=\'\' OR phone IS NULL THEN ? ELSE phone END WHERE id=?').bind(sess.id, sess.name || '', sess.phone || '', ch.id).run(); ch.customer_id = sess.id; }   // محادثة الضيف تُربط بحسابه بعد الدخول (ليصله الإشعار)
   if (!ch && create) {
     const tk = token || randHex(16);
     const id = (await env.DB.prepare("INSERT INTO chats(customer_id,channel,status,created_at,guest_token,name,phone) VALUES(?,'support','open',?,?,?,?) RETURNING id")
@@ -147,8 +148,18 @@ export async function extraRoutes(c) {
     const recent = await env.DB.prepare("SELECT COUNT(*) n FROM chat_messages WHERE chat_id=? AND sender='customer' AND at>?").bind(ch.id, now() - 3600e3).first();
     if (recent.n >= 40) return J({ error: 'رسائل كثيرة، حاول لاحقاً' }, 429);
     if (ch.status !== 'open') { await env.DB.prepare("UPDATE chats SET status='open',closed_at=NULL,mode='bot',assigned_to=NULL WHERE id=?").bind(ch.id).run(); ch.mode = 'bot'; ch.assigned_to = null; }
-    await addMsg(ch.id, 'customer', text);
+    /* استفسار عن منتج: كود المنتج صريح (b.product) أو مكتوب داخل الرسالة → بطاقة المنتج + تحويل لموظف */
+    let prod = null;
+    if (!quick && !b.intent) {
+      const cm = String(b.product || '').trim().toUpperCase().slice(0, 20) || ((/(?:^|[^A-Za-z0-9])([A-Za-z]{1,4}\d{2,6})(?![A-Za-z0-9])/.exec(text) || [])[1] || '').toUpperCase();
+      if (cm) { const row = await env.DB.prepare('SELECT code,name,price,data FROM products WHERE UPPER(code)=?').bind(cm).first(); if (row) prod = { c: row.code, n: row.name, p: row.price, i: String(jp(row.data, {}).i || '').slice(0, 300) }; }
+    }
+    await addMsg(ch.id, 'customer', text, '', prod ? JSON.stringify({ product: prod }) : '');
     let mode = ch.mode;
+    if (prod && mode === 'bot') {
+      mode = 'human'; await env.DB.prepare("UPDATE chats SET mode='human',topic=? WHERE id=?").bind('product:' + prod.c, ch.id).run();
+      await addMsg(ch.id, 'bot', `استلمنا استفسارك عن «${prod.n}» 🌸 سيرد عليك مختص من فريقنا هنا بأقرب وقت.`, BOT);
+    }
     if (mode === 'bot') {
       const pend = /^pending_cancel:(LC-[A-Z0-9]{6})$/.exec(ch.topic || '');
       let q2 = quick;

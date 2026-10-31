@@ -13,7 +13,7 @@
      ADMIN_PASS (إلزامي)  ADMIN_KEY (اختياري)  BOT_TOKEN / CHAT_ID (اختياري: إشعار تلجرام لك)
    ============================================================ */
 
-import { authRoutes, sessionCustomer } from './auth.js';
+import { authRoutes, sessionCustomer, ageOf, MIN_AGE } from './auth.js';
 import { processQueue } from './wa.js';
 import { quote, shopRoutes } from './shop.js';
 import { extraRoutes } from './extra.js';
@@ -165,6 +165,7 @@ const orderView = r => ({
   pay: r.pay_method, d: r.created_at, st: r.status,
 });
 async function createOrder(env, b, sess) {
+  { const g = ageOf(sess.birth); if (g === null) return J({ error: 'أكمل ملفك الشخصي: أضف تاريخ ميلادك أولاً', need_profile: true }, 403); if (g < MIN_AGE) return J({ error: `الطلب متاح لمن عمره ${MIN_AGE} سنة فأكثر`, need_profile: true }, 403); }
   const phone = String(b.ph || '').trim();
   if (!/^07\d{9}$/.test(phone)) return J({ error: 'رقم الهاتف غير صحيح' }, 400);
   const name = String(b.name || '').trim().slice(0, 80);
@@ -223,6 +224,8 @@ function corsFilter(request, env, res) {
   if (ok) { h.set('Access-Control-Allow-Origin', o); h.append('Vary', 'Origin'); } else h.delete('Access-Control-Allow-Origin');
   return new Response(res.body, { status: res.status, statusText: res.statusText, headers: h });
 }
+
+export const PAGE_ROUTES = /^\/(categories|offers|routine|cart|checkout|account|support)(\/[\w-]*)?\/?$/;
 
 export default {
   async fetch(request, rawEnv, ctx) {
@@ -410,6 +413,8 @@ async function handle(request, rawEnv, ctx) {
       return J({ error: 'server error' }, 500);
     }
 
+    /* صفحات المتجر الفرعية: كلها تخدم نفس index.html والمتصفح يعرض الصفحة المطلوبة */
+    if (env.ASSETS && M === 'GET' && PAGE_ROUTES.test(p)) return env.ASSETS.fetch(new Request(new URL('/', request.url), { headers: request.headers }));
     if (env.ASSETS) return env.ASSETS.fetch(request);
     return J({ error: 'not found' }, 404);
   }
