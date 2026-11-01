@@ -36,7 +36,8 @@ export async function checkStock(env, lines) {
   }
   return null;
 }
-export async function takeStock(env, lines, tg) {
+const slog = (env, code, delta, kind, ref, note, after) => env.DB.prepare('INSERT INTO stock_log(code,delta,kind,ref,note,after_qty,at) VALUES(?,?,?,?,?,?,?)').bind(code, delta, kind, ref || '', note || '', after ?? null, now());
+export async function takeStock(env, lines, tg, ref) {
   const need = needMap(lines), rows = await rowsFor(env, Object.keys(need)), done = [], t = now();
   for (const [c, n] of Object.entries(need)) {
     if (!rows[c]) continue;
@@ -46,6 +47,7 @@ export async function takeStock(env, lines, tg) {
       return { error: `الكمية المتاحة من ${c} لم تعد كافية، حدّث السلة` };
     }
     done.push([c, n]);
+    try { await slog(env, c, -n, 'sale', ref, '', rows[c].qty - n).run(); } catch (e) {}
   }
   if (tg) for (const [c, n] of done) {
     const left = rows[c].qty - n;
@@ -58,7 +60,7 @@ export async function restock(env, code) {
   const o = await env.DB.prepare('SELECT items,stock_taken FROM orders WHERE code=?').bind(code).first();
   if (!o || !o.stock_taken) return;
   const need = needMap(jp(o.items, [])), rows = await rowsFor(env, Object.keys(need));
-  for (const [c, n] of Object.entries(need)) if (rows[c]) await env.DB.prepare('UPDATE stock SET qty=qty+?,updated_at=? WHERE code=?').bind(n, now(), c).run();
+  for (const [c, n] of Object.entries(need)) if (rows[c]) { await env.DB.prepare('UPDATE stock SET qty=qty+?,updated_at=? WHERE code=?').bind(n, now(), c).run(); try { await slog(env, c, n, 'cancel', code, '', rows[c].qty + n).run(); } catch (e) {} }
   await env.DB.prepare('UPDATE orders SET stock_taken=0 WHERE code=?').bind(code).run();
 }
 export async function stockMap(env) {
@@ -127,9 +129,10 @@ export async function opsRoutes(c) {
   }
   if (p === '/adm/stock' && M === 'POST') {
     const a = adm(); if (a) return a;
-    const b = await body(), items = Array.isArray(b.items) ? b.items.slice(0, 500) : [], t = now(), st = [];
+    const b = await body(), items = Array.isArray(b.items) ? b.items.slice(0, 500) : [], t = now(), st = [], old = await stockMap(env);
     for (const it of items) {
       const code = String(it.code || '').trim(); if (!code) continue;
+      if (it.qty !== null && it.qty !== '' && it.qty !== undefined) { const nq = Math.max(0, Math.min(1e6, Math.floor(+it.qty || 0))), oq = old[code] ? old[code].qty : null; if (oq !== nq) st.push(slog(env, code, oq === null ? nq : nq - oq, 'adjust', '', oq === null ? 'بدء التتبع' : '', nq)); }
       if (it.qty === null || it.qty === '' || it.qty === undefined) st.push(env.DB.prepare('DELETE FROM stock WHERE code=?').bind(code));
       else st.push(env.DB.prepare('INSERT INTO stock(code,qty,low,updated_at) VALUES(?,?,?,?) ON CONFLICT(code) DO UPDATE SET qty=excluded.qty,low=excluded.low,updated_at=excluded.updated_at')
         .bind(code, Math.max(0, Math.min(1e6, Math.floor(+it.qty || 0))), Math.max(0, Math.min(1e5, Math.floor(it.low === undefined ? 5 : +it.low || 0))), t));
@@ -137,6 +140,38 @@ export async function opsRoutes(c) {
     if (st.length) await env.DB.batch(st);
     await audit(env, request, 'admin', 'stock_save', '', null, { n: st.length });
     return J({ ok: true, n: st.length });
+  }
+
+  if (p === '/adm/stock/receive' && M === 'POST') {
+    const a = adm(); if (a) return a;
+    const b = await body(), code = String(b.code || '').trim(), n = Math.floor(+b.n || 0);
+    if (!code || n < 1 || n > 1e5) return J({ error: 'كمية غير صالحة' }, 400);
+    const pr = await env.DB.prepare('SELECT code FROM products WHERE code=?').bind(code).first(); if (!pr) return J({ error: 'منتج غير موجود' }, 404);
+    await env.DB.prepare('INSERT INTO stock(code,qty,low,updated_at) VALUES(?,?,5,?) ON CONFLICT(code) DO UPDATE SET qty=qty+?,updated_at=?').bind(code, n, now(), n, now()).run();
+    const r = await env.DB.prepare('SELECT qty FROM stock WHERE code=?').bind(code).first();
+    await slog(env, code, n, 'receive', '', String(b.note || '').slice(0, 120), r.qty).run();
+    await audit(env, request, 'admin', 'stock_receive', code, null, { n });
+    return J({ ok: true, qty: r.qty });
+  }
+  if (p === '/adm/stock/log' && M === 'GET') {
+    const a = adm(); if (a) return a;
+    const code = url.searchParams.get('code') || '', rs = code ? await env.DB.prepare('SELECT * FROM stock_log WHERE code=? ORDER BY id DESC LIMIT 60').bind(code).all() : await env.DB.prepare('SELECT * FROM stock_log ORDER BY id DESC LIMIT 60').all();
+    return J({ log: (rs.results || []).map(r => ({ code: r.code, d: r.delta, k: r.kind, ref: r.ref, note: r.note, q: r.after_qty, at: r.at })) });
+  }
+  /* دوران المنتجات: مبيعات الفترة (طلبات غير ملغاة) ← سرعة البيع، أيام التغطية، تصنيف، اقتراح إعادة الطلب */
+  if (p === '/adm/turnover' && M === 'GET') {
+    const a = adm(); if (a) return a;
+    const days = Math.max(7, Math.min(365, +url.searchParams.get('days') || 30)), since = now() - days * 864e5, tgt = Math.max(7, Math.min(180, +url.searchParams.get('target') || 30));
+    const orders = (await env.DB.prepare('SELECT items FROM orders WHERE status>0 AND created_at>=?').bind(since).all()).results || [], sold = {}, rev = {};
+    for (const o of orders) for (const l of jp(o.items, [])) { const c = String(l.c || ''); if (!c || c.startsWith('BOX-')) continue; const q = Math.max(0, +l.q || 0); sold[c] = (sold[c] || 0) + q; rev[c] = (rev[c] || 0) + q * (+l.p || 0); }
+    const rows = (await env.DB.prepare('SELECT p.code,p.name,p.price,s.qty,s.low FROM products p LEFT JOIN stock s ON s.code=p.code ORDER BY p.sort,p.code').all()).results || [];
+    const items = rows.map(r => {
+      const sd = sold[r.code] || 0, v = sd / days, tr = r.qty !== null && r.qty !== undefined, cover = tr && v > 0 ? Math.round(r.qty / v) : null;
+      const need = tr ? Math.max(0, Math.ceil(v * tgt) - r.qty) : 0;
+      let cls = !tr ? 'untracked' : r.qty <= 0 && sd > 0 ? 'out' : sd === 0 ? (r.qty > 0 ? 'dead' : 'idle') : cover !== null && cover <= 14 ? 'fast' : cover !== null && cover > 90 ? 'slow' : 'ok';
+      return { code: r.code, name: r.name, price: r.price, qty: tr ? r.qty : null, low: r.low ?? 5, sold: sd, rev: Math.round(rev[r.code] || 0), v: Math.round(v * 100) / 100, cover, need, value: tr ? r.qty * (r.price || 0) : 0, cls, turn: tr && (r.qty + sd) > 0 ? Math.round(sd / (r.qty + sd) * 100) : null };
+    });
+    return J({ days, target: tgt, items, total_value: items.reduce((a, x) => a + x.value, 0), sold_units: items.reduce((a, x) => a + x.sold, 0) });
   }
 
   /* ---------- شركة التوصيل ---------- */

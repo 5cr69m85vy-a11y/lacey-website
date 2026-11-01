@@ -190,7 +190,7 @@ async function createOrder(env, b, sess) {
   const items = qt.lines, subtotal = qt.subtotal, discount = qt.discount, shipping = qt.shipping, total = qt.total;
   const usedCodes = qt.applied.map(a => a.code), payM = qt.pay;
 
-  const tk = await takeStock(env, items, t => tgNotify(env, t)); if (tk.error) return J({ error: tk.error }, 409);
+  const tk = await takeStock(env, items, t => tgNotify(env, t), b.code); if (tk.error) return J({ error: tk.error }, 409);
   const seq = await env.DB.prepare("UPDATE counters SET value=value+1 WHERE name='order_seq' RETURNING value").first();
   const id = seq.value, t = now();
 

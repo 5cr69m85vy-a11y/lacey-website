@@ -52,6 +52,24 @@ const authFor = require('./sess');
     const list = await get('/adm/stock', adm); assert(list.items.find(i => i.code === 'A2').qty === null && list.items.find(i => i.code === 'A1').qty === 2);
     await post('/adm/stock', { items: [{ code: 'A1', qty: null }] }, adm); assert.strictEqual(env.DB.raw.prepare("select count(*) n from stock").get().n, 0);
   });
+  await ok('stock ledger + turnover: sale/cancel/receive are logged; fast seller gets a reorder suggestion; no-sales stock is dead', async () => {
+    await post('/adm/stock', { items: [{ code: 'A1', qty: 10, low: 2 }, { code: 'A2', qty: 8, low: 2 }] }, adm);
+    const base = (await get('/adm/turnover', adm)).items.find(i => i.code === 'A1').sold, baseU = (await get('/adm/turnover', adm)).sold_units;
+    assert.strictEqual((await post('/order', order('LC-TRN001', [{ c: 'A1', q: 4 }]), H)).status, 200);
+    assert.strictEqual((await post('/adm/stock/receive', { code: 'A1', n: 5 }, adm)).status, 200);
+    assert.strictEqual((await post('/adm/stock/receive', { code: 'A1', n: 5 })).status, 401);
+    assert.strictEqual((await post('/adm/stock/receive', { code: 'A1', n: 0 }, adm)).status, 400);
+    const lg = (await get('/adm/stock/log?code=A1', adm)).log, kinds = lg.map(x => x.k);
+    assert(kinds.includes('sale') && kinds.includes('receive') && kinds.includes('adjust'), kinds.join());
+    assert.strictEqual(lg.find(x => x.k === 'sale').d, -4);
+    const tr = await get('/adm/turnover?days=30', adm), a1 = tr.items.find(i => i.code === 'A1'), a2 = tr.items.find(i => i.code === 'A2');
+    assert.strictEqual(a1.sold, base + 4); assert.strictEqual(a1.qty, 11); assert(a1.v > 0 && a1.cover > 0); assert.strictEqual(a2.cls, 'dead'); assert.strictEqual(tr.sold_units, baseU + 4);
+    assert.strictEqual((await call('/adm/turnover')).status, 401);
+    await post('/order/cancel', { code: 'LC-TRN001', ph: '07701110001' }, H);
+    assert((await get('/adm/stock/log', adm)).log.some(x => x.k === 'cancel'));
+    assert.strictEqual((await get('/adm/turnover', adm)).sold_units, baseU);
+    await post('/adm/stock', { items: [{ code: 'A1', qty: null }, { code: 'A2', qty: null }] }, adm);
+  });
   await ok('delivery: Al-Waseet — connection test, regions guess, send creates the shipment, status refresh marks it delivered', async () => {
     await post('/adm/integrations', { DLV_PROVIDER: 'waseet', DLV_USER: 'shop', DLV_PASS: 'pw123' }, adm);
     const t = await (await post('/adm/delivery/test', {}, adm)).json(); assert.strictEqual(t.ok, true); assert(/2/.test(t.msg));

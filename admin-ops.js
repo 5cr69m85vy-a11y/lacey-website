@@ -14,9 +14,14 @@
 
   /* ---------- المخزون ---------- */
   let stk = [], stF = '';
-  TB.sk = () => { setTimeout(loadStock, 0); return `<div id="skb"><p class="em">جارٍ التحميل…</p></div>`; };
+  let skv = 'inv', trn = null, tdays = 30, tflt = '', slg = null;
+  const vtabs = () => `<div class="chips" style="margin-bottom:8px">${[['inv', 'الجرد'], ['turn', 'دوران المنتجات'], ['log', 'سجل الحركة']].map(([k, n]) => `<button data-a="skv" data-c="${k}" class="${skv === k ? 'on' : ''}">${n}</button>`).join('')}</div>`;
+  TB.sk = () => { setTimeout(loadStock, 0); return `<div id="skw">${vtabs()}<div id="skb"><p class="em">جارٍ التحميل…</p></div></div>`; };
+  A.skv = c => { skv = c; const w = document.getElementById('skw'); if (w) w.querySelector('.chips').outerHTML = vtabs(); loadStock(); };
   async function loadStock() {
     const el = document.getElementById('skb'); if (!el) return;
+    if (skv === 'turn') { try { trn = await api('/adm/turnover?days=' + tdays); } catch (e) { el.innerHTML = '<p class="em">تعذّر التحميل — سجّل الدخول أولاً</p>'; return; } return drawTurn(); }
+    if (skv === 'log') { try { slg = (await api('/adm/stock/log')).log; } catch (e) { el.innerHTML = '<p class="em">تعذّر التحميل</p>'; return; } return drawLog(); }
     try { stk = (await api('/adm/stock')).items; } catch (e) { el.innerHTML = '<p class="em">تعذّر التحميل — سجّل الدخول أولاً</p>'; return; }
     drawStock();
   }
@@ -32,6 +37,30 @@
     <form id="ostk"><div style="overflow:auto"><table class="stk-t"><tr><th>الكود</th><th>المنتج</th><th>الكمية</th><th>حد التنبيه</th></tr>
     ${list.map(r => { const i = stk.indexOf(r); return `<tr class="${state(r)}"><td>${E(r.code)}</td><td>${E(r.name)}</td><td><input type="number" min="0" name="q_${i}" value="${r.qty ?? ''}" placeholder="∞"></td><td><input type="number" min="0" name="l_${i}" value="${r.low}"></td></tr>`; }).join('') || '<tr><td colspan="4">لا نتائج</td></tr>'}</table></div>
     <button class="btn">حفظ المخزون</button></form>`;
+  }
+  const CLS = { fast: ['سريع الدوران', '#2e8b57'], ok: ['طبيعي', '#4a7a8a'], slow: ['بطيء', '#e08a00'], dead: ['راكد (بلا مبيعات)', '#a14a24'], out: ['نفد وعليه طلب', '#4a4a4a'], idle: ['بلا حركة', '#9aa'], untracked: ['غير متتبَّع', '#bbb'] };
+  const nf = n => Number(n || 0).toLocaleString('en-US');
+  function drawTurn() {
+    const el = document.getElementById('skb'); if (!el || !trn) return;
+    const L = trn.items, cnt = k => L.filter(x => x.cls === k).length, f = tflt ? L.filter(x => x.cls === tflt) : L;
+    const ord = [...f].sort((x, y) => (y.need - x.need) || (y.sold - x.sold));
+    el.innerHTML = `<p class="em">تُحسب المبيعات من الطلبات غير الملغاة خلال الفترة. <b>أيام التغطية</b> = الكمية الحالية ÷ متوسط البيع اليومي. «مقترح الشراء» يكفي ${trn.target} يوماً من المبيعات.</p>
+      <div class="chips"><span>الفترة:</span>${[7, 30, 90].map(d => `<button data-a="tdays" data-c="${d}" class="${tdays === d ? 'on' : ''}">${d} يوماً</button>`).join('')}</div>
+      <div class="kpis" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin:10px 0"><div class="kp"><small>وحدات مباعة</small><b>${nf(trn.sold_units)}</b></div><div class="kp"><small>قيمة المخزون</small><b>${nf(trn.total_value)} د.ع</b></div><div class="kp"><small>سريعة الدوران</small><b>${cnt('fast')}</b></div><div class="kp"><small>راكدة</small><b>${cnt('dead')}</b></div></div>
+      <div class="chips"><button data-a="tflt" data-c="" class="${tflt ? '' : 'on'}">الكل</button>${['fast', 'ok', 'slow', 'dead', 'out'].map(k => `<button data-a="tflt" data-c="${k}" class="${tflt === k ? 'on' : ''}">${CLS[k][0]} (${cnt(k)})</button>`).join('')}</div>
+      <div style="overflow:auto"><table class="stk-t"><tr><th>المنتج</th><th>المخزون</th><th>مبيع</th><th>يومياً</th><th>تغطية</th><th>الحالة</th><th>مقترح الشراء</th><th></th></tr>
+      ${ord.map(r => `<tr><td>${E(r.name)}<br><small>${E(r.code)}</small></td><td>${r.qty === null ? '∞' : r.qty}</td><td>${r.sold}</td><td>${r.v}</td><td>${r.cover === null ? '—' : r.cover + ' يوم'}</td><td><span class="ub" style="background:${CLS[r.cls][1]}">${CLS[r.cls][0]}</span></td><td>${r.need ? '<b>' + r.need + '</b>' : '—'}</td><td>${r.qty === null ? '' : `<button class="btn g" data-a="rcv" data-c="${E(r.code)}">استلام</button>`}</td></tr>`).join('')}</table></div>`;
+  }
+  A.tdays = c => { tdays = +c; loadStock(); };
+  A.tflt = c => { tflt = c; drawTurn(); };
+  A.rcv = async c => {
+    const n = prompt('كم وحدة وصلت من ' + c + ' ؟'); if (n === null) return; const v = Math.floor(+n); if (!(v > 0)) return toast('أدخل رقماً صحيحاً');
+    try { await post('/adm/stock/receive', { code: c, n: v }); toast('تم تسجيل الاستلام'); loadStock(); } catch (e) { toast(e.message); }
+  };
+  const KN = { sale: 'بيع', cancel: 'إلغاء طلب', receive: 'استلام بضاعة', adjust: 'تعديل يدوي' };
+  function drawLog() {
+    const el = document.getElementById('skb'); if (!el) return;
+    el.innerHTML = slg && slg.length ? `<div style="overflow:auto"><table class="stk-t"><tr><th>الوقت</th><th>المنتج</th><th>النوع</th><th>التغيير</th><th>المتبقي</th><th>المرجع</th></tr>${slg.map(r => `<tr><td>${new Date(r.at).toLocaleString('ar-IQ')}</td><td>${E(r.code)}</td><td>${KN[r.k] || r.k}</td><td style="color:${r.d < 0 ? '#a14a24' : '#2e8b57'}"><b>${r.d > 0 ? '+' : ''}${r.d}</b></td><td>${r.q ?? ''}</td><td>${E(r.ref || r.note || '')}</td></tr>`).join('')}</table></div>` : '<p class="em">لا توجد حركات بعد — تُسجَّل المبيعات والاستلام والتعديلات تلقائياً.</p>';
   }
   A.skq = c => { stF = c; drawStock(); };
   document.addEventListener('input', e => { if (e.target.id === 'skq') { stF = e.target.value; const p = e.target.selectionStart; drawStock(); const n = document.getElementById('skq'); if (n) { n.focus(); n.setSelectionRange(p, p); } } });

@@ -35,5 +35,9 @@ export const MIGRATIONS = [
  [
   "0009_stock_delivery.sql",
   "-- 0009: المخزون، وربط شركات التوصيل\nCREATE TABLE IF NOT EXISTS stock (code TEXT PRIMARY KEY, qty INTEGER NOT NULL DEFAULT 0, low INTEGER NOT NULL DEFAULT 5, updated_at INTEGER NOT NULL DEFAULT 0);\nALTER TABLE orders ADD COLUMN stock_taken INTEGER NOT NULL DEFAULT 0;\nALTER TABLE orders ADD COLUMN delivery_provider TEXT NOT NULL DEFAULT '';\nALTER TABLE orders ADD COLUMN delivery_ref TEXT NOT NULL DEFAULT '';\nALTER TABLE orders ADD COLUMN delivery_link TEXT NOT NULL DEFAULT '';\nALTER TABLE orders ADD COLUMN delivery_status TEXT NOT NULL DEFAULT '';\nALTER TABLE orders ADD COLUMN delivery_at INTEGER;\nCREATE INDEX IF NOT EXISTS idx_orders_delivery ON orders(delivery_provider, status);\n"
+ ],
+ [
+  "0010_stock_log.sql",
+  "-- 0010: سجلّ حركة المخزون (بيع / إلغاء / استلام / تعديل)\nCREATE TABLE IF NOT EXISTS stock_log (id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT NOT NULL, delta INTEGER NOT NULL, kind TEXT NOT NULL, ref TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '', after_qty INTEGER, at INTEGER NOT NULL);\nCREATE INDEX IF NOT EXISTS idx_stock_log_code ON stock_log(code, at);\nCREATE INDEX IF NOT EXISTS idx_stock_log_at ON stock_log(at);\n"
  ]
 ];
