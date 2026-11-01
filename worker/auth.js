@@ -22,6 +22,18 @@ export function cleanRoutine(v) {
   const codes = x => (Array.isArray(x) ? x : []).map(c => String(c).toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 20)).filter(Boolean).slice(0, 12);
   return JSON.stringify({ skin: SKINS.includes(o.skin) ? o.skin : '', am: codes(o.am), pm: codes(o.pm), at: Date.now() });
 }
+/* يوميات البشرة: { 'YYYY-MM-DD': { s:1-5, f:[...], n:'', r:0-20, at } } — آخر 120 يوماً */
+const DFL = ['acne', 'dry', 'red', 'shine', 'itch', 'new'];
+export function cleanDiary(v) {
+  let o = v; if (typeof v === 'string') { try { o = JSON.parse(v); } catch (e) { return null; } }
+  if (!o || typeof o !== 'object' || Array.isArray(o)) return null;
+  const out = {};
+  for (const k of Object.keys(o).filter(k => /^\d{4}-\d{2}-\d{2}$/.test(k)).sort().slice(-120)) {
+    const e = o[k] || {}, s = Math.floor(+e.s); if (!(s >= 1 && s <= 5)) continue;
+    out[k] = { s, f: (Array.isArray(e.f) ? e.f : []).filter(x => DFL.includes(x)).slice(0, 6), n: String(e.n || '').slice(0, 300), r: Math.max(0, Math.min(20, Math.floor(+e.r) || 0)), at: Math.floor(+e.at) || 0 };
+  }
+  return JSON.stringify(out);
+}
 export const SKINS = ['oily', 'dry', 'combo', 'sensitive', 'normal'];
 const SESSION_MS = 90 * 864e5;
 const OTP_MS = 10 * 60 * 1000;
@@ -48,7 +60,7 @@ export async function sessionCustomer(env, request) {
   if (row) env.DB.prepare('UPDATE customers SET last_seen_at=? WHERE id=?').bind(now(), row.id).run().catch(() => {});
   return row || null;
 }
-const pub = c => ({ id: c.id, name: c.name, ph: c.phone || '', email: c.email || '', city: c.city, area: c.area, lm: c.landmark, wa: !!c.wa_verified, pw: !!c.pw_hash, google: !!c.google_sub, orders: c.orders_count, birth: c.birth || '', age: ageOf(c.birth), mkt: !!c.mkt, routine: c.routine || '', skin: c.skin || '', avatar: c.avatar || '' });
+const pub = c => ({ id: c.id, name: c.name, ph: c.phone || '', email: c.email || '', city: c.city, area: c.area, lm: c.landmark, wa: !!c.wa_verified, pw: !!c.pw_hash, google: !!c.google_sub, orders: c.orders_count, birth: c.birth || '', age: ageOf(c.birth), mkt: !!c.mkt, routine: c.routine || '', diary: c.diary || '', skin: c.skin || '', avatar: c.avatar || '' });
 
 async function welcomeOnce(env, c, origin, ctx) {
   if (c.welcomed || !c.phone) return;
@@ -197,6 +209,10 @@ export async function authRoutes(c) {
       if (b.skin !== undefined && b.skin !== '' && !SKINS.includes(String(b.skin))) return J({ error: 'نوع بشرة غير صالح' }, 400);
       if (b.skin !== undefined) await env.DB.prepare('UPDATE customers SET skin=? WHERE id=?').bind(String(b.skin), me.id).run();
       if (b.mkt !== undefined) await env.DB.prepare('UPDATE customers SET mkt=? WHERE id=?').bind(b.mkt ? 1 : 0, me.id).run();
+      if (b.diary !== undefined) {
+        const d = b.diary === '' ? '' : cleanDiary(b.diary); if (d === null) return J({ error: 'يوميات غير صالحة' }, 400);
+        await env.DB.prepare('UPDATE customers SET diary=? WHERE id=?').bind(d, me.id).run();
+      }
       if (b.routine !== undefined) {
         const r = b.routine === '' ? '' : cleanRoutine(b.routine); if (r === null) return J({ error: 'روتين غير صالح' }, 400);
         await env.DB.prepare('UPDATE customers SET routine=? WHERE id=?').bind(r, me.id).run();

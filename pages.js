@@ -380,27 +380,39 @@
   /* ================= يوميات البشرة: تقييم يومي + مؤشرات + اتجاه آخر 14 يوماً ================= */
   const DFLAGS = [['acne', 'حبوب', 'Breakouts'], ['dry', 'جفاف', 'Dryness'], ['red', 'احمرار', 'Redness'], ['shine', 'لمعان زائد', 'Excess shine'], ['itch', 'حكّة/لسع', 'Itch/sting'], ['new', 'جرّبتُ منتجاً جديداً', 'Tried a new product']];
   const DRATE = [['سيئة جداً', 'Very bad'], ['سيئة', 'Bad'], ['عادية', 'Okay'], ['جيدة', 'Good'], ['ممتازة', 'Great']];
-  const dyAll = () => jp(ls.get('lc_dy')) || {};
-  const dyKey = d => d.toISOString().slice(0, 10);
-  let dyDraft = null;
-  const dyToday = () => { const a = dyAll(), k = dyKey(new Date()); if (!dyDraft || dyDraft.k !== k) dyDraft = Object.assign({ k, s: 0, f: [], n: '' }, a[k] || {}, { k }); return dyDraft; };
+  const dyKey = d => { const z = new Date(d.getTime() - d.getTimezoneOffset() * 6e4); return z.toISOString().slice(0, 10); };
+  const dyLocal = () => jp(ls.get('lc_dy')) || {};
+  let dySel = '', dyDraft = null, dySynced = false;
+  const dyMe = () => (typeof custMe == 'function' ? custMe() : null);
+  const dyAll = () => { const me = dyMe(), a = dyLocal(); if (me && me.diary && !dySynced) { dySynced = true; const s = jp(me.diary) || {}; let ch = false; for (const k in s) if (!a[k] || (s[k].at || 0) > (a[k].at || 0)) { a[k] = s[k]; ch = true; } if (ch) ls.set('lc_dy', JSON.stringify(a)); } return a; };
+  async function dyPush(a) { const me = dyMe(); if (!me) return false; try { const x = await fetch((typeof API == 'function' && API() || '') + '/me', { method: 'POST', headers: { 'Content-Type': 'application/json', ...custAuth() }, body: JSON.stringify({ diary: a }) }); if (x.ok) { if (window.accountRefresh) accountRefresh(); return true; } } catch (e) {} return false; }
+  const dyDay = () => { const all = dyAll(), k = dySel || dyKey(new Date()); if (!dyDraft || dyDraft.k !== k) dyDraft = Object.assign({ k, s: 0, f: [], n: '' }, all[k] || {}, { k }); return dyDraft; };
   function diaryHTML() {
-    const all = dyAll(), t = dyToday(), days = [...Array(14)].map((_, i) => { const d = new Date(Date.now() - (13 - i) * 864e5), k = dyKey(d); return { k, d, v: all[k] }; });
+    const all = dyAll(), t = dyDay(), todayK = dyKey(new Date()), me = dyMe();
+    const days = [...Array(28)].map((_, i) => { const d = new Date(Date.now() - (27 - i) * 864e5), k = dyKey(d); return { k, d, v: all[k] }; });
     const avg = a => { const x = a.filter(z => z.v && z.v.s).map(z => z.v.s); return x.length ? x.reduce((u, w) => u + w, 0) / x.length : null; };
-    const w1 = avg(days.slice(7)), w0 = avg(days.slice(0, 7)), cnt = {}; days.forEach(z => z.v && (z.v.f || []).forEach(f => cnt[f] = (cnt[f] || 0) + 1));
-    const top = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0], logged = days.filter(z => z.v && z.v.s).length;
-    const ins = [];
+    const d14 = days.slice(14), w1 = avg(days.slice(21)), w0 = avg(days.slice(14, 21)), cnt = {}; d14.forEach(z => z.v && (z.v.f || []).forEach(f => cnt[f] = (cnt[f] || 0) + 1));
+    const top = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0], logged = days.filter(z => z.v && z.v.s).length, ins = [];
     if (w1 !== null && w0 !== null) { const df = Math.round((w1 - w0) / w0 * 100); ins.push(df > 5 ? T('بشرتك أفضل بنسبة ' + df + '% عن الأسبوع الماضي. استمري على الروتين نفسه.', 'Your skin is ' + df + '% better than last week. Keep the same routine.') : df < -5 ? T('تقييم بشرتك انخفض ' + Math.abs(df) + '% عن الأسبوع الماضي. راجعي ما تغيّر (منتج جديد، نوم، طعام) وبسّطي الروتين.', 'Your rating is down ' + Math.abs(df) + '% vs last week. Check what changed and simplify the routine.') : T('حالة بشرتك مستقرة عن الأسبوع الماضي.', 'Your skin is steady compared with last week.')); }
     if (top && top[1] >= 3) { const f = DFLAGS.find(x => x[0] === top[0]); ins.push(T('الأكثر تكراراً خلال 14 يوماً: ' + f[1] + ' (' + top[1] + ' أيام).', 'Most frequent in 14 days: ' + f[2] + ' (' + top[1] + ' days).')); }
-    if (days.filter(z => z.v && (z.v.f || []).includes('new')).length && days.slice(-5).some(z => z.v && (z.v.f || []).some(f => ['red', 'itch', 'acne'].includes(f)))) ins.push(T('ظهرت أعراض بعد تجربة منتج جديد: أوقفيه أسبوعاً وراقبي بشرتك، وإن استمرت راجعي طبيبة جلدية.', 'Symptoms appeared after a new product: pause it for a week and watch; see a dermatologist if it persists.'));
-    return `<div class="rt-c"><h3>${lcIco('list')} ${T('كيف بشرتك اليوم؟', 'How is your skin today?')}</h3>
+    const wr = days.filter(z => z.v && z.v.s && (z.v.r || 0) >= 2), nr = days.filter(z => z.v && z.v.s && !(z.v.r || 0));
+    if (wr.length >= 3 && nr.length >= 3) { const x = avg(wr), y = avg(nr); if (x - y >= 0.4) ins.push(T('أيام التزامك بالروتين بشرتك فيها أفضل (' + x.toFixed(1) + ' مقابل ' + y.toFixed(1) + ' من 5). الالتزام ينفع!', 'On days you follow your routine your skin is better (' + x.toFixed(1) + ' vs ' + y.toFixed(1) + ' of 5). It works!')); }
+    const nw = days.filter(z => z.v && (z.v.f || []).includes('new'));
+    if (nw.length && days.slice(-5).some(z => z.v && (z.v.f || []).some(f => ['red', 'itch', 'acne'].includes(f)))) ins.push(T('ظهرت أعراض بعد تجربة منتج جديد: أوقفيه أسبوعاً وراقبي بشرتك، وإن استمرت راجعي طبيبة جلدية.', 'Symptoms appeared after a new product: pause it for a week and watch; see a dermatologist if it persists.'));
+    let streak = 0; for (let i = 27; i >= 0; i--) { if (days[i].v && days[i].v.s) streak++; else if (i === 27) continue; else break; }
+    const col = s => !s ? '' : s >= 4 ? '#2e8b57' : s === 3 ? '#e0b000' : '#c0502e', dow = ['ح', 'ن', 'ث', 'ر', 'خ', 'ج', 'س'];
+    const lead = days[0].d.getDay();
+    return `<div class="rt-c"><h3>${lcIco('list')} ${t.k === todayK ? T('كيف بشرتك اليوم؟', 'How is your skin today?') : T('تعديل يوم ', 'Editing ') + t.k}</h3>
       <div class="rt-opts dy-rate">${DRATE.map((r, i) => `<button type="button" data-rt="dyr" data-v="${i + 1}" class="${t.s === i + 1 ? 'on' : ''}">${T(r[0], r[1])}</button>`).join('')}</div>
       <p class="em">${T('هل لاحظتِ شيئاً؟', 'Notice anything?')}</p><div class="rt-opts">${DFLAGS.map(f => `<button type="button" data-rt="dyf" data-v="${f[0]}" class="${t.f.includes(f[0]) ? 'on' : ''}" aria-pressed="${t.f.includes(f[0])}">${T(f[1], f[2])}</button>`).join('')}</div>
       <textarea id="dy-n" rows="2" maxlength="300" placeholder="${T('ملاحظة (اختياري): نوم، ماء، مكياج…', 'Note (optional): sleep, water, makeup…')}">${E(t.n)}</textarea>
-      <button class="btn" data-rt="dys" ${t.s ? '' : 'disabled'}>${T('احفظي تقييم اليوم', 'Save today')}</button></div>
-      <div class="rt-c"><h3>${T('آخر 14 يوماً', 'Last 14 days')}</h3><div class="dy-bars">${days.map(z => `<div title="${z.k}"><i><b style="height:${z.v && z.v.s ? z.v.s * 20 : 0}%;background:${!z.v || !z.v.s ? 'transparent' : z.v.s >= 4 ? '#2e8b57' : z.v.s === 3 ? '#e0b000' : '#c0502e'}"></b></i><small>${z.d.getDate()}</small></div>`).join('')}</div>
-        <p class="em">${T('سجّلتِ ' + logged + ' من 14 يوماً.', 'Logged ' + logged + ' of 14 days.')}</p>${ins.map(x => `<p class="rt-ok">${lcIco('check')} ${E(x)}</p>`).join('')}
-        <p class="em">${T('تُحفظ اليوميات على هذا الجهاز فقط. التسجيل المنتظم (أسبوعين على الأقل) يوضح لك أي منتج ينفعك فعلاً.', 'Diary is stored on this device only. Logging for at least two weeks shows which products really work for you.')}</p></div>
+      <div class="row2"><button class="btn" data-rt="dys" ${t.s ? '' : 'disabled'}>${T('احفظي', 'Save')}</button>${t.k !== todayK ? `<button class="btn g" data-rt="dyt">${T('العودة لليوم', 'Back to today')}</button>` : ''}${all[t.k] ? `<button class="btn g" data-rt="dyd">${T('احذفي هذا اليوم', 'Delete this day')}</button>` : ''}</div></div>
+      <div class="rt-c"><h3>${T('آخر 4 أسابيع', 'Last 4 weeks')}</h3><p class="em">${lcIco('flame')} ${T('أيام متتالية من التسجيل: ', 'Logging streak: ')}${streak} · ${T('سجّلتِ ' + logged + ' من 28 يوماً', 'Logged ' + logged + ' of 28 days')}</p>
+        <div class="dy-cal">${dow.map(d => `<small>${d}</small>`).join('')}${[...Array(lead)].map(() => '<i></i>').join('')}${days.map(z => `<button type="button" data-rt="dyp" data-v="${z.k}" class="${z.k === t.k ? 'sel' : ''}${z.k === todayK ? ' td' : ''}" style="${z.v && z.v.s ? 'background:' + col(z.v.s) + ';color:#fff' : ''}" title="${z.k}">${z.d.getDate()}</button>`).join('')}</div>
+        <p class="em dy-leg"><span style="background:#c0502e"></span>${T('سيئة', 'Bad')} <span style="background:#e0b000"></span>${T('عادية', 'Okay')} <span style="background:#2e8b57"></span>${T('جيدة', 'Good')} · ${T('اضغطي أي يوم لتعديله', 'Tap a day to edit')}</p>
+        <div class="dy-bars">${days.slice(14).map(z => `<div title="${z.k}"><i><b style="height:${z.v && z.v.s ? z.v.s * 20 : 0}%;background:${col(z.v && z.v.s) || 'transparent'}"></b></i><small>${z.d.getDate()}</small></div>`).join('')}</div>
+        ${ins.map(x => `<p class="rt-ok">${lcIco('check')} ${E(x)}</p>`).join('')}
+        <p class="em">${me ? T('اليوميات محفوظة في حسابك وتظهر على أي جهاز.', 'Your diary is saved to your account on any device.') : T('اليوميات على هذا الجهاز فقط — سجّلي الدخول لتُحفظ في حسابك.', 'Diary is on this device only — sign in to save it to your account.')}</p></div>
       <div class="rt-c"><h3>${T('كيف تجرّبين منتجاً جديداً بأمان؟', 'How to try a new product safely')}</h3><ol class="dy-pt"><li>${T('اختبار الحساسية: ضعي كمية صغيرة خلف الأذن أو داخل الساعد يومين.', 'Patch test: apply a little behind the ear or inner forearm for two days.')}</li><li>${T('أدخلي منتجاً واحداً كل أسبوعين حتى تعرفي المسبّب إن حدث تهيّج.', 'Add one product every two weeks so you can tell the cause of any irritation.')}</li><li>${T('ابدئي بالمنتجات القوية (ريتينول، أحماض) مرتين أسبوعياً فقط.', 'Start strong actives (retinol, acids) just twice a week.')}</li><li>${T('أوقفي المنتج عند احمرار شديد أو لسع مستمر أو طفح.', 'Stop at strong redness, persistent stinging or rash.')}</li></ol></div>`;
   }
   function renderRoutine(sub, u, quiet) {
@@ -427,9 +439,16 @@
     else if (k === 'con') { rq.concerns = rq.concerns.includes(v) ? rq.concerns.filter(x => x !== v) : [...rq.concerns, v]; res = false; sv(); renderRoutine(rsub, null, true); }
     else if (k === 'when') { rq.when = v; sv(); renderRoutine(rsub, null, true); }
     else if (k === 'go') { res = true; renderRoutine(rsub, null, true); const r = document.querySelector('#rtb .rt-c:nth-child(2)'); if (r) r.scrollIntoView({ behavior: 'smooth' }); }
-    else if (k === 'dyr') { const t = dyToday(); t.s = +v; const n = $1('#dy-n'); if (n) t.n = n.value; renderRoutine(rsub, null, true); }
-    else if (k === 'dyf') { const t = dyToday(), n = $1('#dy-n'); if (n) t.n = n.value; t.f = t.f.includes(v) ? t.f.filter(x => x !== v) : [...t.f, v]; renderRoutine(rsub, null, true); }
-    else if (k === 'dys') { const t = dyToday(), n = $1('#dy-n'); if (n) t.n = n.value.slice(0, 300); const a = dyAll(); a[t.k] = { s: t.s, f: t.f, n: t.n }; const keys = Object.keys(a).sort().slice(-120), o = {}; keys.forEach(k2 => o[k2] = a[k2]); ls.set('lc_dy', JSON.stringify(o)); toast(T('تم حفظ تقييم اليوم', 'Saved')); renderRoutine(rsub, null, true); }
+    else if (k === 'dyr') { const t = dyDay(); t.s = +v; const n = $1('#dy-n'); if (n) t.n = n.value; renderRoutine(rsub, null, true); }
+    else if (k === 'dyf') { const t = dyDay(), n = $1('#dy-n'); if (n) t.n = n.value; t.f = t.f.includes(v) ? t.f.filter(x => x !== v) : [...t.f, v]; renderRoutine(rsub, null, true); }
+    else if (k === 'dyp') { dySel = v; dyDraft = null; renderRoutine(rsub, null, true); const c0 = $1('#rtb .rt-c'); if (c0) c0.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+    else if (k === 'dyt') { dySel = ''; dyDraft = null; renderRoutine(rsub, null, true); }
+    else if (k === 'dys' || k === 'dyd') {
+      const t = dyDay(), n = $1('#dy-n'); if (n) t.n = n.value.slice(0, 300); const a = dyLocal();
+      if (k === 'dyd') delete a[t.k]; else { const d0 = daily(), r = t.k === dyKey(new Date()) ? d0.am.length + d0.pm.length : (a[t.k] && a[t.k].r) || 0; a[t.k] = { s: t.s, f: t.f, n: t.n, r, at: Date.now() }; }
+      const keys = Object.keys(a).sort().slice(-120), o = {}; keys.forEach(k2 => o[k2] = a[k2]); ls.set('lc_dy', JSON.stringify(o)); dyDraft = null; if (k === 'dyd') dySel = '';
+      const okSync = await dyPush(o); toast(k === 'dyd' ? T('تم الحذف', 'Deleted') : dyMe() ? (okSync ? T('تم الحفظ في حسابك', 'Saved to your account') : T('حُفظ على الجهاز وتعذّرت المزامنة', 'Saved locally; sync failed')) : T('تم الحفظ على هذا الجهاز', 'Saved on this device')); renderRoutine(rsub, null, true);
+    }
     else if (k === 'ta') {
       const L = tqList(); rq.ans[tqi] = +v; sv();
       const card = $1('#rtn .tq-card'); if (card) card.classList.add('out');

@@ -40,6 +40,15 @@ const authFor = require('./sess');
     for (let i = 0; i < 10; i++) last = (await post('/order', order('LC-RL' + String(i).padStart(4, '0'), '07701230003'), H)).status;
     assert.strictEqual(last, 429);
   });
+  await ok('skin diary is saved on the account and sanitised (dates, ratings 1-5, known flags, note length)', async () => {
+    const r = await post('/auth/register', { email: 'dy@b.co', pw: 'Str0ng-pass', name: 'Dy', birth: '2001-02-03' }); const j = await r.json(), H = { Authorization: 'Bearer ' + j.token };
+    const d = { '2026-10-30': { s: 4, f: ['dry', '<x>', 'new'], n: 'x'.repeat(500), r: 3, at: 5 }, 'bad-date': { s: 3 }, '2026-10-31': { s: 9 } };
+    assert.strictEqual((await post('/me', { diary: d }, H)).status, 200);
+    const got = JSON.parse((await (await call('/me', {}, H)).json()).customer.diary);
+    assert.deepStrictEqual(Object.keys(got), ['2026-10-30']); assert.deepStrictEqual(got['2026-10-30'].f, ['dry', 'new']); assert.strictEqual(got['2026-10-30'].n.length, 300); assert.strictEqual(got['2026-10-30'].s, 4);
+    assert.strictEqual((await post('/me', { diary: 'not json' }, H)).status, 400);
+    assert.strictEqual((await post('/me', { diary: '' }, H)).status, 200); assert.strictEqual((await (await call('/me', {}, H)).json()).customer.diary, '');
+  });
   await ok('customer login/register throttled; avatar validated and persisted; weak passwords refused', async () => {
     assert.strictEqual((await post('/auth/register', { email: 'a@b.co', pw: '11111111', name: 'Ann', birth: '2001-02-03' })).status, 400);
     const r = await post('/auth/register', { email: 'a@b.co', pw: 'Str0ng-pass', name: 'Ann', avatar: 'av7', birth: '2001-02-03' }); const j = await r.json();
