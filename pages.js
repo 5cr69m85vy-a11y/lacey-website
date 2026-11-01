@@ -165,8 +165,8 @@
   }
   const TIPS = { oily: 'اختاري غسولاً خفيفاً بجل ومرطباً مائياً — الترطيب مهم حتى للبشرة الدهنية.', dry: 'ركّزي على الترطيب والمواد المرمّمة، وتجنّبي الماء الساخن.', combo: 'استخدمي مرطباً خفيفاً على المنطقة الدهنية وأغنى على الخدود الجافة.', sensitive: 'أدخلي منتجاً جديداً كل أسبوعين وجرّبيه على منطقة صغيرة أولاً.', normal: 'حافظي على روتين بسيط ثابت: غسول، مرطّب، واقي شمس.' };
   let rsub = '', rq = (() => { try { return JSON.parse(ls.get('lc_rq') || '') || {} } catch (e) { return {} } })(), askP = '', res = false;
-  rq.skin = rq.skin || ''; rq.concerns = rq.concerns || []; rq.when = rq.when || 'both'; rq.preg = !!rq.preg; rq.budget = rq.budget || ''; rq.dq = Array.isArray(rq.dq) ? rq.dq : []; rq.ans = Array.isArray(rq.ans) ? rq.ans : []; rq.sens = !!rq.sens; let diagOpen = false, pfs = { step: '', q: '' };
-  const sv = () => ls.set('lc_rq', JSON.stringify({ skin: rq.skin, concerns: rq.concerns, when: rq.when, preg: rq.preg, budget: rq.budget, dq: rq.dq, ans: rq.ans, sens: rq.sens }));
+  rq.skin = rq.skin || ''; rq.concerns = rq.concerns || []; rq.when = rq.when || 'both'; rq.preg = !!rq.preg; rq.budget = rq.budget || ''; rq.dq = Array.isArray(rq.dq) ? rq.dq : []; rq.ans = Array.isArray(rq.ans) ? rq.ans : []; rq.sens = !!rq.sens; rq.pick = rq.pick && typeof rq.pick == 'object' ? rq.pick : {}; let diagOpen = false, pfs = { step: '', q: '' };
+  const sv = () => ls.set('lc_rq', JSON.stringify({ skin: rq.skin, concerns: rq.concerns, when: rq.when, preg: rq.preg, budget: rq.budget, dq: rq.dq, ans: rq.ans, pick: rq.pick, sens: rq.sens }));
   const jp = s => { try { return JSON.parse(s) || null } catch (e) { return null } };
   const savedR = () => { const me = typeof custMe == 'function' ? custMe() : null; return (me && jp(me.routine)) || jp(ls.get('lc_rt')); };
   const today = () => new Date().toISOString().slice(0, 10);
@@ -210,11 +210,23 @@
     return STEPS.map(([id, ar, en, re, when]) => {
       const pool = list.filter(p => stepOf(p) === id);
       const scored = pool.map(p => [score(p), p]).sort((a, b) => b[0] - a[0] || a[1].p - b[1].p);
-      return { id, ar, en, when, items: scored.slice(0, 2).map(x => x[1]) };
+      let items = scored.slice(0, 3).map(x => x[1]); const pk = items.findIndex(x => String(x.c) === String(rq.pick[id])); if (pk > 0) items.unshift(items.splice(pk, 1)[0]);
+      return { id, ar, en, when, items };
     });
   }
   const pcard = (p, acts) => `<div class="rt-p"><div class="th" style="${p.i ? `background-image:url('${E(p.i)}')` : ''}"></div><div><b>${E(p.n)}</b><small>${E(p.c)} · ${fmM(p.p)}</small>${ingHTML(p)}</div><div class="acts">${acts ? `<button data-rt="add" data-c="${E(p.c)}">${T('أضف', 'Add')}</button><button class="g" data-rt="ask" data-c="${E(p.c)}">${T('اسأل', 'Ask')}</button>` : ''}</div></div>`;
 
+  const HOW = { cleanse: ['دلّكي الوجه 60 ثانية بماء فاتر ثم اشطفي جيداً.', 'Massage for 60 seconds with lukewarm water, rinse well.', 0], serum: ['ضعي 3–4 قطرات على بشرة رطبة وانتظري دقيقة قبل الخطوة التالية.', 'Apply 3–4 drops on damp skin, wait a minute before the next step.', 60], moist: ['طبقة رقيقة على الوجه والرقبة، وهي تثبّت ما قبلها.', 'A thin layer over face and neck to lock in the previous steps.', 0], spf: ['مقدار إصبعين للوجه والرقبة، وأعيدي كل ساعتين خارج المنزل.', 'Two finger-lengths for face and neck; reapply every 2 hours outdoors.', 0] };
+  const WHY = { cleanse: ['يزيل الزيوت والأوساخ ويهيّئ البشرة لما بعده.', 'Removes oil and dirt and preps skin.'], serum: ['الخطوة العلاجية التي تعالج اهتمامك الأساسي.', 'The treatment step targeting your main concern.'], moist: ['يرمّم حاجز البشرة ويمنع الجفاف.', 'Supports the barrier and prevents dryness.'], spf: ['أهم حماية ضد التصبغات والتجاعيد.', 'The key protection against spots and ageing.'] };
+  const DAYS = [['السبت', 'Sat'], ['الأحد', 'Sun'], ['الاثنين', 'Mon'], ['الثلاثاء', 'Tue'], ['الأربعاء', 'Wed'], ['الخميس', 'Thu'], ['الجمعة', 'Fri']];
+  const ACTN = { retinol: ['ريتينول', 'Retinol'], aha: ['AHA', 'AHA'], bha: ['BHA', 'BHA'], bp: ['بيروكسيد البنزويل', 'Benzoyl peroxide'] };
+  function weekHTML(pmSteps) {
+    const acts = []; pmSteps.forEach(s => { const it = s.items[0]; if (it) actsOf([it]).filter(a => ACTN[a]).forEach(a => { if (!acts.includes(a)) acts.push(a); }); });
+    const nights = [0, 2, 4], plan = DAYS.map((d, i) => { const k = nights.indexOf(i); return k >= 0 && acts.length ? acts[k % acts.length] : ''; });
+    if (!acts.length) return '';
+    return `<div class="rt-c"><h3>${lcIco('list')} ${T('جدول الأسبوع (المساء)', 'Weekly plan (evening)')}</h3><div class="rt-week">${DAYS.map((d, i) => `<div class="${plan[i] ? 'act' : ''}"><b>${T(d[0], d[1])}</b><small>${plan[i] ? T(ACTN[plan[i]][0], ACTN[plan[i]][1]) : T('ترطيب وترميم', 'Hydrate & repair')}</small></div>`).join('')}</div>
+      <p class="em">${T('المنتجات القوية تُستخدم في ليالٍ متباعدة (3 ليالٍ أسبوعياً كحد أقصى) وتبدئين بليلتين أول أسبوعين، وبين الليالي رطّبي فقط حتى لا يتعب حاجز البشرة.', 'Strong actives go on spaced nights (max 3 a week); start with two nights for two weeks and just hydrate in between to protect your barrier.')}</p></div>`;
+  }
   function quizHTML() {
     const me = typeof custMe == 'function' ? custMe() : null;
     const pre = savedHTML();
@@ -229,13 +241,15 @@
       <button class="btn" data-rt="go" ${rq.skin ? '' : 'disabled'}>${T('اعرضي روتيني', 'Show my routine')}</button></div>`;
     if (res && rq.skin) {
       const rec = recommend(), show1 = (w) => rec.filter(s => w === 'am' ? true : s.when !== 'am');
-      const blk = (title, steps) => `<div class="rt-c"><h3>${title}</h3>${steps.map((s, i) => `<div class="rt-step"><b>${i + 1}</b><div><b>${T(s.ar, s.en)}</b>${s.items.length ? s.items.map(p => pcard(p, true)).join('') : `<p class="em">${T('لا يوجد منتج مناسب حالياً — اسألي مختصاً.', 'No matching product yet — ask a specialist.')}</p>`}</div></div>`).join('')}</div>`;
+      const blk = (title, steps, w) => `<div class="rt-c"><h3>${title}</h3>${steps.map((s, i) => `<div class="rt-step"><b>${i + 1}</b><div><b>${T(s.ar, s.en)}</b><p class="em rt-why">${T(WHY[s.id][0], WHY[s.id][1])} ${T(HOW[s.id][0], HOW[s.id][1])}</p>${s.items.length ? s.items.map((p, pi) => `<div class="rt-pw${pi ? '' : ' on'}">${pi === 0 && s.items.length > 1 ? `<small class="rt-sel-l">${T('المختار لك', 'Your pick')}</small>` : ''}${pcard(p, true)}${pi ? `<button class="g rt-swap" data-rt="pick" data-s="${s.id}" data-c="${E(p.c)}">${T('اختاري هذا بدلاً منه', 'Use this instead')}</button>` : ''}</div>`).join('') : `<p class="em">${T('لا يوجد منتج مناسب حالياً — اسألي مختصاً.', 'No matching product yet — ask a specialist.')}</p>`}</div></div>`).join('')}</div>`;
       const sk = SKINS.find(x => x[0] === rq.skin);
       out += `<div class="rt-c"><h3>${lcIco('flower')} ${T('روتينك للبشرة ' + sk[1], 'Your routine for ' + sk[2] + ' skin')}</h3><p class="em">${E(TIPS[rq.skin])}</p></div>`;
+      const chosen = rec.filter(s => (rq.when === 'pm' ? s.when !== 'am' : true)).map(s => s.items[0]).filter(Boolean), uniq = [...new Map(chosen.map(x => [x.c, x])).values()], tot = uniq.reduce((a, x) => a + (x.p || 0), 0);
+      out += `<div class="rt-c rt-sum"><div><small class="em">${T('تكلفة روتينك الكاملة', 'Your full routine cost')}</small><b>${fmM(tot)}</b></div><div><small class="em">${T('عدد المنتجات', 'Products')}</small><b>${uniq.length}</b></div><div><small class="em">${T('خطوات يومياً', 'Steps a day')}</small><b>${rq.when === 'pm' ? rec.filter(s => s.when !== 'am').length : rq.when === 'am' ? rec.length : rec.length + rec.filter(s => s.when !== 'am').length}</b></div></div>`;
       const pick = w => (w === 'am' ? rec : rec.filter(s => s.when !== 'am')).map(s => s.items[0]).filter(Boolean);
       const warn = w => conflicts(actsOf(pick(w))).map(x => `<p class="rt-warn">${lcIco('warn')} ${E(x)}</p>`).join('');
       if (rq.when !== 'pm') out += blk(lcIco('sun') + ' ' + T('الصباح', 'Morning'), show1('am')) + warn('am');
-      if (rq.when !== 'am') out += blk(lcIco('moon') + ' ' + T('المساء', 'Evening'), show1('pm')) + warn('pm');
+      if (rq.when !== 'am') out += blk(lcIco('moon') + ' ' + T('المساء', 'Evening'), show1('pm')) + warn('pm') + weekHTML(show1('pm'));
       out += `<div class="rt-c"><button class="btn" data-rt="send">${T('أرسلي روتيني إلى مختصة', 'Send my routine to a specialist')}</button> <button class="btn g" data-rt="saveR">${T('احفظي روتيني', 'Save my routine')}</button> <button class="btn g" data-rt="addall">${T('أضيفي الكل للسلة', 'Add all to bag')}</button></div>`;
     }
     return out;
@@ -418,7 +432,8 @@
       if (me) { try { const x = await fetch((typeof API == 'function' && API() || '') + '/me', { method: 'POST', headers: { 'Content-Type': 'application/json', ...custAuth() }, body: JSON.stringify({ routine: r, skin: rq.skin }) }); if (x.ok && typeof accountRefresh == 'function') accountRefresh(); } catch (x) {} }
       toast(me ? T('تم حفظ روتينك في حسابك', 'Routine saved to your account') : T('تم الحفظ على هذا الجهاز — سجّلي الدخول لحفظه في حسابك', 'Saved on this device — sign in to keep it on your account')); renderRoutine(rsub, null, true);
     }
-    else if (k === 'addall') { recommend().forEach(s => { if (s.items[0]) cart[s.items[0].c] = (cart[s.items[0].c] || 0) + 1; }); save(); rcount(); toast(T('أُضيفت منتجات الروتين للسلة', 'Routine products added to bag')); }
+    else if (k === 'pick') { rq.pick[b.dataset.s] = c; sv(); renderRoutine(rsub, null, true); }
+    else if (k === 'addall') { recommend().filter(s => rq.when === 'pm' ? s.when !== 'am' : true).forEach(s => { if (s.items[0]) cart[s.items[0].c] = (cart[s.items[0].c] || 0) + 1; }); save(); rcount(); toast(T('أُضيفت منتجات الروتين للسلة', 'Routine products added to bag')); }
     else if (k === 'add') { cart[c] = (cart[c] || 0) + 1; save(); rcount(); toast(T('تمت الإضافة للسلة', 'Added to bag')); }
     else if (k === 'ask') { askP = c; lcNav('/routine/ask?p=' + encodeURIComponent(c)); }
     else if (k === 'q') { const t = $1('#rt-ask textarea'); if (t) { t.value = v; t.focus(); } }
