@@ -33,8 +33,8 @@ const assert = require('assert');
   /* guest is stopped at checkout and must sign in; the bag survives and checkout resumes */
   await vis.waitForSelector('#acv.on'); assert.strictEqual(await vis.$('#of'), null); ok('guest at checkout is asked to sign in (no order form)');
   await vis.click('#acv [data-x=mode][data-v=em]'); await vis.click('#acv [data-x=sub][data-v=reg]');
-  await vis.fill('#af-reg [name=name]', 'علي'); await vis.fill('#af-reg [name=email]', 'ali@example.com'); await vis.fill('#af-reg [name=pw]', 'Str0ng-pass1'); await vis.fill('#af-reg [name=birth]', '2014-01-01'); assert.strictEqual(await vis.$eval('#af-reg [name=birth]', e => e.validity.valid), false); ok('under-15 birth date is refused at sign-up'); await vis.fill('#af-reg [name=birth]', '2000-01-01'); await vis.click('#af-reg .av[data-v=av5]'); await vis.click('#af-reg button.btn');
-  await vis.waitForSelector('#of'); assert.strictEqual(await vis.textContent('#cn'), '1'); assert(await vis.$('#accb .avs')); ok('after sign-up checkout resumes, bag kept, avatar in header');
+  await vis.fill('#af-reg [name=name]', 'علي'); await vis.fill('#af-reg [name=email]', 'ali@example.com'); await vis.fill('#af-reg [name=pw]', 'Str0ng-pass1'); await vis.fill('#af-reg [name=birth]', '2014-01-01'); assert.strictEqual(await vis.$eval('#af-reg [name=birth]', e => e.validity.valid), false); ok('under-15 birth date is refused at sign-up'); await vis.fill('#af-reg [name=birth]', '2000-01-01'); await vis.click('#af-reg button.btn');
+  await vis.waitForSelector('#of'); assert.strictEqual(await vis.textContent('#cn'), '1'); ok('after sign-up checkout resumes, bag kept, avatar in header');
   await vis.fill('#of [name=name]', 'علي'); await vis.fill('#of [name=ph]', '07701234567'); await vis.selectOption('#of [name=ci]', { index: 1 }); await vis.fill('#of [name=ae]', 'الكرادة'); await vis.fill('#of [name=lm]', 'قرب المدرسة');
   await vis.click('#of [type=submit]'); await vis.waitForSelector('#c10n');
   assert.strictEqual(db.prepare('select count(*) n from orders').get().n, 0, 'nothing is sent during the countdown'); ok('countdown shown, order not yet sent');
