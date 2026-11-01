@@ -396,7 +396,7 @@
     return `<div class="rt-c"><h3>${lcIco('list')} ${T('كيف بشرتك اليوم؟', 'How is your skin today?')}</h3>
       <div class="rt-opts dy-rate">${DRATE.map((r, i) => `<button type="button" data-rt="dyr" data-v="${i + 1}" class="${t.s === i + 1 ? 'on' : ''}">${T(r[0], r[1])}</button>`).join('')}</div>
       <p class="em">${T('هل لاحظتِ شيئاً؟', 'Notice anything?')}</p><div class="rt-opts">${DFLAGS.map(f => `<button type="button" data-rt="dyf" data-v="${f[0]}" class="${t.f.includes(f[0]) ? 'on' : ''}" aria-pressed="${t.f.includes(f[0])}">${T(f[1], f[2])}</button>`).join('')}</div>
-      <textarea id="dy-n" rows="2" maxlength="300" placeholder="${T('ملاحظة (اختياري): نوم، ماء، مكياج، دورة شهرية…', 'Note (optional): sleep, water, makeup, cycle…')}">${E(t.n)}</textarea>
+      <textarea id="dy-n" rows="2" maxlength="300" placeholder="${T('ملاحظة (اختياري): نوم، ماء، مكياج…', 'Note (optional): sleep, water, makeup…')}">${E(t.n)}</textarea>
       <button class="btn" data-rt="dys" ${t.s ? '' : 'disabled'}>${T('احفظي تقييم اليوم', 'Save today')}</button></div>
       <div class="rt-c"><h3>${T('آخر 14 يوماً', 'Last 14 days')}</h3><div class="dy-bars">${days.map(z => `<div title="${z.k}"><i><b style="height:${z.v && z.v.s ? z.v.s * 20 : 0}%;background:${!z.v || !z.v.s ? 'transparent' : z.v.s >= 4 ? '#2e8b57' : z.v.s === 3 ? '#e0b000' : '#c0502e'}"></b></i><small>${z.d.getDate()}</small></div>`).join('')}</div>
         <p class="em">${T('سجّلتِ ' + logged + ' من 14 يوماً.', 'Logged ' + logged + ' of 14 days.')}</p>${ins.map(x => `<p class="rt-ok">${lcIco('check')} ${E(x)}</p>`).join('')}
