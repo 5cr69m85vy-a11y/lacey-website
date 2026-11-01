@@ -32,7 +32,7 @@
   function frame(d, s) {
     const me = typeof custMe == 'function' ? custMe() : null;
     el.dataset.dept = d;
-    el.innerHTML = `<div class="chh"><div><b>${T(DEPT[d].ar, DEPT[d].en)}</b><small id="chw"></small></div><span><button data-c="end" title="${T('إنهاء المحادثة', 'End chat')}" aria-label="End">✓</button><button data-c="x" aria-label="Close">×</button></span></div>
+    el.innerHTML = `<div class="chh"><div><b>${T(DEPT[d].ar, DEPT[d].en)}</b><small id="chw"></small></div></div>
       <div class="msgs" id="chmsgs" aria-live="polite"></div><div id="chtyp" class="typ" hidden>${T('الموظف يكتب…', 'Agent is typing…')}<i></i><i></i><i></i></div><div id="chcp"></div><div id="chrt"></div>
       <div id="chin">${!me && !s.all.length ? `<input id="scn" placeholder="${T('اسمك (اختياري)', 'Your name (optional)')}" value="${E(ls.get('lc_cn') || '')}">` : ''}
       <form id="scf"><button type="button" class="pk" data-c="pick" title="${T('مشاركة منتج', 'Share a product')}" aria-label="Share product">${window.lcIco ? lcIco('box') : '+'}</button><input name="text" autocomplete="off" maxlength="600" placeholder="${T('اكتب رسالة…', 'Type a message…')}" required><button class="btn" aria-label="Send">➤</button></form></div>`;
@@ -50,8 +50,9 @@
     const rt = el.querySelector('#chrt'), fm = el.querySelector('#scf'), inp = el.querySelector('#chin');
     if (closed) {
       inp.hidden = true;
-      rt.innerHTML = (s.rated || s.thanks) ? `<div class="chr"><p>${T('شكراً لتقييمك 🌸', 'Thanks for your feedback 🌸')}</p><button class="btn" data-c="new">${T('محادثة جديدة', 'New chat')}</button></div>`
+      rt.innerHTML = (s.rated || s.thanks) ? `<div class="chr"><p>${T('شكراً لتقييمك 🌸', 'Thanks for your feedback 🌸')}</p><small class="em">${T('جارٍ الرجوع…', 'Returning…')}</small></div>`
         : `<div class="chr"><p>${T('كيف كانت تجربتك؟', 'How was your experience?')}</p><div class="stars">${[1, 2, 3, 4, 5].map(i => `<button data-c="star" data-v="${i}" class="${i <= s.rate ? 'on' : ''}" aria-label="${i}">★</button>`).join('')}</div><textarea id="chc" rows="2" placeholder="${T('تعليق (اختياري)', 'Comment (optional)')}"></textarea><div class="row2"><button class="btn" data-c="rate">${T('إرسال التقييم', 'Submit')}</button><button class="btn g" data-c="new">${T('محادثة جديدة', 'New chat')}</button></div></div>`;
+      if ((s.rated || s.thanks) && !s.leaving) { s.leaving = true; setTimeout(() => { if (cur === d && s.leaving) { s.thanks = false; s.rated = false; s.all = []; s.after = 0; s.chat = 0; s.status = 'open'; s.rate = 0; s.mode = 'bot'; s.staff = ''; s.leaving = false; typeof lcNav == 'function' ? lcNav(d == 'routine' ? '/routine' : '/help') : unmount(); } }, 1600); }
     } else { rt.innerHTML = ''; inp.hidden = false; }
   }
   async function refresh(d, mark) {
@@ -70,7 +71,7 @@
   function mount(host, d) {
     if (!host) return; d = DEPT[d] ? d : 'service'; unmount(true);
     el = document.getElementById('chp'); if (!el) { el = document.createElement('div'); el.id = 'chp'; }
-    host.appendChild(el); el.className = 'inl on'; cur = d; sig = ''; const s = get(d); s.thanks = false; s.all = []; s.after = 0; s.chat = 0;
+    host.appendChild(el); el.className = 'inl on'; cur = d; sig = ''; const s = get(d); s.thanks = false; s.leaving = false; s.all = []; s.after = 0; s.chat = 0;
     frame(d, s); paint(d); refresh(d, true); start(d); setDots(d, 0);
   }
   function unmount(quiet) { clearInterval(timer); if (el) { el.remove(); el = null; } cur = null; if (!quiet) dots(); }
@@ -94,10 +95,8 @@
     const b = e.target.closest && e.target.closest('#chp [data-c]'); if (!b || !cur) return; const c = b.dataset.c, d = cur, s = get(d);
     try {
       if (c == 'chip') { if (b.dataset.h) return typeof lcNav == 'function' && lcNav(b.dataset.h); await send(b.dataset.t, '', d, b.dataset.k); }
-      else if (c == 'end') { if (!s.all.length) return typeof lcBack == 'function' ? history.back() : 0; await api('/chat/close', { token: s.tk, dept: d }); s.status = 'closed'; sig = ''; paint(d); }
       else if (c == 'star') { s.rate = +b.dataset.v; paint(d); }
       else if (c == 'rate') { if (!s.rate) return toast(T('اختر عدد النجوم', 'Pick a star rating')); await api('/chat/rate', { token: s.tk, dept: d, rating: s.rate, comment: (document.getElementById('chc') || {}).value || '' }); s.rated = true; s.thanks = true; s.all = []; s.after = 0; s.chat = 0; sig = ''; paint(d); }
-      else if (c == 'new') { s.thanks = false; s.all = []; s.after = 0; s.status = 'open'; s.rated = false; s.rate = 0; s.mode = 'bot'; s.staff = ''; s.chat = 0; sig = ''; frame(d, s); paint(d); }
       else if (c == 'pick') { const code = (prompt(T('اكتب كود المنتج (مثال LC101)', 'Enter the product code (e.g. LC101)')) || '').trim(); if (!code) return; const p = prod(code); if (!p) return toast(T('كود غير موجود', 'Code not found')); await send(T('أريد الاستفسار عن هذا المنتج', 'I have a question about this product'), p.c, d); }
     } catch (x) { toast(x.message); }
   });

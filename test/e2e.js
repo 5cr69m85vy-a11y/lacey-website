@@ -106,7 +106,7 @@ const assert = require('assert');
   await adm.evaluate(async id => { await apiJ('/adm/chat/reply', { method: 'POST', body: JSON.stringify({ id, text: 'نعم مناسب' }) }); await apiJ('/adm/chat/close', { method: 'POST', body: JSON.stringify({ id }) }); }, chatId);
   await v3.waitForSelector('.m.admin', { timeout: 8000 }); await v3.waitForSelector('.stars', { timeout: 8000 }); ok('admin reply appears, closing shows the rating form');
   await v3.click('.stars button >> nth=3'); await v3.fill('#chc', 'ممتاز'); await v3.click('[data-c=rate]'); await v3.waitForTimeout(500);
-  assert.deepStrictEqual({ ...db.prepare('select rating,comment from reviews').get() }, { rating: 4, comment: 'ممتاز' }); ok('rating saved (4 stars + comment)');
+  assert.deepStrictEqual({ ...db.prepare('select rating,comment from reviews').get() }, { rating: 4, comment: 'ممتاز' }); ok('rating saved (4 stars + comment)'); await v3.waitForFunction(() => location.pathname === '/routine', null, { timeout: 8000 }); assert.strictEqual(await v3.$('[data-c=end]'), null); ok('after the rating the customer returns automatically (no end/new-chat buttons for customers)');
   /* --- smart support: reason buttons, staff takes over by name, bell notification --- */
   const sp = await mk(); await sp.goto(base + '/help/chat'); await sp.waitForSelector('#scf input'); await sp.waitForSelector('#chp .chips button');
   await sp.fill('#scn', 'نور'); await sp.click('#chp .chips button[data-k=where]'); await sp.waitForSelector('#chp .m.customer + .m.bot', { timeout: 8000 }); ok('reason buttons ("أين طلبي؟") get an automatic answer');
