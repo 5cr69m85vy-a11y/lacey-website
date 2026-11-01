@@ -28,7 +28,7 @@ const authFor = require('./sess');
 
   await ok('shipping fee per governorate (falls back to the default fee)', async () => {
     const q = c => post('/quote', { items: [{ c: 'A1', q: 1 }], city: c }).then(r => r.json());
-    assert.strictEqual((await q('بغداد')).shipping, 3000); assert.strictEqual((await q('محافظة البصرة')).shipping, 7000); assert.strictEqual((await q('دهوك')).shipping, 5000); assert.strictEqual((await q('')).shipping, 5000);
+    assert.strictEqual((await q('بغداد')).shipping, 3000); assert.strictEqual((await q('محافظة البصرة')).shipping, 7000); assert.strictEqual((await q('Baghdad')).shipping, 3000); assert.strictEqual((await q('Basra')).shipping, 7000); assert.strictEqual((await q('Nineveh (Mosul)')).shipping, 5000); assert.strictEqual((await q('Duhok')).shipping, 5000); assert.strictEqual((await q('دهوك')).shipping, 5000); assert.strictEqual((await q('')).shipping, 5000);
   });
   await ok('stock: admin sets quantities; public catalog shows them; sold-out and over-quantity are refused', async () => {
     assert.strictEqual((await post('/adm/stock', { items: [{ code: 'A1', qty: 3, low: 2 }] }, adm)).status, 200);

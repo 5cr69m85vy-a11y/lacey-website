@@ -4,7 +4,11 @@ import { audit, limit } from './guard.js';
 import { eq } from './auth.js';
 
 /* ================= رسوم التوصيل حسب المحافظة ================= */
-const nrm = s => String(s || '').replace(/محافظة|محافظه/g, '').replace(/[\u064B-\u0652ـ]/g, '').replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').replace(/\s+/g, '').toLowerCase();
+const NRM0 = s => String(s || '').replace(/محافظة|محافظه/g, '').replace(/[\u064B-\u0652ـ]/g, '').replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').replace(/\s+/g, '').toLowerCase();
+/* أسماء المحافظات الإنجليزية (قائمة الدفع) وأسماء بديلة ← الاسم العربي الموحّد */
+const CITY_EN = { baghdad: 'بغداد', nineveh: 'نينوى', mosul: 'نينوى', erbil: 'أربيل', arbil: 'أربيل', sulaymaniyah: 'السليمانية', sulaymaniya: 'السليمانية', slemani: 'السليمانية', duhok: 'دهوك', dohuk: 'دهوك', kirkuk: 'كركوك', basra: 'البصرة', basrah: 'البصرة', najaf: 'النجف', karbala: 'كربلاء', babylon: 'بابل', babil: 'بابل', hillah: 'بابل', anbar: 'الأنبار', ramadi: 'الأنبار', diyala: 'ديالى', baqubah: 'ديالى', salahaldin: 'صلاح الدين', salahuddin: 'صلاح الدين', tikrit: 'صلاح الدين', wasit: 'واسط', kut: 'واسط', maysan: 'ميسان', amarah: 'ميسان', dhiqar: 'ذي قار', nasiriyah: 'ذي قار', muthanna: 'المثنى', samawah: 'المثنى', alqadisiyyah: 'القادسية', qadisiyyah: 'القادسية', qadisiyah: 'القادسية', diwaniyah: 'القادسية', halabja: 'حلبجة' };
+const CITY_AR = { 'الديوانيه': 'القادسية', 'الموصل': 'نينوى', 'الناصريه': 'ذي قار', 'الحله': 'بابل', 'الرمادي': 'الأنبار', 'العماره': 'ميسان', 'الكوت': 'واسط', 'السماوه': 'المثنى', 'تكريت': 'صلاح الدين', 'اربيل': 'أربيل' };
+const nrm = s => { const raw = String(s || ''), en = raw.replace(/\(.*?\)/g, ' ').toLowerCase().replace(/[^a-z]/g, ''), n = NRM0(raw.replace(/\(.*?\)/g, ' ')); const m = CITY_EN[en] || CITY_EN[(raw.match(/\(([^)]*)\)/) || [])[1] ? String(raw.match(/\(([^)]*)\)/)[1]).toLowerCase().replace(/[^a-z]/g, '') : ''] || CITY_AR[n]; return NRM0(m || raw); };
 export function feeFor(cfg, city) {
   const base = Math.max(0, Math.round(+cfg.sf || 0)), sg = cfg.sg && typeof cfg.sg === 'object' ? cfg.sg : null;
   if (!sg || !city) return base;

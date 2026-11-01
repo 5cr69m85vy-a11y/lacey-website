@@ -377,16 +377,42 @@
       ${me ? '' : `<input name="nm" placeholder="${T('اسمك (اختياري)', 'Your name (optional)')}" value="${E(ls.get('lc_cn') || '')}">`}
       <button class="btn">${T('إرسال السؤال', 'Send question')}</button></form></div>`;
   }
+  /* ================= يوميات البشرة: تقييم يومي + مؤشرات + اتجاه آخر 14 يوماً ================= */
+  const DFLAGS = [['acne', 'حبوب', 'Breakouts'], ['dry', 'جفاف', 'Dryness'], ['red', 'احمرار', 'Redness'], ['shine', 'لمعان زائد', 'Excess shine'], ['itch', 'حكّة/لسع', 'Itch/sting'], ['new', 'جرّبتُ منتجاً جديداً', 'Tried a new product']];
+  const DRATE = [['سيئة جداً', 'Very bad'], ['سيئة', 'Bad'], ['عادية', 'Okay'], ['جيدة', 'Good'], ['ممتازة', 'Great']];
+  const dyAll = () => jp(ls.get('lc_dy')) || {};
+  const dyKey = d => d.toISOString().slice(0, 10);
+  let dyDraft = null;
+  const dyToday = () => { const a = dyAll(), k = dyKey(new Date()); if (!dyDraft || dyDraft.k !== k) dyDraft = Object.assign({ k, s: 0, f: [], n: '' }, a[k] || {}, { k }); return dyDraft; };
+  function diaryHTML() {
+    const all = dyAll(), t = dyToday(), days = [...Array(14)].map((_, i) => { const d = new Date(Date.now() - (13 - i) * 864e5), k = dyKey(d); return { k, d, v: all[k] }; });
+    const avg = a => { const x = a.filter(z => z.v && z.v.s).map(z => z.v.s); return x.length ? x.reduce((u, w) => u + w, 0) / x.length : null; };
+    const w1 = avg(days.slice(7)), w0 = avg(days.slice(0, 7)), cnt = {}; days.forEach(z => z.v && (z.v.f || []).forEach(f => cnt[f] = (cnt[f] || 0) + 1));
+    const top = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0], logged = days.filter(z => z.v && z.v.s).length;
+    const ins = [];
+    if (w1 !== null && w0 !== null) { const df = Math.round((w1 - w0) / w0 * 100); ins.push(df > 5 ? T('بشرتك أفضل بنسبة ' + df + '% عن الأسبوع الماضي. استمري على الروتين نفسه.', 'Your skin is ' + df + '% better than last week. Keep the same routine.') : df < -5 ? T('تقييم بشرتك انخفض ' + Math.abs(df) + '% عن الأسبوع الماضي. راجعي ما تغيّر (منتج جديد، نوم، طعام) وبسّطي الروتين.', 'Your rating is down ' + Math.abs(df) + '% vs last week. Check what changed and simplify the routine.') : T('حالة بشرتك مستقرة عن الأسبوع الماضي.', 'Your skin is steady compared with last week.')); }
+    if (top && top[1] >= 3) { const f = DFLAGS.find(x => x[0] === top[0]); ins.push(T('الأكثر تكراراً خلال 14 يوماً: ' + f[1] + ' (' + top[1] + ' أيام).', 'Most frequent in 14 days: ' + f[2] + ' (' + top[1] + ' days).')); }
+    if (days.filter(z => z.v && (z.v.f || []).includes('new')).length && days.slice(-5).some(z => z.v && (z.v.f || []).some(f => ['red', 'itch', 'acne'].includes(f)))) ins.push(T('ظهرت أعراض بعد تجربة منتج جديد: أوقفيه أسبوعاً وراقبي بشرتك، وإن استمرت راجعي طبيبة جلدية.', 'Symptoms appeared after a new product: pause it for a week and watch; see a dermatologist if it persists.'));
+    return `<div class="rt-c"><h3>${lcIco('list')} ${T('كيف بشرتك اليوم؟', 'How is your skin today?')}</h3>
+      <div class="rt-opts dy-rate">${DRATE.map((r, i) => `<button type="button" data-rt="dyr" data-v="${i + 1}" class="${t.s === i + 1 ? 'on' : ''}">${T(r[0], r[1])}</button>`).join('')}</div>
+      <p class="em">${T('هل لاحظتِ شيئاً؟', 'Notice anything?')}</p><div class="rt-opts">${DFLAGS.map(f => `<button type="button" data-rt="dyf" data-v="${f[0]}" class="${t.f.includes(f[0]) ? 'on' : ''}" aria-pressed="${t.f.includes(f[0])}">${T(f[1], f[2])}</button>`).join('')}</div>
+      <textarea id="dy-n" rows="2" maxlength="300" placeholder="${T('ملاحظة (اختياري): نوم، ماء، مكياج، دورة شهرية…', 'Note (optional): sleep, water, makeup, cycle…')}">${E(t.n)}</textarea>
+      <button class="btn" data-rt="dys" ${t.s ? '' : 'disabled'}>${T('احفظي تقييم اليوم', 'Save today')}</button></div>
+      <div class="rt-c"><h3>${T('آخر 14 يوماً', 'Last 14 days')}</h3><div class="dy-bars">${days.map(z => `<div title="${z.k}"><i><b style="height:${z.v && z.v.s ? z.v.s * 20 : 0}%;background:${!z.v || !z.v.s ? 'transparent' : z.v.s >= 4 ? '#2e8b57' : z.v.s === 3 ? '#e0b000' : '#c0502e'}"></b></i><small>${z.d.getDate()}</small></div>`).join('')}</div>
+        <p class="em">${T('سجّلتِ ' + logged + ' من 14 يوماً.', 'Logged ' + logged + ' of 14 days.')}</p>${ins.map(x => `<p class="rt-ok">${lcIco('check')} ${E(x)}</p>`).join('')}
+        <p class="em">${T('تُحفظ اليوميات على هذا الجهاز فقط. التسجيل المنتظم (أسبوعين على الأقل) يوضح لك أي منتج ينفعك فعلاً.', 'Diary is stored on this device only. Logging for at least two weeks shows which products really work for you.')}</p></div>
+      <div class="rt-c"><h3>${T('كيف تجرّبين منتجاً جديداً بأمان؟', 'How to try a new product safely')}</h3><ol class="dy-pt"><li>${T('اختبار الحساسية: ضعي كمية صغيرة خلف الأذن أو داخل الساعد يومين.', 'Patch test: apply a little behind the ear or inner forearm for two days.')}</li><li>${T('أدخلي منتجاً واحداً كل أسبوعين حتى تعرفي المسبّب إن حدث تهيّج.', 'Add one product every two weeks so you can tell the cause of any irritation.')}</li><li>${T('ابدئي بالمنتجات القوية (ريتينول، أحماض) مرتين أسبوعياً فقط.', 'Start strong actives (retinol, acids) just twice a week.')}</li><li>${T('أوقفي المنتج عند احمرار شديد أو لسع مستمر أو طفح.', 'Stop at strong redness, persistent stinging or rash.')}</li></ol></div>`;
+  }
   function renderRoutine(sub, u, quiet) {
     rsub = sub || ''; const el = $1('#rtn'); if (!el) return;
-    const tab = rsub === 'ask' ? 'ask' : rsub === 'support' ? 'support' : rsub === 'guide' ? 'guide' : rsub === 'products' ? 'products' : rsub === 'test' ? 'test' : 'quiz';
+    const tab = rsub === 'ask' ? 'ask' : rsub === 'support' ? 'support' : rsub === 'guide' ? 'guide' : rsub === 'products' ? 'products' : rsub === 'test' ? 'test' : rsub === 'diary' ? 'diary' : 'quiz';
     if (u && u.searchParams.get('p')) { askP = u.searchParams.get('p'); }
     if (tab !== 'support' && window.LCChat) LCChat.unmount();
     if (tab === 'test' && !quiet) { const L0 = tqList(); tqi = tqResult() ? L0.length : Math.min(rq.ans.filter(x => x != null).length, L0.length - 1); }
-    const tabs = [['quiz', '/routine', T('روتيني', 'My routine')], ['test', '/routine/test', T('اختبار البشرة', 'Skin test')], ['products', '/routine/products', T('كل المنتجات', 'All products')], ['guide', '/routine/guide', T('دليل المكونات', 'Ingredients')], ['ask', '/routine/ask', T('اسألي عن منتج', 'Ask about a product')], ['support', '/routine/support', T('الدعم', 'Support')]];
+    const tabs = [['quiz', '/routine', T('روتيني', 'My routine')], ['test', '/routine/test', T('اختبار البشرة', 'Skin test')], ['diary', '/routine/diary', T('يومياتي', 'Diary')], ['products', '/routine/products', T('كل المنتجات', 'All products')], ['guide', '/routine/guide', T('دليل المكونات', 'Ingredients')], ['ask', '/routine/ask', T('اسألي عن منتج', 'Ask about a product')], ['support', '/routine/support', T('الدعم', 'Support')]];
     el.innerHTML = `<div class="w"><div class="rh"><h2>${lcIco('flower')} ${T('روتين', 'Routine')}</h2><p>${T('مستشارتك الشخصية للعناية بالبشرة: تحليل بشرتك، اقتراح منتجات، وتحدّثي مع فريقنا.', 'Your personal skincare advisor: analyse your skin, get product picks, and chat with our team.')}</p></div>
       <nav class="rt-tabs" aria-label="Routine">${tabs.map(([k, h, n]) => `<a href="${h}" class="${tab === k ? 'on' : ''}">${n}</a>`).join('')}</nav>
-      <div id="rtb">${tab === 'quiz' ? quizHTML() : tab === 'ask' ? askHTML() : tab === 'guide' ? guideHTML() : tab === 'products' ? prodsHTML() : tab === 'test' ? tqHTML() : `<div id="rt-chat"></div>`}</div></div>`;
+      <div id="rtb">${tab === 'quiz' ? quizHTML() : tab === 'ask' ? askHTML() : tab === 'guide' ? guideHTML() : tab === 'products' ? prodsHTML() : tab === 'test' ? tqHTML() : tab === 'diary' ? diaryHTML() : `<div id="rt-chat"></div>`}</div></div>`;
     if (tab === 'support' && window.LCChat) LCChat.mount(document.getElementById('rt-chat'), 'routine');
   }
   function resolveCode(v) {
@@ -401,6 +427,9 @@
     else if (k === 'con') { rq.concerns = rq.concerns.includes(v) ? rq.concerns.filter(x => x !== v) : [...rq.concerns, v]; res = false; sv(); renderRoutine(rsub, null, true); }
     else if (k === 'when') { rq.when = v; sv(); renderRoutine(rsub, null, true); }
     else if (k === 'go') { res = true; renderRoutine(rsub, null, true); const r = document.querySelector('#rtb .rt-c:nth-child(2)'); if (r) r.scrollIntoView({ behavior: 'smooth' }); }
+    else if (k === 'dyr') { const t = dyToday(); t.s = +v; const n = $1('#dy-n'); if (n) t.n = n.value; renderRoutine(rsub, null, true); }
+    else if (k === 'dyf') { const t = dyToday(), n = $1('#dy-n'); if (n) t.n = n.value; t.f = t.f.includes(v) ? t.f.filter(x => x !== v) : [...t.f, v]; renderRoutine(rsub, null, true); }
+    else if (k === 'dys') { const t = dyToday(), n = $1('#dy-n'); if (n) t.n = n.value.slice(0, 300); const a = dyAll(); a[t.k] = { s: t.s, f: t.f, n: t.n }; const keys = Object.keys(a).sort().slice(-120), o = {}; keys.forEach(k2 => o[k2] = a[k2]); ls.set('lc_dy', JSON.stringify(o)); toast(T('تم حفظ تقييم اليوم', 'Saved')); renderRoutine(rsub, null, true); }
     else if (k === 'ta') {
       const L = tqList(); rq.ans[tqi] = +v; sv();
       const card = $1('#rtn .tq-card'); if (card) card.classList.add('out');
