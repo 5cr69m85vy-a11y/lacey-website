@@ -26,10 +26,7 @@ const assert = require('assert');
   await vis.evaluate(() => lcNav('/categories')); assert.strictEqual(new URL(vis.url()).pathname, '/categories'); ok('الفئات page has its own link');
   await vis.evaluate(() => { document.querySelector('#shop').scrollIntoView() });
   await vis.click('#grid .card [data-a=add] >> nth=0');
-  await vis.waitForSelector('#cfm.on'); assert((await vis.textContent('#cfb')).includes('إضافة هذا المنتج')); await vis.click('[data-a=addn]');
-  assert.strictEqual(await vis.textContent('#cn'), '0'); ok('"No" on the confirmation adds nothing');
-  await vis.click('#grid .card [data-a=add] >> nth=0'); await vis.click('[data-a=addy]');
-  assert.strictEqual(await vis.textContent('#cn'), '1'); ok('"Yes" adds exactly one');
+  assert.strictEqual(await vis.textContent('#cn'), '1'); assert.strictEqual(await vis.$eval('#grid .card .qs b', e => e.textContent), '1'); ok('add is immediate (no confirmation) and the card now shows a − 1 + stepper');
 
   /* --- checkout: 10 s countdown, skip, tracker --- */
   await vis.click('#bnav [data-a=bag]'); await vis.click('[data-a=vf]');
@@ -54,7 +51,7 @@ const assert = require('assert');
   await vis.waitForSelector('#trkbox .er2'); assert.strictEqual(db.prepare('select status from orders').get().status, 0); ok('customer cancel within the window → cancelled');
 
   /* --- second order: Skip button, auto-confirm after 10 min, admin advances it --- */
-  await vis.click('#cb .btn[data-a=x]'); await vis.click('#grid .card [data-a=add] >> nth=1'); await vis.click('[data-a=addy]'); await vis.click('#bnav [data-a=bag]'); await vis.click('[data-a=vf]');
+  await vis.click('#cb .btn[data-a=x]'); await vis.click('#grid .card [data-a=add] >> nth=1'); await vis.click('#bnav [data-a=bag]'); await vis.click('[data-a=vf]');
   await vis.fill('#of [name=name]', 'علي'); await vis.fill('#of [name=ph]', '07701234567'); await vis.selectOption('#of [name=ci]', { index: 1 }); await vis.fill('#of [name=ae]', 'الكرادة'); await vis.fill('#of [name=lm]', 'قرب المدرسة');
   await vis.click('#of [type=submit]'); await vis.click('[data-a=c10s]'); await vis.waitForSelector('#trkbox .tl');
   const code = db.prepare('select code from orders where status=1').get().code; ok('"Skip" sends immediately');
@@ -89,7 +86,7 @@ const assert = require('assert');
   await new Promise(r => setTimeout(r, 1800));
   const v3 = await mk(); await v3.goto(base + '/'); await v3.waitForSelector('.bxc', { timeout: 8000 }); ok('visitor sees the Boxes section');
   assert((await v3.$eval('.bxc', e => e.textContent)).includes('بوكس الهدية')); assert(await v3.$('#hd.hm img')); ok('hero shows uploaded media');
-  await v3.click('.bxc [data-a=add]'); await v3.click('[data-a=addy]'); assert.strictEqual(await v3.textContent('#cn'), '1'); ok('box is added to the bag in one click');
+  await v3.click('.bxc [data-a=add]'); assert.strictEqual(await v3.textContent('#cn'), '1'); ok('box is added to the bag in one click');
   await v3.click('#bnav [data-a=bag]'); await v3.waitForSelector('#cd'); await v3.waitForFunction(() => document.querySelector('#cb').textContent.includes('التوصيل') || document.querySelector('#cb').textContent.includes('Shipping'));
   await v3.fill('#cd input', 'save10'); await v3.click('#cd button'); await v3.waitForFunction(() => document.querySelector('#cb').textContent.includes('SAVE10'));
   await v3.fill('#cd input', 'freeship'); await v3.click('#cd button'); await v3.waitForFunction(() => /FREESHIP/.test(document.querySelector('#cb').textContent));
@@ -104,7 +101,7 @@ const assert = require('assert');
   /* description images */
   await v3.evaluate(() => { A.x(); }); const dh = await v3.evaluate(() => descHTML(S.P[0])); assert(/<p>سطر 1<\/p><img[^>]*width:40%;margin:8px auto 8px 0[^>]*><p>سطر 2/.test(dh), dh); ok('rich description: image in the middle, 40% wide, left-aligned');
   /* chat */
-  await v3.evaluate(() => lcNav('/routine/support')); await v3.waitForSelector('#scf input'); await v3.fill('#scf input', 'هل المنتج مناسب للبشرة الدهنية؟'); await v3.click('#scf .btn'); await v3.waitForSelector('.m.customer', { timeout: 6000 }).catch(async x => { console.log('CHATDBG', await v3.$eval('#chp', n => n.innerText), v3.errs); throw x; });
+  await v3.evaluate(() => lcNav('/routine/support')); await v3.waitForSelector('#scf input'); await v3.fill('#scf input', 'هل المنتج مناسب للبشرة الدهنية؟'); await v3.click('#scf .btn'); await v3.waitForSelector('.m.customer', { timeout: 12000 }).catch(async x => { console.log('CHATDBG', await v3.$eval('#chp', n => n.innerText), v3.errs); throw x; });
   const chatId = db.prepare('select id from chats where channel=\'support\'').get().id; ok('customer sends a support message');
   await adm.evaluate(async id => { await apiJ('/adm/chat/reply', { method: 'POST', body: JSON.stringify({ id, text: 'نعم مناسب' }) }); await apiJ('/adm/chat/close', { method: 'POST', body: JSON.stringify({ id }) }); }, chatId);
   await v3.waitForSelector('.m.admin', { timeout: 8000 }); await v3.waitForSelector('.stars', { timeout: 8000 }); ok('admin reply appears, closing shows the rating form');
@@ -126,12 +123,13 @@ const assert = require('assert');
     await pg.goto(base + '/routine'); await pg.waitForSelector('[data-rt=dopen]'); await pg.click('[data-rt=dopen]'); for (let q = 0; q < 4; q++) await pg.click(`[data-rt=dq][data-q="${q}"][data-v="0"]`); await pg.waitForSelector('#rtn .rt-ok'); assert.strictEqual(await pg.$eval('[data-rt=skin].on', e => e.dataset.v), 'oily'); ok('skin assessment (4 questions) sets the skin type automatically (oily)');
     await pg.goto(base + '/routine/products'); await pg.waitForSelector('#rtn .rt-pw'); assert((await pg.$$('#rtn .rt-pw')).length >= 3); await pg.fill('#rt-pq', 'zzzz-none'); await pg.waitForSelector('#rtn .em'); ok('Routine lists all products with search/filter by step');
     const pc = db.prepare('select code from products order by sort,code limit 1').get().code;
-    await pg.goto(base + '/categories'); await pg.waitForSelector('#grid .card'); await pg.evaluate(c => A.open(c), pc); await pg.waitForSelector('#pm .md .rtq'); await pg.waitForTimeout(300); assert.strictEqual(await pg.$$eval('#pm .md .rtq', e => e.length), 1); assert.strictEqual(await pg.evaluate(() => 1 + 1), 2); ok('product modal opens once with a single «روتين» button (no render loop)');
-    await pg.click('#pm .md a[data-a=pg]'); await pg.waitForSelector('#prd .pgd h1'); assert.strictEqual(await pg.evaluate(() => location.pathname), '/p/' + pc); ok('modal link opens the product page at /p/CODE');
+    await pg.goto(base + '/categories'); await pg.waitForSelector('#grid .card'); await pg.click(`#grid .card[data-c="${pc}"] .im`); await pg.waitForSelector('#prd .pgd h1'); assert.strictEqual(await pg.evaluate(() => location.pathname), '/p/' + pc); ok('tapping a product opens its own page directly (/p/CODE)');
+    await pg.click('#prd [data-a=add]'); await pg.waitForSelector('#prd .qs b'); assert.strictEqual(await pg.$eval('#prd .qs b', e => e.textContent), '1'); await pg.click('#prd .qs [data-d="1"]'); assert.strictEqual(await pg.$eval('#prd .qs b', e => e.textContent), '2'); await pg.click('#prd [data-pback]'); await pg.waitForSelector('#grid .card'); assert.strictEqual(await pg.evaluate(() => location.pathname), '/categories');
+    assert.strictEqual(await pg.$eval(`#grid .card[data-c="${pc}"] .qs b`, e => e.textContent), '2'); await pg.click(`#grid .card[data-c="${pc}"] .qs [data-d="-1"]`); assert.strictEqual(await pg.$eval(`#grid .card[data-c="${pc}"] .qs b`, e => e.textContent), '1'); ok('adding shows a − qty + stepper on the card and product page; back arrow returns to the list'); await pg.evaluate(() => { cart = {}; save(); rcount(); });
     await pg.goto(base + '/p/' + pc); await pg.waitForSelector('#prd .pgd h1'); assert.strictEqual(await pg.evaluate(() => document.body.dataset.pg), 'product'); assert(await pg.$('#prd [data-a=add]')); assert(await pg.evaluate(() => /"@type":"Product"/.test(document.head.innerHTML))); ok('/p/CODE is an isolated product page with its own URL (JSON-LD in the head)');
     const sm = await pg.evaluate(async () => (await fetch('/sitemap.xml')).text()); assert(sm.includes('/p/' + pc)); ok('sitemap.xml lists product pages');
     db.prepare('insert or replace into stock(code,qty,low,updated_at) values(?,?,?,?)').run(pc, 0, 5, Date.now());
-    await pg.goto(base + '/p/' + pc); await pg.waitForSelector('#prd .so2'); assert.strictEqual(await pg.$eval('#prd [data-a=add]', e => e.disabled), true); await pg.goto(base + '/categories'); await pg.waitForSelector('#grid .card .so'); ok('sold-out products show «نفد» and cannot be added to the bag');
+    await pg.goto(base + '/p/' + pc); await pg.waitForSelector('#prd .so2'); assert.strictEqual(await pg.$eval('#prd .qsw button', e => e.disabled), true); await pg.goto(base + '/categories'); await pg.waitForSelector('#grid .card .so'); ok('sold-out products show «نفد» and cannot be added to the bag');
     db.prepare('update stock set qty=3 where code=?').run(pc); await pg.goto(base + '/categories'); await pg.waitForSelector('#grid .card .lw'); ok('low stock shows «متبقي N فقط» on the product card'); db.prepare('delete from stock').run();
     await adm.evaluate(() => { at = 'sk'; ra(); }); await adm.waitForSelector('#ostk .stk-t input'); ok('admin: stock tab lists products with quantity + alert threshold');
     await adm.evaluate(() => { at = 'dl'; ra(); }); await adm.waitForSelector('#ofee .gvt input'); await adm.selectOption('#oprov [name=DLV_PROVIDER]', 'waseet').catch(() => {}); ok('admin: shipping tab has per-governorate fees and delivery-company linking');

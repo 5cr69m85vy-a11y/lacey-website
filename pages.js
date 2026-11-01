@@ -9,7 +9,7 @@
   const TITLES = { home: 'Lacey Skincare', categories: 'الفئات | Lacey', offers: 'عروضنا | Lacey', routine: 'روتين | Lacey', cart: 'السلة | Lacey', checkout: 'إتمام الطلب | Lacey', account: 'حسابي | Lacey', support: 'الدعم | Lacey', product: 'Lacey', help: 'مركز المساعدة | Lacey', tracking: 'تتبع الطلب | Lacey', preferences: 'الإعدادات | Lacey' };
   const OVERLAY = ['cart', 'checkout', 'account'];
   const hdr = document.getElementById('hlp'); if (hdr) hdr.addEventListener('click', e => { e.preventDefault(); lcNav('/help'); });
-  let cur = '', prevPath = '/', bn = null;
+  let cur = '', prevPath = '/', bn = null, navDepth = 0; const scrolls = {};
 
   const parse = href => { const u = new URL(href, location.origin), seg = u.pathname.split('/').filter(Boolean); return { page: PAGES[seg[0] || ''] || 'home', sub: seg[1] || '', u }; };
 
@@ -32,6 +32,8 @@
   function closeCart() { const cv = $1('#cv'); if (cv) cv.classList.remove('on', 'pgv'); }
   function show(path, push, replace) {
     const { page, sub, u } = parse(path), was = cur;
+    scrolls[location.pathname + location.search] = scrollY;
+    if (push) navDepth++; else if (!replace && navDepth > 0) navDepth--;
     if ((was === 'routine' || was === 'help') && window.LCChat && page !== was) LCChat.unmount();
     if (was === 'account' && page !== 'account' && window.accountHide) accountHide();
     if (was && !OVERLAY.includes(was) && was !== 'support' && was !== page) prevPath = location.pathname + location.search;
@@ -50,7 +52,7 @@
     if (page === 'product') renderProduct(sub);
     if (page === 'tracking') renderTrack(u);
     if (page === 'preferences') renderPrefs();
-    if (!(was === page && page === 'routine')) scrollTo(0, 0);
+    if (!(was === page && page === 'routine')) { const sy = !push && !replace ? scrolls[u.pathname + u.search] : 0; scrollTo(0, sy || 0); if (sy) setTimeout(() => scrollTo(0, sy), 120); }
     setPh();
   }
   function setPh() { const h = $1('header'); if (h) document.documentElement.style.setProperty('--ph', Math.round(h.getBoundingClientRect().bottom + scrollY) + 'px'); }
@@ -72,6 +74,7 @@
     A.vf = () => { if (typeof needLogin == 'function' && needLogin()) return; lcNav('/checkout'); };
     A.vb = () => lcNav('/cart');
     A.pg = () => A.x();
+    A.open = c => lcNav('/p/' + encodeURIComponent(c));
     /* إعادة رسم نموذج الطلب عند وصول سعر التوصيل لا تُفقد ما كتبه الزبون ولا موضع المؤشر */
     const rc0 = window.rc; window.rc = function () {
       const f = document.querySelector('#of'); if (!(f && typeof view !== 'undefined' && view === 'form')) return rc0.apply(this, arguments);
@@ -107,14 +110,18 @@
     document.title = pd.n + ' | Lacey';
     const gal = [pd.i, ...(pd.im || [])].filter(Boolean), im = gal[pimg] || gal[0], b = typeof brd == 'function' ? brd(pd) : null;
     const low = pd.left > 0 && pd.left <= (pd.lw ?? 5), same = prodList().filter(x => x.c !== pd.c && x.k === pd.k).slice(0, 4);
-    el.innerHTML = `<div class="w"><p><a href="/categories">← ${T('المتجر', 'Shop')}</a></p><div class="pgd"><div><div class="pim" style="${im ? `background-image:url('${E(im)}')` : ''}"></div>${gal.length > 1 ? `<div class="pth">${gal.map((u, k) => `<button data-pi="${k}" class="${k === pimg ? 'on' : ''}" style="background-image:url('${E(u)}')" aria-label="${k + 1}"></button>`).join('')}</div>` : ''}</div>
+    el.innerHTML = `<div class="w"><p><button class="pbk" data-pback="1" aria-label="${T('رجوع', 'Back')}">→ ${T('رجوع', 'Back')}</button></p><div class="pgd"><div><div class="pim" style="${im ? `background-image:url('${E(im)}')` : ''}"></div>${gal.length > 1 ? `<div class="pth">${gal.map((u, k) => `<button data-pi="${k}" class="${k === pimg ? 'on' : ''}" style="background-image:url('${E(u)}')" aria-label="${k + 1}"></button>`).join('')}</div>` : ''}</div>
       <div><small>${E(pd.c)}${b ? ' · ' + E(b.n) : ''}${pd.k ? ' · ' + E(pd.k) : ''}</small><h1>${E(pd.n)}</h1><div class="pr">${fmM(pd.p)}${pd.o > pd.p ? ` <s>${fmM(pd.o)}</s>` : ''}</div>
       ${pd.left === 0 ? `<p class="so2">${T('نفد من المخزون', 'Sold out')}</p>` : low ? `<p class="lw2">${T('متبقي ' + pd.left + ' قطع فقط', 'Only ' + pd.left + ' left')}</p>` : ''}
       ${ingOf(pd).length ? `<h3>${T('المكونات الفعالة', 'Active ingredients')}</h3>${ingHTML(pd)}` : ''}
       ${typeof descHTML == 'function' ? descHTML(pd) : ''}
-      <div class="row2"><button class="btn" data-a="add" data-c="${E(pd.c)}" ${pd.left === 0 ? 'disabled' : ''}>${T('أضف إلى السلة', 'Add to bag')}</button><button class="btn g" data-a="rtn" data-c="${E(pd.c)}">${T('اسأل روتين', 'Ask Routine')}</button><button class="btn g" data-pcopy="1">${T('نسخ الرابط', 'Copy link')}</button></div></div></div>
+      <div class="row2"><span class="qsw" data-q="${E(pd.c)}" data-big="1">${qsHTML(pd.c, true)}</span><button class="btn g" data-a="rtn" data-c="${E(pd.c)}">${T('اسأل روتين', 'Ask Routine')}</button><button class="btn g" data-pcopy="1">${T('نسخ الرابط', 'Copy link')}</button></div></div></div>
       ${same.length ? `<h3>${T('منتجات مشابهة', 'Similar products')}</h3><div class="grid">${same.map(card).join('')}</div>` : ''}</div>`;
   }
+  document.addEventListener('click', e => {
+    const b = e.target.closest && e.target.closest('[data-pback]'); if (!b) return;
+    if (navDepth > 0) history.back(); else lcNav('/categories');
+  });
   document.addEventListener('click', e => {
     const t = e.target.closest && e.target.closest('#prd [data-pi],#prd [data-pcopy]'); if (!t) return;
     if (t.dataset.pi !== undefined) { pimg = +t.dataset.pi; renderProduct(psub, true); }
