@@ -231,8 +231,9 @@ export async function authRoutes(c) {
     }
     if (p === '/me/notifications' && M === 'GET') {
       const rows = (await env.DB.prepare('SELECT * FROM notifications WHERE customer_id=? ORDER BY id DESC LIMIT 50').bind(me.id).all()).results;
-      const txt = r => { const d = jp(r.payload, {}); return r.template === 'order_received' ? `تم استلام طلبك ${d.code}` : r.template === 'order_status' ? `${d.code}: ${d.text}` : r.template === 'welcome' ? 'أهلاً بك في لاسي 🌸' : r.template === 'chat_reply' ? `${d.name}: ${d.text}` : d.text || ''; };
-      return J({ items: rows.filter(r => r.template !== 'otp').map(r => ({ t: r.created_at, text: txt(r), tpl: r.template })) });
+      const txt = r => { const d = jp(r.payload, {}); return r.template === 'order_received' ? `تم استلام طلبك ${d.code}` : r.template === 'order_status' ? `${d.code}: ${d.text}` : r.template === 'welcome' ? 'أهلاً بك في لاسي 🌸' : r.template === 'chat_reply' ? String(d.text || '') : d.text || ''; };
+      const href = r => { const d = jp(r.payload, {}); return (r.template === 'order_received' || r.template === 'order_status') && /^LC-[A-Z0-9]{6}$/.test(String(d.code || '')) ? '/tracking?c=' + d.code : r.template === 'chat_reply' ? (d.dept === 'routine' ? '/routine/support' : '/help/chat') : ''; };
+      return J({ items: rows.filter(r => r.template !== 'otp').map(r => ({ id: r.id, t: r.created_at, text: txt(r), tpl: r.template, href: href(r) })) });
     }
   }
   return null;

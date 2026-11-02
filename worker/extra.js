@@ -206,6 +206,8 @@ export async function extraRoutes(c) {
       env.DB.prepare('INSERT INTO reviews(chat_id,customer_id,rating,comment,at,staff_id) VALUES(?,?,?,?,?,?)').bind(ch.id, ch.customer_id, r, String(b.comment || '').slice(0, 500), now(), ch.assigned_to || null),
       env.DB.prepare("UPDATE chats SET status='closed',closed_at=COALESCE(closed_at,?) WHERE id=?").bind(now(), ch.id),
     ]);
+    /* بعد إنهاء المحادثة وتقييمها تُحذف إشعارات الردود الخاصة بها (والقديمة بلا معرّف ضمن مدة المحادثة) */
+    if (ch.customer_id) await env.DB.prepare("DELETE FROM notifications WHERE customer_id=? AND template='chat_reply' AND (json_extract(payload,'$.chat')=? OR (json_extract(payload,'$.chat') IS NULL AND created_at>=?))").bind(ch.customer_id, ch.id, ch.created_at || 0).run();
     return J({ ok: true });
   }
 
@@ -312,7 +314,7 @@ export async function extraRoutes(c) {
     await addMsg(ch.id, op.admin ? 'admin' : 'staff', text, op.name);
     if (ch.channel === 'support') {
       await env.DB.prepare("UPDATE chats SET mode='human',status='open',assigned_to=COALESCE(assigned_to,?),staff_typing_at=0,staff_seen_at=? WHERE id=?").bind(op.admin ? null : op.id, now(), ch.id).run();
-      await env.DB.prepare("INSERT INTO notifications(customer_id,phone,channel,template,payload,status,created_at) VALUES(?,?,'inapp','chat_reply',?,'sent',?)").bind(ch.customer_id, ch.phone || null, JSON.stringify({ text: 'رد جديد من ' + op.name + ': ' + text.slice(0, 80) }), now()).run();
+      await env.DB.prepare("INSERT INTO notifications(customer_id,phone,channel,template,payload,status,created_at) VALUES(?,?,'inapp','chat_reply',?,'sent',?)").bind(ch.customer_id, ch.phone || null, JSON.stringify({ text: 'رد جديد من ' + op.name + ': ' + text.slice(0, 80), chat: ch.id, dept: ch.dept || 'service' }), now()).run();
     }
     return J({ ok: true });
   }

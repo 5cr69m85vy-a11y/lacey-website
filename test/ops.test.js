@@ -70,6 +70,19 @@ const authFor = require('./sess');
     assert.strictEqual((await get('/adm/turnover', adm)).sold_units, baseU);
     await post('/adm/stock', { items: [{ code: 'A1', qty: null }, { code: 'A2', qty: null }] }, adm);
   });
+  await ok('notifications: order → link to tracking; staff reply → link to its department chat, no "undefined"; deleted after the chat is closed and rated', async () => {
+    await post('/adm/stock', { items: [] }, adm);
+    assert.strictEqual((await post('/order', order('LC-NTF001', [{ c: 'A1', q: 1 }]), H)).status, 200);
+    const nts = async () => (await (await call('/me/notifications', { headers: H })).json()).items;
+    const o = (await nts()).find(n => /LC-NTF001/.test(n.text)); assert(o && o.href === '/tracking?c=LC-NTF001', JSON.stringify(o));
+    const s = await (await post('/chat/send', { text: 'سؤال', dept: 'routine', name: 'Ali' }, H)).json();
+    const ch = (await get('/adm/chats?channel=support', adm)).chats.find(c => c.dept === 'routine');
+    assert.strictEqual((await post('/adm/chat/reply', { id: ch.id, text: 'أهلاً' }, adm)).status, 200);
+    const r = (await nts()).find(n => n.tpl === 'chat_reply'); assert(r && r.href === '/routine/support' && !/undefined/.test(r.text) && /أهلاً/.test(r.text), JSON.stringify(r));
+    await post('/adm/chat/close', { id: ch.id }, adm); await post('/chat/rate', { token: s.token, dept: 'routine', rating: 5 }, H);
+    assert(!(await nts()).some(n => n.tpl === 'chat_reply'), 'chat_reply notifications removed after rating');
+    assert((await nts()).some(n => /LC-NTF001/.test(n.text)), 'order notification stays');
+  });
   await ok('delivery: Al-Waseet — connection test, regions guess, send creates the shipment, status refresh marks it delivered', async () => {
     await post('/adm/integrations', { DLV_PROVIDER: 'waseet', DLV_USER: 'shop', DLV_PASS: 'pw123' }, adm);
     const t = await (await post('/adm/delivery/test', {}, adm)).json(); assert.strictEqual(t.ok, true); assert(/2/.test(t.msg));
