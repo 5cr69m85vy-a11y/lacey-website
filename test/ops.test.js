@@ -83,6 +83,19 @@ const authFor = require('./sess');
     assert(!(await nts()).some(n => n.tpl === 'chat_reply'), 'chat_reply notifications removed after rating');
     assert((await nts()).some(n => /LC-NTF001/.test(n.text)), 'order notification stays');
   });
+  await ok('notifications: unread count, mark read (one / all), hide (one / all) — only for the owner; kinds and titles', async () => {
+    const list = async () => (await call('/me/notifications', { headers: H })).json();
+    assert.strictEqual((await post('/order', order('LC-NTF002', [{ c: 'A1', q: 1 }]), H)).status, 200);
+    let j = await list(); assert(j.unread >= 1 && j.items[0].kind === 'order' && j.items[0].title === 'تم استلام طلبك' && j.items[0].unread === true);
+    const id = j.items[0].id; assert.strictEqual((await post('/me/notifications/read', { id }, H)).status, 200);
+    j = await list(); assert.strictEqual(j.items.find(x => x.id === id).unread, false);
+    assert.strictEqual((await post('/me/notifications/read', { id })).status, 401);
+    const other = await authFor(env, '07701110002'); await post('/me/notifications/hide', { id }, other); assert((await list()).items.some(x => x.id === id), 'other user cannot hide mine');
+    await post('/me/notifications/hide', { id }, H); assert(!(await list()).items.some(x => x.id === id));
+    await post('/me/notifications/read', { all: true }, H); assert.strictEqual((await list()).unread, 0);
+    await post('/me/notifications/hide', { all: true }, H); assert.strictEqual((await list()).items.length, 0);
+    assert(env.DB.raw.prepare("select count(*) n from notifications where template='order_received' and status='queued'").get().n >= 1, 'whatsapp queue untouched');
+  });
   await ok('delivery: Al-Waseet — connection test, regions guess, send creates the shipment, status refresh marks it delivered', async () => {
     await post('/adm/integrations', { DLV_PROVIDER: 'waseet', DLV_USER: 'shop', DLV_PASS: 'pw123' }, adm);
     const t = await (await post('/adm/delivery/test', {}, adm)).json(); assert.strictEqual(t.ok, true); assert(/2/.test(t.msg));

@@ -9,7 +9,7 @@
   try { me = JSON.parse(ls.get('lc_me') || 'null') } catch (e) {}
   window.custAuth = () => tok ? { Authorization: 'Bearer ' + tok } : {};
   /* أيقونات خطية موحّدة بدل الإيموجي */
-  const ICO = {'headset': '<path d="M4 14v-2a8 8 0 0116 0v2"/><rect x="3" y="14" width="4" height="6" rx="1.5"/><rect x="17" y="14" width="4" height="6" rx="1.5"/><path d="M19 20c0 1.5-2 2-5 2"/>', 'flower': '<circle cx="12" cy="12" r="2.5"/><path d="M12 9.5C12 6 13 3 12 3s-0 3-0 6.5M12 14.5c0 3.500 1 6.500 0 6.500s0-3 0-6.500M9.500 12C6 12 3 11 3 12s3 0 6.500 0M14.500 12c3.500 0 6.500-1 6.500 0s-3 0-6.500 0"/>', 'box': '<path d="M3 7l9-4 9 4v10l-9 4-9-4z"/><path d="M3 7l9 4 9-4M12 11v10"/>', 'gear': '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.900 4.900l2.100 2.100M17 17l2.100 2.100M4.900 19.100L7 17M17 7l2.100-2.100"/>', 'receipt': '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/>', 'flask': '<path d="M9 3h6M10 3v6l-5 9a2 2 0 002 3h10a2 2 0 002-3l-5-9V3"/><path d="M7.500 15h9"/>', 'scale': '<path d="M12 4v16M6 20h12M5 7h14"/><path d="M5 7l-3 7a3 3 0 006 0zM19 7l-3 7a3 3 0 006 0z"/>', 'list': '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M9 11l2 2 4-4M9 17h6"/>', 'sun': '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.500 1.500M17.500 17.500L19 19M5 19l1.500-1.500M17.500 6.500L19 5"/>', 'moon': '<path d="M20 14.500A8 8 0 019.500 4 8 8 0 1020 14.500z"/>', 'flame': '<path d="M12 22c4 0 7-2.500 7-7 0-3-2-5-3-7-1 2-2 2.500-3 2 0-3-1-6-3-8 0 4-5 6-5 12 0 4.500 3 8 7 8z"/>', 'warn': '<path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18v.5"/>', 'check': '<circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/>'};
+  const ICO = {'tag': '<path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.500" cy="8.500" r="1.200"/>', 'trash': '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>', 'tickall': '<path d="M3 12l4 4 8-9M12 16l1 1 8-9"/>', 'headset': '<path d="M4 14v-2a8 8 0 0116 0v2"/><rect x="3" y="14" width="4" height="6" rx="1.5"/><rect x="17" y="14" width="4" height="6" rx="1.5"/><path d="M19 20c0 1.5-2 2-5 2"/>', 'flower': '<circle cx="12" cy="12" r="2.5"/><path d="M12 9.5C12 6 13 3 12 3s-0 3-0 6.5M12 14.5c0 3.500 1 6.500 0 6.500s0-3 0-6.500M9.500 12C6 12 3 11 3 12s3 0 6.500 0M14.500 12c3.500 0 6.500-1 6.500 0s-3 0-6.500 0"/>', 'box': '<path d="M3 7l9-4 9 4v10l-9 4-9-4z"/><path d="M3 7l9 4 9-4M12 11v10"/>', 'gear': '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.900 4.900l2.100 2.100M17 17l2.100 2.100M4.900 19.100L7 17M17 7l2.100-2.100"/>', 'receipt': '<path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/>', 'flask': '<path d="M9 3h6M10 3v6l-5 9a2 2 0 002 3h10a2 2 0 002-3l-5-9V3"/><path d="M7.500 15h9"/>', 'scale': '<path d="M12 4v16M6 20h12M5 7h14"/><path d="M5 7l-3 7a3 3 0 006 0zM19 7l-3 7a3 3 0 006 0z"/>', 'list': '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1M9 11l2 2 4-4M9 17h6"/>', 'sun': '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.500 1.500M17.500 17.500L19 19M5 19l1.500-1.500M17.500 6.500L19 5"/>', 'moon': '<path d="M20 14.500A8 8 0 019.500 4 8 8 0 1020 14.500z"/>', 'flame': '<path d="M12 22c4 0 7-2.500 7-7 0-3-2-5-3-7-1 2-2 2.500-3 2 0-3-1-6-3-8 0 4-5 6-5 12 0 4.500 3 8 7 8z"/>', 'warn': '<path d="M12 3l10 18H2z"/><path d="M12 10v5M12 18v.5"/>', 'check': '<circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/>'};
   window.lcIco = (n, c) => `<svg class="ico ${c || ''}" viewBox="0 0 24 24" aria-hidden="true">${ICO[n] || ''}</svg>`;
   window.custMe = () => me;
   window.accountRefresh = () => refresh();
@@ -54,7 +54,7 @@
   bell.innerHTML = '<svg class="ic" viewBox="0 0 24 24"><path d="M6 17V11a6 6 0 0112 0v6l2 2H4z"/><path d="M10 21h4"/></svg><i id="belln">0</i>'; hb.parentNode.insertBefore(bell, hb);
   bell.addEventListener('click', () => { window.lcNav ? lcNav('/account/alerts') : open('n'); });
   let bellSeen = +ls.get('lc_bell') || 0;
-  function bellDraw(items) { bell.style.display = me ? '' : 'none'; if (!me) return; const n = (items || []).filter(i => i.t > bellSeen).length, b = document.getElementById('belln'); if (b) { b.textContent = n > 9 ? '9+' : n; b.style.display = n ? 'flex' : 'none'; } }
+  function bellDraw(items) { bell.style.display = me ? '' : 'none'; if (!me) return; const n = (items || []).filter(i => i.unread).length, b = document.getElementById('belln'); if (b) { b.textContent = n > 9 ? '9+' : n; b.style.display = n ? 'flex' : 'none'; } }
   window.bellDraw = bellDraw;
   const body = () => document.getElementById('acb');
   const open = t => { if (t) tab = t; ov.classList.add('on'); draw(); if (me) refresh(); };
@@ -69,6 +69,11 @@
     const el = e.target.closest('[data-x]'); if (!el) return;
     const x = el.dataset.x, v = el.dataset.v;
     if (x === 'close') return close();
+    if (x === 'nf') { nFilter = v; return drawNotifs(); }
+    if (x === 'nread') { nItems.forEach(n => n.unread = false); drawNotifs(); bellDraw(nItems); return nAct('/me/notifications/read', { all: true }); }
+    if (x === 'nclear') { nItems = []; drawNotifs(); bellDraw(nItems); return nAct('/me/notifications/hide', { all: true }); }
+    if (x === 'ndel') { const id = +el.dataset.id; nItems = nItems.filter(n => n.id !== id); drawNotifs(); bellDraw(nItems); return nAct('/me/notifications/hide', { id }); }
+    if (x === 'nopen') { const id = +el.dataset.id, n = nItems.find(z => z.id === id), href = el.dataset.href; if (n && n.unread) { n.unread = false; bellDraw(nItems); nAct('/me/notifications/read', { id }); } if (href) { if (window.lcNav) lcNav(href); } else drawNotifs(); return; }
     if (x === 'mode') { mode = v; step = 0; return draw(); }
     if (x === 'sub') { sub = v; return draw(); }
     if (x === 'tab') { tab = v; draw(); if (window.lcUrl) lcUrl('/account' + (SLUG[v] ? '/' + SLUG[v] : '')); return load(); }
@@ -124,6 +129,21 @@
     : `<form id="af-ph" class="ph"><p>${T('اربط رقم واتساب لتصلك إشعارات الطلب', 'Link your WhatsApp number for order updates')}</p><input name="ph" type="tel" inputmode="numeric" maxlength="11" placeholder="07XXXXXXXXX" required><button class="btn">${T('إرسال الرمز', 'Send code')}</button>${err}</form>`;
   const ST = ['ملغى', 'تم الاستلام', 'تم التأكيد', 'تم الشحن', 'في الطريق', 'تم التوصيل'], STE = ['Cancelled', 'Received', 'Confirmed', 'Shipped', 'On the way', 'Delivered'];
   const dt = t => new Date(t).toLocaleString(lang == 'en' ? 'en-GB' : 'ar-IQ', { dateStyle: 'medium', timeStyle: 'short' });
+  /* ---------- مركز الإشعارات ---------- */
+  let nItems = [], nFilter = 'all';
+  const NK = { order: ['box', 'طلباتي', 'Orders', '#2e7d8a'], support: ['headset', 'الدعم', 'Support', '#7a3fb0'], promo: ['tag', 'العروض', 'Offers', '#c2185b'], system: ['flower', 'عام', 'General', '#6b8a8a'] };
+  const ago = t => { const m = Math.floor((Date.now() - t) / 6e4); return m < 1 ? T('الآن', 'Just now') : m < 60 ? T('قبل ' + m + ' د', m + ' min ago') : m < 1440 ? T('قبل ' + Math.floor(m / 60) + ' ساعة', Math.floor(m / 60) + ' h ago') : new Date(t).toLocaleTimeString(lang == 'en' ? 'en-GB' : 'ar-IQ', { hour: '2-digit', minute: '2-digit' }); };
+  const dayLabel = t => { const d = new Date(t), n = new Date(), k = x => x.toDateString(), y = new Date(Date.now() - 864e5); return k(d) === k(n) ? T('اليوم', 'Today') : k(d) === k(y) ? T('أمس', 'Yesterday') : d.toLocaleDateString(lang == 'en' ? 'en-GB' : 'ar-IQ', { dateStyle: 'medium' }); };
+  function drawNotifs(el) {
+    el = el || document.getElementById('acl'); if (!el || tab != 'n') return;
+    const un = nItems.filter(x => x.unread).length, L = nItems.filter(x => nFilter === 'all' ? true : nFilter === 'unread' ? x.unread : x.kind === nFilter);
+    const chips = [['all', T('الكل', 'All')], ['unread', T('غير المقروء', 'Unread') + (un ? ' (' + un + ')' : '')], ['order', T('الطلبات', 'Orders')], ['support', T('الدعم', 'Support')], ['promo', T('العروض', 'Offers')]];
+    let last = '', body = '';
+    L.forEach(n => { const g = dayLabel(n.t); if (g !== last) { last = g; body += `<h4 class="nt-day">${E(g)}</h4>`; } const k = NK[n.kind] || NK.system;
+      body += `<div class="nt ${n.unread ? 'un' : ''}" data-x="nopen" data-id="${n.id}" data-href="${E(n.href || '')}" role="${n.href ? 'link' : 'article'}" tabindex="0"><span class="nt-i" style="--c:${k[3]}">${lcIco(k[0])}</span><div class="nt-b"><div class="nt-h"><b>${E(n.title)}</b><small>${ago(n.t)}</small></div>${n.text ? `<p>${E(n.text)}</p>` : ''}<div class="nt-f"><span class="nt-k" style="--c:${k[3]}">${T(k[1], k[2])}</span>${n.href ? `<span class="nt-go">${T('افتحي', 'Open')} ›</span>` : ''}</div></div>${n.unread ? '<i class="nt-d"></i>' : ''}<button type="button" class="nt-x" data-x="ndel" data-id="${n.id}" aria-label="${T('حذف', 'Delete')}">${lcIco('trash')}</button></div>`; });
+    el.innerHTML = `<div class="nt-bar"><div class="nt-chips">${chips.map(([k, n]) => `<button type="button" data-x="nf" data-v="${k}" class="${nFilter === k ? 'on' : ''}">${n}</button>`).join('')}</div>${nItems.length ? `<div class="nt-acts"><button type="button" data-x="nread" ${un ? '' : 'disabled'}>${lcIco('tickall')} ${T('قراءة الكل', 'Mark all read')}</button><button type="button" data-x="nclear">${lcIco('trash')} ${T('مسح الكل', 'Clear all')}</button></div>` : ''}</div>${body || `<p class="em nt-empty">${lcIco('flower')}<br>${nItems.length ? T('لا إشعارات في هذا التصنيف', 'Nothing in this filter') : T('لا إشعارات بعد — سنخبرك عند أي تحديث على طلباتك أو ردود الدعم.', 'No notifications yet — we will tell you about orders and support replies.')}</p>`}`;
+  }
+  async function nAct(path, body) { try { await call(path, body); } catch (e) {} }
   async function load() {
     const el = document.getElementById('acl'); if (!el || !me) return;
     try {
@@ -134,9 +154,8 @@
         const j = await call('/me/receipts');
         el.innerHTML = j.receipts.length ? j.receipts.map(r => `<div class="aco"><div><b>${E(r.number)}</b> · ${E(r.code)}</div><small>${dt(r.t)}</small>${(r.items || []).map(i => `<div class="ai">${i.q}× ${E(i.n)} — ${num(i.p * i.q)}</div>`).join('')}<div class="ai">${T('الخصم', 'Discount')}: ${num(r.discount)} · <b>${T('المجموع', 'Total')}: ${num(r.total)}</b></div><div class="ai">${E(r.name || '')} — ${E(r.addr || '')}</div></div>`).join('') : `<p class="em">${T('تصدر الإيصالات بعد تأكيد الطلب', 'Receipts are issued once an order is confirmed')}</p>`;
       } else if (tab == 'n') {
-        const j = await call('/me/notifications');
-        el.innerHTML = j.items.length ? j.items.map(n => n.href ? `<a class="aco ln" href="${E(n.href)}"><div>${E(n.text)}</div><small>${dt(n.t)} · ${T('افتحي', 'Open')} ›</small></a>` : `<div class="aco"><div>${E(n.text)}</div><small>${dt(n.t)}</small></div>`).join('') : `<p class="em">${T('لا إشعارات', 'No notifications')}</p>`;
-        if (j.items[0]) { lastN = Math.max(lastN, j.items[0].t); ls.set('lc_ln', lastN); bellSeen = Date.now(); ls.set('lc_bell', String(bellSeen)); bellDraw([]); }
+        const j = await call('/me/notifications'); nItems = j.items; drawNotifs(el); bellDraw(nItems);
+        if (nItems[0]) { lastN = Math.max(lastN, nItems[0].t); ls.set('lc_ln', lastN); }
       }
     } catch (x) { el.innerHTML = `<p class="em">${E(x.message)}</p>`; }
   }
@@ -155,9 +174,9 @@
     if (!tok) return;
     try {
       const j = await call('/me/notifications');
-      bellDraw(j.items);
-      const fresh = j.items.filter(n => n.t > lastN && (n.tpl === 'order_status' || n.tpl === 'chat_reply'));
-      if (lastN && fresh.length) toast(fresh[0].text);
+      nItems = j.items; bellDraw(j.items); if (tab == 'n' && document.getElementById('acl')) drawNotifs();
+      const fresh = j.items.filter(n => n.t > lastN && n.unread && (n.tpl === 'order_status' || n.tpl === 'chat_reply'));
+      if (lastN && fresh.length) toast(fresh[0].title + (fresh[0].text ? ' — ' + fresh[0].text : ''));
       if (j.items[0]) { lastN = Math.max(lastN, j.items[0].t); ls.set('lc_ln', lastN); }
     } catch (e) {}
   }

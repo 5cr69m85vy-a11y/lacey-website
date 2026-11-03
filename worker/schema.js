@@ -43,5 +43,9 @@ export const MIGRATIONS = [
  [
   "0011_diary.sql",
   "-- 0011: يوميات البشرة تُحفظ في حساب الزبونة\nALTER TABLE customers ADD COLUMN diary TEXT NOT NULL DEFAULT '';\n"
+ ],
+ [
+  "0012_notif_state.sql",
+  "-- 0012: حالة الإشعار عند الزبونة (مقروء / مخفي) دون المساس بطابور واتساب\nALTER TABLE notifications ADD COLUMN read_at INTEGER;\nALTER TABLE notifications ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0;\n"
  ]
 ];

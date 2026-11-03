@@ -230,10 +230,34 @@ export async function authRoutes(c) {
       return J({ receipts: rows.map(r => ({ number: r.number, code: r.order_code, t: r.issued_at, ...jp(r.data, {}) })) });
     }
     if (p === '/me/notifications' && M === 'GET') {
-      const rows = (await env.DB.prepare('SELECT * FROM notifications WHERE customer_id=? ORDER BY id DESC LIMIT 50').bind(me.id).all()).results;
-      const txt = r => { const d = jp(r.payload, {}); return r.template === 'order_received' ? `تم استلام طلبك ${d.code}` : r.template === 'order_status' ? `${d.code}: ${d.text}` : r.template === 'welcome' ? 'أهلاً بك في لاسي 🌸' : r.template === 'chat_reply' ? String(d.text || '') : d.text || ''; };
-      const href = r => { const d = jp(r.payload, {}); return (r.template === 'order_received' || r.template === 'order_status') && /^LC-[A-Z0-9]{6}$/.test(String(d.code || '')) ? '/tracking?c=' + d.code : r.template === 'chat_reply' ? (d.dept === 'routine' ? '/routine/support' : '/help/chat') : ''; };
-      return J({ items: rows.filter(r => r.template !== 'otp').map(r => ({ id: r.id, t: r.created_at, text: txt(r), tpl: r.template, href: href(r) })) });
+      const rows = (await env.DB.prepare("SELECT * FROM notifications WHERE customer_id=? AND hidden=0 AND template!='otp' ORDER BY id DESC LIMIT 60").bind(me.id).all()).results;
+      const DN = { routine: 'دعم روتين', service: 'خدمة الزبائن' };
+      const view = r => {
+        const d = jp(r.payload, {}), code = /^LC-[A-Z0-9]{6}$/.test(String(d.code || '')) ? d.code : '';
+        const o = { id: r.id, t: r.created_at, tpl: r.template, unread: !r.read_at, href: '', kind: 'system', title: '', text: '' };
+        if (r.template === 'order_received') { o.kind = 'order'; o.title = 'تم استلام طلبك'; o.text = 'طلبك ' + code + ' وصلنا وسنؤكده قريباً'; }
+        else if (r.template === 'order_status') { o.kind = 'order'; o.title = String(d.text || 'تحديث على طلبك'); o.text = 'الطلب ' + code; }
+        else if (r.template === 'chat_reply') { o.kind = 'support'; const m = /^رد جديد من (.*?): ([\s\S]*)$/.exec(String(d.text || '')); o.title = (DN[d.dept] || 'الدعم') + (m ? ' · ' + m[1] : ''); o.text = m ? m[2] : String(d.text || ''); o.href = d.dept === 'routine' ? '/routine/support' : '/help/chat'; }
+        else if (r.template === 'promo') { o.kind = 'promo'; o.title = 'عرض خاص لكِ'; o.text = String(d.text || ''); }
+        else if (r.template === 'welcome') { o.title = 'أهلاً بك في لاسي 🌸'; o.text = 'نتمنى لكِ تجربة جميلة معنا'; }
+        else { o.title = String(d.text || ''); }
+        if (o.kind === 'order' && code) o.href = '/tracking?c=' + code;
+        return o;
+      };
+      const items = rows.map(view);
+      return J({ items, unread: items.filter(x => x.unread).length });
+    }
+    if (p === '/me/notifications/read' && M === 'POST') {
+      const b = await body();
+      if (b.all) await env.DB.prepare('UPDATE notifications SET read_at=? WHERE customer_id=? AND read_at IS NULL').bind(now(), me.id).run();
+      else if (+b.id) await env.DB.prepare('UPDATE notifications SET read_at=COALESCE(read_at,?) WHERE id=? AND customer_id=?').bind(now(), +b.id, me.id).run();
+      return J({ ok: true });
+    }
+    if (p === '/me/notifications/hide' && M === 'POST') {
+      const b = await body();
+      if (b.all) await env.DB.prepare('UPDATE notifications SET hidden=1,read_at=COALESCE(read_at,?) WHERE customer_id=?').bind(now(), me.id).run();
+      else if (+b.id) await env.DB.prepare('UPDATE notifications SET hidden=1,read_at=COALESCE(read_at,?) WHERE id=? AND customer_id=?').bind(now(), +b.id, me.id).run();
+      return J({ ok: true });
     }
   }
   return null;
