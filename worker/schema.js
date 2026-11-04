@@ -47,5 +47,9 @@ export const MIGRATIONS = [
  [
   "0012_notif_state.sql",
   "-- 0012: حالة الإشعار عند الزبونة (مقروء / مخفي) دون المساس بطابور واتساب\nALTER TABLE notifications ADD COLUMN read_at INTEGER;\nALTER TABLE notifications ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0;\n"
+ ],
+ [
+  "0013_order_hide.sql",
+  "-- 0013: إخفاء الطلبات الملغاة من قائمة الزبونة (لا يُحذف الطلب من النظام)\nALTER TABLE orders ADD COLUMN cust_hidden INTEGER NOT NULL DEFAULT 0;\n"
  ]
 ];

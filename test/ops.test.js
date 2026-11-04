@@ -96,6 +96,16 @@ const authFor = require('./sess');
     await post('/me/notifications/hide', { all: true }, H); assert.strictEqual((await list()).items.length, 0);
     assert(env.DB.raw.prepare("select count(*) n from notifications where template='order_received' and status='queued'").get().n >= 1, 'whatsapp queue untouched');
   });
+  await ok('customer can remove cancelled orders from her list (active orders cannot be hidden; the order stays in the system)', async () => {
+    const orders = async () => (await (await call('/me/orders', { headers: H })).json()).orders;
+    assert.strictEqual((await post('/order', order('LC-HID001', [{ c: 'A1', q: 1 }]), H)).status, 200); assert.strictEqual((await post('/order', order('LC-HID002', [{ c: 'A1', q: 1 }]), H)).status, 200);
+    await post('/order/cancel', { code: 'LC-HID001', ph: '07701110001' }, H);
+    await post('/me/orders/hide', { code: 'LC-HID002' }, H); assert((await orders()).some(o => o.code === 'LC-HID002'), 'active order stays');
+    assert.strictEqual((await post('/me/orders/hide', { code: 'LC-HID001' })).status, 401);
+    await post('/me/orders/hide', { code: 'LC-HID001' }, H); const l = await orders(); assert(!l.some(o => o.code === 'LC-HID001') && l.some(o => o.code === 'LC-HID002'));
+    assert.strictEqual(env.DB.raw.prepare("select count(*) n from orders where code='LC-HID001'").get().n, 1);
+    await post('/me/orders/hide', { all: true }, H); assert(!(await orders()).some(o => o.s === 0));
+  });
   await ok('delivery: Al-Waseet — connection test, regions guess, send creates the shipment, status refresh marks it delivered', async () => {
     await post('/adm/integrations', { DLV_PROVIDER: 'waseet', DLV_USER: 'shop', DLV_PASS: 'pw123' }, adm);
     const t = await (await post('/adm/delivery/test', {}, adm)).json(); assert.strictEqual(t.ok, true); assert(/2/.test(t.msg));

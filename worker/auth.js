@@ -222,8 +222,14 @@ export async function authRoutes(c) {
       return J({ ok: true });
     }
     if (p === '/me/orders' && M === 'GET') {
-      const rows = (await env.DB.prepare('SELECT o.*, r.number rnum FROM orders o LEFT JOIN receipts r ON r.order_code=o.code WHERE o.customer_id=? ORDER BY o.created_at DESC LIMIT 100').bind(me.id).all()).results;
+      const rows = (await env.DB.prepare('SELECT o.*, r.number rnum FROM orders o LEFT JOIN receipts r ON r.order_code=o.code WHERE o.customer_id=? AND o.cust_hidden=0 ORDER BY o.created_at DESC LIMIT 100').bind(me.id).all()).results;
       return J({ orders: rows.map(o => ({ code: o.code, id: o.id, s: o.status, total: o.total, discount: o.discount, pay: o.pay_method, t: o.created_at, items: jp(o.items, []), receipt: o.rnum || '' })) });
+    }
+    if (p === '/me/orders/hide' && M === 'POST') {
+      const b = await body();   /* لا يُخفى إلا الطلب الملغى */
+      if (b.all) await env.DB.prepare('UPDATE orders SET cust_hidden=1 WHERE customer_id=? AND status=0').bind(me.id).run();
+      else await env.DB.prepare('UPDATE orders SET cust_hidden=1 WHERE customer_id=? AND code=? AND status=0').bind(me.id, String(b.code || '')).run();
+      return J({ ok: true });
     }
     if (p === '/me/receipts' && M === 'GET') {
       const rows = (await env.DB.prepare('SELECT r.* FROM receipts r JOIN orders o ON o.code=r.order_code WHERE o.customer_id=? ORDER BY r.issued_at DESC LIMIT 100').bind(me.id).all()).results;

@@ -69,6 +69,7 @@
     const el = e.target.closest('[data-x]'); if (!el) return;
     const x = el.dataset.x, v = el.dataset.v;
     if (x === 'close') return close();
+    if (x === 'ohide') { const all = v === '*'; oItems = oItems.filter(o => all ? o.s !== 0 : o.code !== v); drawOrders(); metaDraw(); return nAct('/me/orders/hide', all ? { all: true } : { code: v }); }
     if (x === 'of') { oFilter = v; return drawOrders(); }
     if (x === 'rcopy') { try { await navigator.clipboard.writeText(v); toast(T('تم النسخ', 'Copied')); } catch (e) { toast(v); } return; }
     if (x === 'rprint') { const card = el.closest('.rcp'); if (card) { card.classList.add('prn'); document.body.classList.add('prn-one'); setTimeout(() => { window.print(); card.classList.remove('prn'); document.body.classList.remove('prn-one'); }, 50); } return; }
@@ -140,15 +141,15 @@
   const prodOf = code => (typeof S !== 'undefined' && S.P || []).find(p => String(p.c) === String(code));
   function drawOrders(el) {
     el = el || document.getElementById('acl'); if (!el || tab != 'o') return;
-    const act = o => o.s >= 1 && o.s <= 4, L = oItems.filter(o => oFilter === 'all' ? true : oFilter === 'active' ? act(o) : oFilter === 'done' ? o.s === 5 : o.s === 0);
-    const chips = [['all', T('الكل', 'All'), oItems.length], ['active', T('جارية', 'In progress'), oItems.filter(act).length], ['done', T('مكتملة', 'Delivered'), oItems.filter(o => o.s === 5).length], ['cancel', T('ملغاة', 'Cancelled'), oItems.filter(o => o.s === 0).length]];
-    el.innerHTML = `<div class="nt-chips" style="margin-bottom:10px">${chips.map(([k, n, v]) => `<button type="button" data-x="of" data-v="${k}" class="${oFilter === k ? 'on' : ''}">${n}${v ? ' (' + v + ')' : ''}</button>`).join('')}</div>` + (L.length ? L.map(o => {
+    const live = oItems.filter(o => o.s !== 0), act = o => o.s >= 1 && o.s <= 4, L = oItems.filter(o => oFilter === 'all' ? o.s !== 0 : oFilter === 'active' ? act(o) : oFilter === 'done' ? o.s === 5 : o.s === 0);
+    const chips = [['all', T('الكل', 'All'), live.length], ['active', T('جارية', 'In progress'), oItems.filter(act).length], ['done', T('مكتملة', 'Delivered'), oItems.filter(o => o.s === 5).length], ['cancel', T('ملغاة', 'Cancelled'), oItems.filter(o => o.s === 0).length]];
+    el.innerHTML = `<div class="nt-chips" style="margin-bottom:10px">${chips.map(([k, n, v]) => `<button type="button" data-x="of" data-v="${k}" class="${oFilter === k ? 'on' : ''}">${n}${v ? ' (' + v + ')' : ''}</button>`).join('')}</div>` + (oFilter === 'cancel' && L.length > 1 ? `<div class="nt-acts" style="margin-bottom:8px"><button type="button" data-x="ohide" data-v="*">${lcIco('trash')} ${T('حذف كل الملغاة', 'Remove all cancelled')}</button></div>` : '') + (L.length ? L.map(o => {
       const pct = o.s === 0 ? 0 : Math.round((Math.min(o.s, 5) - 1) / 4 * 100), ths = o.items.slice(0, 4).map(i => { const p = prodOf(i.c); return `<i class="od-th" style="${p && p.i ? `background-image:url('${E(p.i)}')` : ''}"></i>`; }).join(''), more = o.items.length > 4 ? `<em class="od-m">+${o.items.length - 4}</em>` : '';
       return `<div class="od s${o.s}"><div class="od-h"><div><b>${E(o.code)}</b><small>${dt(o.t)}</small></div><span class="st s${o.s}">${T(ST[o.s], STE[o.s])}</span></div>
         ${o.s === 0 ? `<p class="od-x">${lcIco('warn')} ${T('تم إلغاء هذا الطلب', 'This order was cancelled')}</p>` : `<div class="od-p"><i style="width:${pct}%"></i>${STEPS5.map((s, i) => `<span class="${i < o.s ? 'on' : ''}"><u></u><small>${T(s[0], s[1])}</small></span>`).join('')}</div>`}
         <div class="od-i"><div class="od-ths">${ths}${more}</div><div class="od-n">${o.items.map(i => `<div>${i.q}× ${E(i.n)}${i.cc ? ' (' + E(i.cc) + ')' : ''}</div>`).join('')}</div></div>
         <div class="od-t"><span>${o.pay == 'cod' ? T('دفع عند الاستلام', 'Cash on delivery') : E(o.pay)}${o.discount ? ' · ' + T('خصم', 'Discount') + ' ' + num(o.discount) : ''}</span><b>${num(o.total)} ${T('د.ع', 'IQD')}</b></div>
-        <div class="od-b"><a class="ln" href="/tracking?c=${E(o.code)}">${lcIco('box')} ${T('تتبع', 'Track')}</a><button type="button" class="ln" data-x="reorder" data-v="${E(o.code)}">${T('أعيدي الطلب', 'Order again')}</button>${o.receipt ? `<button type="button" class="ln" data-x="tab" data-v="r">${lcIco('receipt')} ${T('الإيصال', 'Receipt')}</button>` : ''}</div></div>`;
+        <div class="od-b"><a class="ln" href="/tracking?c=${E(o.code)}">${lcIco('box')} ${T('تتبع', 'Track')}</a><button type="button" class="ln" data-x="reorder" data-v="${E(o.code)}">${T('أعيدي الطلب', 'Order again')}</button>${o.s === 0 ? `<button type="button" class="ln od-del" data-x="ohide" data-v="${E(o.code)}">${lcIco('trash')} ${T('حذف من القائمة', 'Remove')}</button>` : ''}${o.receipt ? `<button type="button" class="ln" data-x="tab" data-v="r">${lcIco('receipt')} ${T('الإيصال', 'Receipt')}</button>` : ''}</div></div>`;
     }).join('') : `<p class="em nt-empty">${lcIco('box')}<br>${oItems.length ? T('لا طلبات في هذا التصنيف', 'No orders in this filter') : T('لا توجد طلبات بعد — ابدئي من الصفحة الرئيسية 🌸', 'No orders yet')}</p>`);
   }
   /* ملخص أعلى الصفحة + شارات البلاطات (طلبات جارية، ردود دعم غير مقروءة، إشعارات) */

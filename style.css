@@ -368,3 +368,6 @@ a.aco{color:inherit;text-decoration:none;cursor:pointer}a.aco:hover{border-color
 .rcp{border:1px solid #e5eeee;border-radius:20px;padding:14px;margin-bottom:12px;background:#fff}.rcp-h{display:flex;gap:10px;align-items:center}.rcp-h b{font-size:15px}.rcp-h small{display:block;color:#8aa;font-size:12px}.rcp-i{width:38px;height:38px;border-radius:12px;background:#eaf3f3;display:grid;place-items:center;color:#2e7d8a}
 .rcp-l{margin:10px 0;border-top:1px dashed #dbe7e7;padding-top:8px}.rcp-l div,.rcp-r,.rcp-t{display:flex;justify-content:space-between;gap:8px;font-size:13.5px;color:#456;padding:2px 0}.rcp-t{border-top:1px solid #e5eeee;margin-top:6px;padding-top:8px;font-size:16px}.rcp-t b{color:#2b4a4a}.rcp-a{display:block;color:#8aa;margin-top:6px}.rcp-b{display:flex;gap:8px;margin-top:8px}.rcp-b .ln{background:#eef4f4;border-radius:99px;padding:6px 14px;font-size:13px}
 @media print{body.prn-one *{visibility:hidden}body.prn-one .rcp.prn,body.prn-one .rcp.prn *{visibility:visible}body.prn-one .rcp.prn{position:fixed;inset:0 0 auto 0;border:0}.rcp-b{display:none}}
+
+.act button{position:relative}.act button .tb{position:absolute;top:-7px;inset-inline-end:8px;margin:0;min-width:20px;height:20px;line-height:20px;display:block;text-align:center;box-shadow:0 0 0 2px #fff}
+.od-b .od-del{color:#a14a24;background:#fbefe9}.od-b .od-del .ico{width:15px;height:15px}
