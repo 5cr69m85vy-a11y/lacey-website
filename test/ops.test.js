@@ -106,6 +106,35 @@ const authFor = require('./sess');
     assert.strictEqual(env.DB.raw.prepare("select count(*) n from orders where code='LC-HID001'").get().n, 1);
     await post('/me/orders/hide', { all: true }, H); assert(!(await orders()).some(o => o.s === 0));
   });
+  await ok('reminders: back-in-stock (watch → restock notifies once), abandoned cart (after the delay, once, not after an order), reorder (after ~85% of usage time, once)', async () => {
+    const nts = async () => (await (await call('/me/notifications', { headers: H })).json()).items;
+    const run = async () => (await post('/adm/reminders/run', {}, adm)).json();
+    /* back in stock */
+    await post('/adm/stock', { items: [{ code: 'A1', qty: 0, low: 2 }] }, adm);
+    assert.strictEqual((await post('/me/watch', { code: 'A1' }, H)).status, 200); assert.strictEqual((await post('/me/watch', { code: 'NOPE' }, H)).status, 404);
+    assert.deepStrictEqual((await (await call('/me/watch', { headers: H })).json()).codes, ['A1']);
+    await post('/adm/stock', { items: [{ code: 'A1', qty: 0, low: 2 }] }, adm); assert(!(await nts()).some(n => n.tpl === 'restock'), 'still sold out → no notice');
+    assert.strictEqual((await post('/adm/stock/receive', { code: 'A1', n: 5 }, adm)).status, 200);
+    let rs = (await nts()).filter(n => n.tpl === 'restock'); assert.strictEqual(rs.length, 1); assert(rs[0].href === '/p/A1' && rs[0].kind === 'remind' && /رجع/.test(rs[0].title));
+    await post('/adm/stock/receive', { code: 'A1', n: 1 }, adm); assert.strictEqual((await nts()).filter(n => n.tpl === 'restock').length, 1, 'only once');
+    assert.deepStrictEqual((await (await call('/me/watch', { headers: H })).json()).codes, []);
+    /* abandoned cart */
+    assert.strictEqual((await post('/me/cart', { items: { A1: 2 } }, H)).status, 200); assert.strictEqual((await post('/me/cart', { items: { A1: 2 } })).status, 401);
+    await run(); assert(!(await nts()).some(n => n.tpl === 'cart_reminder'), 'too early');
+    env.DB.raw.prepare('update carts set updated_at=?').run(Date.now() - 4 * 36e5); env.DB.raw.prepare('update orders set created_at=created_at-36000000').run();
+    const r1 = await run(); assert(r1.cart >= 1); let cr = (await nts()).filter(n => n.tpl === 'cart_reminder'); assert.strictEqual(cr.length, 1); assert(cr[0].href === '/cart');
+    await run(); assert.strictEqual((await nts()).filter(n => n.tpl === 'cart_reminder').length, 1, 'once per cart state');
+    await post('/me/cart', { items: {} }, H); assert.strictEqual(env.DB.raw.prepare('select count(*) n from carts').get().n, 0);
+    /* reorder */
+    assert.strictEqual((await post('/order', order('LC-RRO001', [{ c: 'A1', q: 1 }]), H)).status, 200);
+    env.DB.raw.prepare('update orders set created_at=?').run(Date.now() - 100 * 864e5); env.DB.raw.prepare("update orders set status=5,delivered_at=? where code='LC-RRO001'").run(Date.now() - 60 * 864e5);
+    const r2 = await run(); assert(r2.reorder >= 1, JSON.stringify(r2)); const ro = (await nts()).filter(n => n.tpl === 'reorder'); assert.strictEqual(ro.length, 1); assert(ro[0].href === '/p/A1');
+    await run(); assert.strictEqual((await nts()).filter(n => n.tpl === 'reorder').length, 1, 'once');
+    assert.strictEqual((await post('/adm/reminders', { cart: 0, reorder: 0, stock: 0, cartHours: 5 }, adm)).status, 200); assert.strictEqual((await get('/adm/reminders', adm)).cfg.cartHours, 5);
+    assert.strictEqual((await call('/adm/reminders')).status, 401);
+    await post('/adm/reminders', { cart: 1, reorder: 1, stock: 1, cartHours: 3 }, adm);
+    await post('/adm/stock', { items: [{ code: 'A1', qty: null }] }, adm);
+  });
   await ok('delivery: Al-Waseet — connection test, regions guess, send creates the shipment, status refresh marks it delivered', async () => {
     await post('/adm/integrations', { DLV_PROVIDER: 'waseet', DLV_USER: 'shop', DLV_PASS: 'pw123' }, adm);
     const t = await (await post('/adm/delivery/test', {}, adm)).json(); assert.strictEqual(t.ok, true); assert(/2/.test(t.msg));

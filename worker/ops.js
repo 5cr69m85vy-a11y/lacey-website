@@ -2,6 +2,7 @@
 import { J, now, jp, randHex, cfgOf, readIg, resetIg } from './lib.js';
 import { audit, limit } from './guard.js';
 import { eq } from './auth.js';
+import { notifyRestock, remCfg, saveRemCfg, remStats, runReminders } from './remind.js';
 
 /* ================= رسوم التوصيل حسب المحافظة ================= */
 const NRM0 = s => String(s || '').replace(/محافظة|محافظه/g, '').replace(/[\u064B-\u0652ـ]/g, '').replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي').replace(/\s+/g, '').toLowerCase();
@@ -66,6 +67,7 @@ export async function restock(env, code) {
   const need = needMap(jp(o.items, [])), rows = await rowsFor(env, Object.keys(need));
   for (const [c, n] of Object.entries(need)) if (rows[c]) { await env.DB.prepare('UPDATE stock SET qty=qty+?,updated_at=? WHERE code=?').bind(n, now(), c).run(); try { await slog(env, c, n, 'cancel', code, '', rows[c].qty + n).run(); } catch (e) {} }
   await env.DB.prepare('UPDATE orders SET stock_taken=0 WHERE code=?').bind(code).run();
+  for (const c of Object.keys(need)) if (rows[c] && rows[c].qty <= 0) await notifyRestock(env, c);
 }
 export async function stockMap(env) {
   return Object.fromEntries(((await env.DB.prepare('SELECT code,qty,low FROM stock').all()).results || []).map(r => [r.code, r]));
@@ -142,6 +144,7 @@ export async function opsRoutes(c) {
         .bind(code, Math.max(0, Math.min(1e6, Math.floor(+it.qty || 0))), Math.max(0, Math.min(1e5, Math.floor(it.low === undefined ? 5 : +it.low || 0))), t));
     }
     if (st.length) await env.DB.batch(st);
+    for (const it of items) { const code = String(it.code || '').trim(), oq = old[code] ? old[code].qty : null; if (code && it.qty !== null && it.qty !== '' && it.qty !== undefined && oq !== null && oq <= 0 && Math.floor(+it.qty || 0) > 0) await notifyRestock(env, code); }
     await audit(env, request, 'admin', 'stock_save', '', null, { n: st.length });
     return J({ ok: true, n: st.length });
   }
@@ -154,6 +157,7 @@ export async function opsRoutes(c) {
     await env.DB.prepare('INSERT INTO stock(code,qty,low,updated_at) VALUES(?,?,5,?) ON CONFLICT(code) DO UPDATE SET qty=qty+?,updated_at=?').bind(code, n, now(), n, now()).run();
     const r = await env.DB.prepare('SELECT qty FROM stock WHERE code=?').bind(code).first();
     await slog(env, code, n, 'receive', '', String(b.note || '').slice(0, 120), r.qty).run();
+    if (r.qty - n <= 0) await notifyRestock(env, code);
     await audit(env, request, 'admin', 'stock_receive', code, null, { n });
     return J({ ok: true, qty: r.qty });
   }
@@ -177,6 +181,11 @@ export async function opsRoutes(c) {
     });
     return J({ days, target: tgt, items, total_value: items.reduce((a, x) => a + x.value, 0), sold_units: items.reduce((a, x) => a + x.sold, 0) });
   }
+
+  /* ---------- التذكيرات (أدمن) ---------- */
+  if (p === '/adm/reminders' && M === 'GET') { const a = adm(); if (a) return a; return J({ cfg: await remCfg(env), stats: await remStats(env) }); }
+  if (p === '/adm/reminders' && M === 'POST') { const a = adm(); if (a) return a; const cfg = await saveRemCfg(env, await body()); await audit(env, request, 'admin', 'reminders_save', '', null, cfg); return J({ ok: true, cfg }); }
+  if (p === '/adm/reminders/run' && M === 'POST') { const a = adm(); if (a) return a; return J({ ok: true, ...(await runReminders(env)) }); }
 
   /* ---------- شركة التوصيل ---------- */
   if (p === '/adm/delivery/test' && M === 'POST') {

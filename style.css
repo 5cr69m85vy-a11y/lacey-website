@@ -371,3 +371,5 @@ a.aco{color:inherit;text-decoration:none;cursor:pointer}a.aco:hover{border-color
 
 .act button{position:relative}.act button .tb{position:absolute;top:-7px;inset-inline-end:8px;margin:0;min-width:20px;height:20px;line-height:20px;display:block;text-align:center;box-shadow:0 0 0 2px #fff}
 .od-b .od-del{color:#a14a24;background:#fbefe9}.od-b .od-del .ico{width:15px;height:15px}
+
+.wt{margin:8px 0;display:inline-flex;align-items:center;gap:6px}.wt.on{background:#e9f4ee;color:#2e7d54;border-color:#bfe0cc}

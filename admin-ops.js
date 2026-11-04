@@ -6,11 +6,11 @@
   const api = (p, o) => apiJ(p, o);
   const post = (p, b) => api(p, { method: 'POST', body: JSON.stringify(b || {}) });
   const GOV = ['بغداد', 'نينوى', 'أربيل', 'السليمانية', 'دهوك', 'كركوك', 'البصرة', 'النجف', 'كربلاء', 'بابل', 'الأنبار', 'ديالى', 'صلاح الدين', 'واسط', 'ميسان', 'ذي قار', 'المثنى', 'القادسية', 'حلبجة'];
-  const tabs = [['sk', 'المخزون'], ['dl', 'الشحن والتوصيل']];
+  const tabs = [['sk', 'المخزون'], ['dl', 'الشحن والتوصيل'], ['rm', 'التذكيرات']];
   tabs.forEach(t => { if (!TABS.find(x => x[0] === t[0])) TABS.push(t); });
   const G = window.GROUPS || [];
   const grp = (id, k) => { const g = G.find(x => x[0] === id); if (g && !g[2].includes(k)) g[2].push(k); };
-  grp('catalog', 'sk'); grp('settings', 'dl');
+  grp('catalog', 'sk'); grp('settings', 'dl'); grp('settings', 'rm');
 
   /* ---------- المخزون ---------- */
   let stk = [], stF = '';
@@ -71,6 +71,24 @@
 
   /* ---------- الشحن والتوصيل ---------- */
   let ig = null, dlTest = '';
+
+  /* ---------- التذكيرات ---------- */
+  TB.rm = () => { setTimeout(loadRm, 0); return `<div id="rmb"><p class="em">جارٍ التحميل…</p></div>`; };
+  async function loadRm() {
+    const el = document.getElementById('rmb'); if (!el) return; let j;
+    try { j = await api('/adm/reminders'); } catch (e) { el.innerHTML = '<p class="em">تعذّر التحميل — سجّل الدخول أولاً</p>'; return; }
+    const c = j.cfg, s = j.stats;
+    el.innerHTML = `<p class="em">تذكيرات ذكية للزبونة تصل داخل الموقع (وعلى واتساب لمن وافقت على العروض). تعمل تلقائياً كل 30 دقيقة.</p>
+      <div class="kpis" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin:10px 0"><div class="kp"><small>سلات متروكة (آخر 30 يوماً)</small><b>${s.cart}</b></div><div class="kp"><small>تذكير إعادة شراء</small><b>${s.reorder}</b></div><div class="kp"><small>رجع للمخزون</small><b>${s.restock}</b></div><div class="kp"><small>ينتظرون توفر منتج</small><b>${s.watching}</b></div></div>
+      <form id="orm" class="fm"><label class="full"><input type="checkbox" name="cart" ${c.cart ? 'checked' : ''} style="width:auto"> تذكير السلة المتروكة (مرة واحدة لكل سلة، ولا يتكرر قبل 3 أيام)</label>
+      <label>بعد كم ساعة من ترك السلة؟<input name="cartHours" type="number" min="1" max="72" value="${c.cartHours}"></label>
+      <label class="full"><input type="checkbox" name="stock" ${c.stock ? 'checked' : ''} style="width:auto"> «رجع المنتج للمخزون» لمن ضغطت «أعلميني»</label>
+      <label class="full"><input type="checkbox" name="reorder" ${c.reorder ? 'checked' : ''} style="width:auto"> تذكير إعادة الشراء عند اقتراب انتهاء المنتج (بعد ~85% من مدة استهلاكه، وحداً أقصى إشعار واحد أسبوعياً لكل زبونة)</label>
+      <p class="em">مدة استهلاك كل منتج تُحدَّد في نموذج المنتج (حقل «مدة الاستهلاك بالأيام»). بدونها نستخدم: غسول 45، سيروم 40، مرطب 45، واقي شمس 35، قناع 20 يوماً.</p>
+      <button class="btn">حفظ</button> <button type="button" class="btn g" data-a="rmrun">شغّل التذكيرات الآن</button></form>`;
+  }
+  H.orm = async v => { try { await post('/adm/reminders', { cart: !!v.cart, stock: !!v.stock, reorder: !!v.reorder, cartHours: +v.cartHours || 3 }); toast('تم الحفظ'); loadRm(); } catch (e) { toast(e.message); } };
+  A.rmrun = async () => { try { const r = await post('/adm/reminders/run', {}); toast(`أُرسل: سلة ${r.cart}، إعادة شراء ${r.reorder}`); loadRm(); } catch (e) { toast(e.message); } };
   TB.dl = () => { setTimeout(loadDl, 0); return `<div id="dlb"><p class="em">جارٍ التحميل…</p></div>`; };
   async function loadDl() {
     const el = document.getElementById('dlb'); if (!el) return;

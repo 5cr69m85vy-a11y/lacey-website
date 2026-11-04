@@ -165,15 +165,18 @@
     const tn = document.querySelector('.act [data-v="n"]'); if (tn) { let i = tn.querySelector('.tb'); if (un) { if (!i) { i = document.createElement('i'); i.className = 'tb'; tn.appendChild(i); } i.textContent = un > 9 ? '9+' : un; } else if (i) i.remove(); }
     const to = document.querySelector('.act [data-v="o"]'); if (to) { let i = to.querySelector('.tb'); if (act) { if (!i) { i = document.createElement('i'); i.className = 'tb'; to.appendChild(i); } i.textContent = act; } else if (i) i.remove(); }
   }
+  /* مزامنة السلة مع الحساب (لتذكير السلة المتروكة) */
+  let cst = 0;
+  window.cartSync = () => { if (!tok) return; clearTimeout(cst); cst = setTimeout(() => { try { call('/me/cart', { items: typeof cart == 'object' ? cart : {} }).catch(() => {}); } catch (e) {} }, 3500); };
   /* ---------- مركز الإشعارات ---------- */
   let nItems = [], nFilter = 'all';
-  const NK = { order: ['box', 'طلباتي', 'Orders', '#2e7d8a'], support: ['headset', 'الدعم', 'Support', '#7a3fb0'], promo: ['tag', 'العروض', 'Offers', '#c2185b'], system: ['flower', 'عام', 'General', '#6b8a8a'] };
+  const NK = { order: ['box', 'طلباتي', 'Orders', '#2e7d8a'], support: ['headset', 'الدعم', 'Support', '#7a3fb0'], promo: ['tag', 'العروض', 'Offers', '#c2185b'], remind: ['bell', 'تذكير', 'Reminder', '#b7791f'], system: ['flower', 'عام', 'General', '#6b8a8a'] };
   const ago = t => { const m = Math.floor((Date.now() - t) / 6e4); return m < 1 ? T('الآن', 'Just now') : m < 60 ? T('قبل ' + m + ' د', m + ' min ago') : m < 1440 ? T('قبل ' + Math.floor(m / 60) + ' ساعة', Math.floor(m / 60) + ' h ago') : new Date(t).toLocaleTimeString(lang == 'en' ? 'en-GB' : 'ar-IQ', { hour: '2-digit', minute: '2-digit' }); };
   const dayLabel = t => { const d = new Date(t), n = new Date(), k = x => x.toDateString(), y = new Date(Date.now() - 864e5); return k(d) === k(n) ? T('اليوم', 'Today') : k(d) === k(y) ? T('أمس', 'Yesterday') : d.toLocaleDateString(lang == 'en' ? 'en-GB' : 'ar-IQ', { dateStyle: 'medium' }); };
   function drawNotifs(el) {
     el = el || document.getElementById('acl'); if (!el || tab != 'n') return;
     const un = nItems.filter(x => x.unread).length, L = nItems.filter(x => nFilter === 'all' ? true : nFilter === 'unread' ? x.unread : x.kind === nFilter);
-    const chips = [['all', T('الكل', 'All')], ['unread', T('غير المقروء', 'Unread') + (un ? ' (' + un + ')' : '')], ['order', T('الطلبات', 'Orders')], ['support', T('الدعم', 'Support')], ['promo', T('العروض', 'Offers')]];
+    const chips = [['all', T('الكل', 'All')], ['unread', T('غير المقروء', 'Unread') + (un ? ' (' + un + ')' : '')], ['order', T('الطلبات', 'Orders')], ['support', T('الدعم', 'Support')], ['promo', T('العروض', 'Offers')], ['remind', T('تذكيرات', 'Reminders')]];
     let last = '', body = '';
     L.forEach(n => { const g = dayLabel(n.t); if (g !== last) { last = g; body += `<h4 class="nt-day">${E(g)}</h4>`; } const k = NK[n.kind] || NK.system;
       body += `<div class="nt ${n.unread ? 'un' : ''}" data-x="nopen" data-id="${n.id}" data-href="${E(n.href || '')}" role="${n.href ? 'link' : 'article'}" tabindex="0"><span class="nt-i" style="--c:${k[3]}">${lcIco(k[0])}</span><div class="nt-b"><div class="nt-h"><b>${E(n.title)}</b><small>${ago(n.t)}</small></div>${n.text ? `<p>${E(n.text)}</p>` : ''}<div class="nt-f"><span class="nt-k" style="--c:${k[3]}">${T(k[1], k[2])}</span>${n.href ? `<span class="nt-go">${T('افتحي', 'Open')} ›</span>` : ''}</div></div>${n.unread ? '<i class="nt-d"></i>' : ''}<button type="button" class="nt-x" data-x="ndel" data-id="${n.id}" aria-label="${T('حذف', 'Delete')}">${lcIco('trash')}</button></div>`; });

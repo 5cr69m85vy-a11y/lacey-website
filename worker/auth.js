@@ -1,5 +1,6 @@
 /* auth.js — حسابات الزبائن: هاتف (OTP واتساب) · بريد+كلمة سر · Google */
 import { J, now, jp, rnd, sha256, hex, randHex } from './lib.js';
+import { saveCart, watchAdd, watchDel, watchList } from './remind.js';
 import { waOn, processQueue } from './wa.js';
 import { limit, hit, tooMany, audit } from './guard.js';
 
@@ -225,6 +226,9 @@ export async function authRoutes(c) {
       const rows = (await env.DB.prepare('SELECT o.*, r.number rnum FROM orders o LEFT JOIN receipts r ON r.order_code=o.code WHERE o.customer_id=? AND o.cust_hidden=0 ORDER BY o.created_at DESC LIMIT 100').bind(me.id).all()).results;
       return J({ orders: rows.map(o => ({ code: o.code, id: o.id, s: o.status, total: o.total, discount: o.discount, pay: o.pay_method, t: o.created_at, items: jp(o.items, []), receipt: o.rnum || '' })) });
     }
+    if (p === '/me/cart' && M === 'POST') { const b = await body(); return J({ ok: true, n: await saveCart(env, me.id, b.items) }); }
+    if (p === '/me/watch' && M === 'GET') return J({ codes: await watchList(env, me.id) });
+    if (p === '/me/watch' && M === 'POST') { const b = await body(); if (b.off) { await watchDel(env, me.id, b.code); return J({ ok: true }); } return (await watchAdd(env, me.id, b.code)) ? J({ ok: true }) : J({ error: 'منتج غير موجود' }, 404); }
     if (p === '/me/orders/hide' && M === 'POST') {
       const b = await body();   /* لا يُخفى إلا الطلب الملغى */
       if (b.all) await env.DB.prepare('UPDATE orders SET cust_hidden=1 WHERE customer_id=? AND status=0').bind(me.id).run();
@@ -246,6 +250,7 @@ export async function authRoutes(c) {
         else if (r.template === 'chat_reply') { o.kind = 'support'; const m = /^رد جديد من (.*?): ([\s\S]*)$/.exec(String(d.text || '')); o.title = (DN[d.dept] || 'الدعم') + (m ? ' · ' + m[1] : ''); o.text = m ? m[2] : String(d.text || ''); o.href = d.dept === 'routine' ? '/routine/support' : '/help/chat'; }
         else if (r.template === 'promo') { o.kind = 'promo'; o.title = 'عرض خاص لكِ'; o.text = String(d.text || ''); }
         else if (r.template === 'welcome') { o.title = 'أهلاً بك في لاسي 🌸'; o.text = 'نتمنى لكِ تجربة جميلة معنا'; }
+        else if (r.template === 'cart_reminder' || r.template === 'reorder' || r.template === 'restock') { o.kind = 'remind'; o.title = String(d.title || ''); o.text = String(d.text || ''); o.href = /^\/[A-Za-z0-9/_-]*$/.test(String(d.href || '')) ? d.href : ''; }
         else { o.title = String(d.text || ''); }
         if (o.kind === 'order' && code) o.href = '/tracking?c=' + code;
         return o;

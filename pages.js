@@ -112,7 +112,7 @@
     const low = pd.left > 0 && pd.left <= (pd.lw ?? 5), same = prodList().filter(x => x.c !== pd.c && x.k === pd.k).slice(0, 4);
     el.innerHTML = `<div class="w"><p><button class="pbk" data-pback="1" aria-label="${T('رجوع', 'Back')}">→ ${T('رجوع', 'Back')}</button></p><div class="pgd"><div><div class="pim" style="${im ? `background-image:url('${E(im)}')` : ''}"></div>${gal.length > 1 ? `<div class="pth">${gal.map((u, k) => `<button data-pi="${k}" class="${k === pimg ? 'on' : ''}" style="background-image:url('${E(u)}')" aria-label="${k + 1}"></button>`).join('')}</div>` : ''}</div>
       <div><small>${E(pd.c)}${b ? ' · ' + E(b.n) : ''}${pd.k ? ' · ' + E(pd.k) : ''}</small><h1>${E(pd.n)}</h1><div class="pr">${fmM(pd.p)}${pd.o > pd.p ? ` <s>${fmM(pd.o)}</s>` : ''}</div>
-      ${pd.left === 0 ? `<p class="so2">${T('نفد من المخزون', 'Sold out')}</p>` : low ? `<p class="lw2">${T('متبقي ' + pd.left + ' قطع فقط', 'Only ' + pd.left + ' left')}</p>` : ''}
+      ${pd.left === 0 ? `<p class="so2">${T('نفد من المخزون', 'Sold out')}</p><button type="button" class="btn g wt" data-wt="${E(pd.c)}">${lcIco('bell')} ${T('أعلميني عند التوفر', 'Notify me when back')}</button>` : low ? `<p class="lw2">${T('متبقي ' + pd.left + ' قطع فقط', 'Only ' + pd.left + ' left')}</p>` : ''}
       ${ingOf(pd).length ? `<h3>${T('المكونات الفعالة', 'Active ingredients')}</h3>${ingHTML(pd)}` : ''}
       ${typeof descHTML == 'function' ? descHTML(pd) : ''}
       <div class="row2"><span class="qsw" data-q="${E(pd.c)}" data-big="1">${qsHTML(pd.c, true)}</span><button class="btn g" data-a="rtn" data-c="${E(pd.c)}">${T('اسأل روتين', 'Ask Routine')}</button><button class="btn g" data-pcopy="1">${T('نسخ الرابط', 'Copy link')}</button></div></div></div>
@@ -507,6 +507,17 @@
   });
   document.addEventListener('input', e => { if (e.target.id === 'rt-pq') { pfs.q = e.target.value; const p0 = e.target.selectionStart; renderRoutine(rsub, null, true); const n = $1('#rt-pq'); if (n) { n.focus(); n.setSelectionRange(p0, p0); } return; } if (e.target.id === 'rt-iq') { ingQ = e.target.value; const p = e.target.selectionStart; renderRoutine(rsub, null, true); const n = $1('#rt-iq'); if (n) { n.focus(); n.setSelectionRange(p, p); } return; } if (e.target.name === 'prod' && e.target.form && e.target.form.id === 'rt-ask') { const p = resolveCode(e.target.value); const code = p ? p.c : ''; if (code !== askP && p && /—/.test(e.target.value)) { askP = code; const t = $1('#rt-ask textarea'), v = t ? t.value : '', n = $1('#rt-ask [name=nm]'), nv = n ? n.value : ''; renderRoutine(rsub, null, true); const t2 = $1('#rt-ask textarea'); if (t2) t2.value = v; const n2 = $1('#rt-ask [name=nm]'); if (n2) n2.value = nv; } } });
 
+
+  /* ---------- «أعلميني عند التوفر» ---------- */
+  const wtApi = (body) => fetch((typeof API == 'function' && API() || '') + '/me/watch', { method: body ? 'POST' : 'GET', headers: { 'Content-Type': 'application/json', ...custAuth() }, body: body ? JSON.stringify(body) : undefined }).then(r => r.json());
+  async function wtInit() { const b = document.querySelector('#prd .wt'); if (!b || !(typeof custMe == 'function' && custMe())) return; try { const j = await wtApi(); if (j.codes && j.codes.includes(b.dataset.wt)) { b.classList.add('on'); b.innerHTML = lcIco('check') + ' ' + T('سنخبرك عند التوفر (اضغطي للإلغاء)', 'We will notify you (tap to cancel)'); } } catch (e) {} }
+  new MutationObserver(() => { const b = document.querySelector('#prd .wt'); if (b && !b.dataset.i) { b.dataset.i = 1; wtInit(); } }).observe(document.body, { childList: true, subtree: true });
+  document.addEventListener('click', async e => {
+    const b = e.target.closest && e.target.closest('#prd .wt'); if (!b) return;
+    if (!(typeof custMe == 'function' && custMe())) { toast(T('سجّلي الدخول لنخبرك عند توفره', 'Sign in so we can notify you')); return lcNav('/account'); }
+    const on = b.classList.contains('on');
+    try { const j = await wtApi({ code: b.dataset.wt, off: on }); if (j.error) throw new Error(j.error); b.classList.toggle('on', !on); b.innerHTML = on ? lcIco('bell') + ' ' + T('أعلميني عند التوفر', 'Notify me when back') : lcIco('check') + ' ' + T('سنخبرك عند التوفر (اضغطي للإلغاء)', 'We will notify you (tap to cancel)'); toast(on ? T('أُلغي التنبيه', 'Cancelled') : T('سنخبرك فور توفره 🌸', 'We will tell you as soon as it is back')); } catch (x) { toast(x.message || 'error'); }
+  });
 
   /* ================= مركز المساعدة / تتبع الطلب / الإعدادات (صفحات معزولة) ================= */
   const FAQ = [
