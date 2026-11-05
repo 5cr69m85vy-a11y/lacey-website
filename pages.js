@@ -5,8 +5,8 @@
   const E = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const $1 = s => document.querySelector(s);
   const ls = { get: k => { try { return localStorage.getItem(k) } catch (e) { return null } }, set: (k, v) => { try { localStorage.setItem(k, v) } catch (e) {} } };
-  const PAGES = { '': 'home', categories: 'categories', offers: 'offers', routine: 'routine', help: 'help', tracking: 'tracking', preferences: 'preferences', p: 'product', cart: 'cart', checkout: 'checkout', account: 'account', support: 'support' };
-  const TITLES = { home: 'Lacey Skincare', categories: 'الفئات | Lacey', offers: 'عروضنا | Lacey', routine: 'روتين | Lacey', cart: 'السلة | Lacey', checkout: 'إتمام الطلب | Lacey', account: 'حسابي | Lacey', support: 'الدعم | Lacey', product: 'Lacey', help: 'مركز المساعدة | Lacey', tracking: 'تتبع الطلب | Lacey', preferences: 'الإعدادات | Lacey' };
+  const PAGES = { '': 'home', categories: 'categories', offers: 'offers', routine: 'routine', help: 'help', tracking: 'tracking', preferences: 'preferences', p: 'product', search: 'search', cart: 'cart', checkout: 'checkout', account: 'account', support: 'support' };
+  const TITLES = { home: 'Lacey Skincare', categories: 'الفئات | Lacey', offers: 'عروضنا | Lacey', routine: 'روتين | Lacey', cart: 'السلة | Lacey', checkout: 'إتمام الطلب | Lacey', account: 'حسابي | Lacey', support: 'الدعم | Lacey', product: 'Lacey', search: 'البحث | Lacey', help: 'مركز المساعدة | Lacey', tracking: 'تتبع الطلب | Lacey', preferences: 'الإعدادات | Lacey' };
   const OVERLAY = ['cart', 'checkout', 'account'];
   const hdr = document.getElementById('hlp'); if (hdr) hdr.addEventListener('click', e => { e.preventDefault(); lcNav('/help'); });
   let cur = '', prevPath = '/', bn = null, navDepth = 0; const scrolls = {};
@@ -50,6 +50,7 @@
     if (page === 'routine') renderRoutine(sub, u);
     if (page === 'help') renderHelp(sub);
     if (page === 'product') renderProduct(sub);
+    if (page === 'search') renderSearch(u);
     if (page === 'tracking') renderTrack(u);
     if (page === 'preferences') renderPrefs();
     if (!(was === page && page === 'routine')) { const sy = !push && !replace ? scrolls[u.pathname + u.search] : 0; scrollTo(0, sy || 0); if (sy) setTimeout(() => scrollTo(0, sy), 120); }
@@ -117,6 +118,7 @@
       ${typeof descHTML == 'function' ? descHTML(pd) : ''}
       <div class="row2"><span class="qsw" data-q="${E(pd.c)}" data-big="1">${qsHTML(pd.c, true)}</span><button class="btn g" data-a="rtn" data-c="${E(pd.c)}">${T('اسأل روتين', 'Ask Routine')}</button><button class="btn g" data-pcopy="1">${T('نسخ الرابط', 'Copy link')}</button></div></div></div>
       ${same.length ? `<h3>${T('منتجات مشابهة', 'Similar products')}</h3><div class="grid">${same.map(card).join('')}</div>` : ''}</div>${pd.left === 0 ? '' : `<div class="pstick"><div><small>${E(pd.n)}</small><b>${fmM(pd.p)}</b></div><span class="qsw" data-q="${E(pd.c)}" data-big="1">${qsHTML(pd.c, true)}</span></div>`}`;
+    { const r2 = el.querySelector('.row2'), sk = el.querySelector('.pstick'); if (r2 && sk && 'IntersectionObserver' in window) { if (window.__pstIO) window.__pstIO.disconnect(); window.__pstIO = new IntersectionObserver(([en]) => sk.classList.toggle('on', !en.isIntersecting && en.boundingClientRect.top < 0)); window.__pstIO.observe(r2); } }
   }
   document.addEventListener('click', e => {
     const b = e.target.closest && e.target.closest('[data-pback]'); if (!b) return;
@@ -507,6 +509,66 @@
   });
   document.addEventListener('input', e => { if (e.target.id === 'rt-pq') { pfs.q = e.target.value; const p0 = e.target.selectionStart; renderRoutine(rsub, null, true); const n = $1('#rt-pq'); if (n) { n.focus(); n.setSelectionRange(p0, p0); } return; } if (e.target.id === 'rt-iq') { ingQ = e.target.value; const p = e.target.selectionStart; renderRoutine(rsub, null, true); const n = $1('#rt-iq'); if (n) { n.focus(); n.setSelectionRange(p, p); } return; } if (e.target.name === 'prod' && e.target.form && e.target.form.id === 'rt-ask') { const p = resolveCode(e.target.value); const code = p ? p.c : ''; if (code !== askP && p && /—/.test(e.target.value)) { askP = code; const t = $1('#rt-ask textarea'), v = t ? t.value : '', n = $1('#rt-ask [name=nm]'), nv = n ? n.value : ''; renderRoutine(rsub, null, true); const t2 = $1('#rt-ask textarea'); if (t2) t2.value = v; const n2 = $1('#rt-ask [name=nm]'); if (n2) n2.value = nv; } } });
 
+
+  /* ================= صفحة البحث (معزولة: /search?q=) ================= */
+  const rsGet = () => { try { return JSON.parse(ls.get('lc_rs') || '[]').filter(x => typeof x === 'string').slice(0, 10); } catch (e) { return []; } };
+  const rsSet = a => ls.set('lc_rs', JSON.stringify(a.slice(0, 10)));
+  const rsAdd = t => { t = String(t || '').trim().slice(0, 60); if (t.length < 2) return; const a = rsGet().filter(x => x.toLowerCase() !== t.toLowerCase()); a.unshift(t); rsSet(a); };
+  let spQ = '', spC = '', spS = '';
+  const lev = (a, b) => { if (Math.abs(a.length - b.length) > 2) return 9; const m = []; for (let i = 0; i <= a.length; i++) { m[i] = [i]; } for (let j = 1; j <= b.length; j++) m[0][j] = j; for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) m[i][j] = Math.min(m[i - 1][j] + 1, m[i][j - 1] + 1, m[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); return m[a.length][b.length]; };
+  function didYouMean(qs) {
+    const toks = WS(nrm(qs)).filter(t => t.length >= 3); if (!toks.length) return '';
+    const vocab = new Set(); prodList().forEach(x => { WS(nrm(x.n)).forEach(w => w.length >= 3 && vocab.add(w)); if (x.k) WS(nrm(x.k)).forEach(w => w.length >= 3 && vocab.add(w)); });
+    const out = toks.map(t => { if (vocab.has(t)) return t; let best = t, d = 3; vocab.forEach(w => { const e = lev(t, w); if (e < d) { d = e; best = w; } }); return d <= 2 ? best : t; });
+    const s = out.join(' '); return s !== toks.join(' ') && srch(s).length ? s : '';
+  }
+  const popular = () => { const o = (typeof S !== 'undefined' && S.sq) || {}; const a = Object.entries(o).filter(([k]) => k.length > 1 && srch(k).length).sort((x, y) => y[1] - x[1]).slice(0, 8).map(x => x[0]); if (a.length >= 3) return a; const ks = [...new Set(prodList().map(x => x.k).filter(Boolean))].slice(0, 8); return [...a, ...ks].slice(0, 8); };
+  function spHome() {
+    const rs = rsGet(), pop = popular(), cats = [...new Set(prodList().map(x => x.k).filter(Boolean))].slice(0, 12), best = prodList().filter(x => x.b || x.o > x.p).slice(0, 6);
+    return `${rs.length ? `<div class="sp-sec"><div class="sp-h"><b>${T('عمليات البحث الأخيرة', 'Recent searches')}</b><button type="button" class="ln" data-sp="rclr">${T('مسح الكل', 'Clear all')}</button></div><div class="sp-chips">${rs.map((t, i) => `<span class="sp-c"><button type="button" data-sp="rs" data-v="${E(t)}">${lcIco('clock')} ${E(t)}</button><button type="button" class="sp-x" data-sp="rx" data-i="${i}" aria-label="${T('حذف', 'Remove')}">×</button></span>`).join('')}</div></div>` : ''}
+      ${pop.length ? `<div class="sp-sec"><div class="sp-h"><b>${T('الأكثر بحثاً', 'Trending')}</b></div><div class="sp-chips">${pop.map(t => `<button type="button" class="sp-c sp-p" data-sp="rs" data-v="${E(t)}">${lcIco('flame')} ${E(t)}</button>`).join('')}</div></div>` : ''}
+      ${cats.length ? `<div class="sp-sec"><div class="sp-h"><b>${T('تصفّحي بالفئة', 'Browse by category')}</b></div><div class="sp-chips">${cats.map(t => `<button type="button" class="sp-c" data-sp="rs" data-v="${E(t)}">${E(t)}</button>`).join('')}</div></div>` : ''}
+      ${best.length ? `<div class="sp-sec"><div class="sp-h"><b>${T('اقتراحات لك', 'Picked for you')}</b></div><div class="grid">${best.map(card).join('')}</div></div>` : ''}`;
+  }
+  function spResults() {
+    const M = srch(spQ); let L = M;
+    const cats = {}; M.forEach(x => { if (x.k) cats[x.k] = (cats[x.k] || 0) + 1; });
+    if (spC) L = L.filter(x => x.k === spC);
+    if (spS === 'lo') L = [...L].sort((a, b) => a.p - b.p); else if (spS === 'hi') L = [...L].sort((a, b) => b.p - a.p); else if (spS === 'off') L = [...L].sort((a, b) => (b.o > b.p ? 1 - b.p / b.o : 0) - (a.o > a.p ? 1 - a.p / a.o : 0));
+    if (!M.length) {
+      const dym = didYouMean(spQ), Sm = similar(M, M, 6);
+      return `<div class="sp-none">${lcIco('search')}<p><b>${T('لا نتائج عن «' + E(spQ) + '»', 'No results for “' + E(spQ) + '”')}</b></p>${dym ? `<p>${T('هل تقصدين', 'Did you mean')}: <button type="button" class="sp-c sp-p" data-sp="rs" data-v="${E(dym)}">${E(dym)}</button></p>` : `<p class="em">${T('جرّبي كلمة أخرى أو كود المنتج.', 'Try another word or the product code.')}</p>`}</div>${spHome().replace(/<div class="sp-sec"><div class="sp-h"><b>[^<]*<\/b><button[\s\S]*?<\/div><\/div>/, '')}`;
+    }
+    const sm = similar(M, M, 6);
+    return `<div class="sp-top"><p class="rs"><b>${L.length}</b> ${T('نتيجة', 'results')}</p><label class="sp-sort">${T('ترتيب', 'Sort')}<select id="sp-s">${[['', T('الأنسب', 'Relevance')], ['off', T('أكبر خصم', 'Biggest discount')], ['lo', T('الأقل سعراً', 'Price: low')], ['hi', T('الأعلى سعراً', 'Price: high')]].map(([k, n]) => `<option value="${k}" ${spS === k ? 'selected' : ''}>${n}</option>`).join('')}</select></label></div>
+      ${Object.keys(cats).length > 1 ? `<div class="sp-chips sp-f"><button type="button" class="sp-c ${spC ? '' : 'on'}" data-sp="cat" data-v="">${T('الكل', 'All')} (${M.length})</button>${Object.entries(cats).map(([k, n]) => `<button type="button" class="sp-c ${spC === k ? 'on' : ''}" data-sp="cat" data-v="${E(k)}">${E(k)} (${n})</button>`).join('')}</div>` : ''}
+      <div class="grid">${L.map(card).join('')}</div>${sm.length ? `<h3 class="sh"><span>${T('منتجات مشابهة', 'Similar products')}</span></h3><div class="grid">${sm.map(card).join('')}</div>` : ''}`;
+  }
+  function spDraw() { const r = $1('#sp-res'), x = $1('#sp-x'); if (!r) return; if (x) x.hidden = !spQ; r.innerHTML = spQ.trim() ? spResults() : spHome(); }
+  function renderSearch(u) {
+    const el = $1('#srp'); if (!el) return; spQ = (u && u.searchParams.get('q')) || ''; spC = ''; spS = '';
+    document.title = (spQ ? spQ + ' | ' : '') + TITLES.search;
+    el.innerHTML = `<div class="w"><form id="sp-f" class="sp-bar" role="search"><button type="button" class="sp-bk" data-sp="back" aria-label="${T('رجوع', 'Back')}">→</button><div class="sp-in">${lcIco('search')}<input id="sp-q" type="search" enterkeyhint="search" autocomplete="off" placeholder="${T('ابحثي باسم المنتج أو الكود', 'Search by product name or code')}" value="${E(spQ)}"><button type="button" id="sp-x" class="sp-clr" data-sp="clr" aria-label="${T('مسح', 'Clear')}" ${spQ ? '' : 'hidden'}>×</button></div></form><div id="sp-res"></div></div>`;
+    spDraw(); const i = $1('#sp-q'); if (i && !spQ) setTimeout(() => i.focus(), 30);
+  }
+  let spT = 0;
+  document.addEventListener('input', e => { if (e.target.id !== 'sp-q') return; spQ = e.target.value; spC = ''; clearTimeout(spT); spT = setTimeout(() => { try { history.replaceState(null, '', '/search' + (spQ.trim() ? '?q=' + encodeURIComponent(spQ.trim()) : '')); } catch (x) {} document.title = (spQ.trim() ? spQ.trim() + ' | ' : '') + TITLES.search; spDraw(); }, 140); });
+  document.addEventListener('submit', e => { if (e.target.id !== 'sp-f') return; e.preventDefault(); e.stopPropagation(); const t = spQ.trim(); if (t.length > 1) { rsAdd(t); try { const k = t.toLowerCase(); S.sq = S.sq || {}; S.sq[k] = (S.sq[k] || 0) + 1; save(); } catch (x) {} } const i = $1('#sp-q'); if (i) i.blur(); }, true);
+  document.addEventListener('change', e => { if (e.target.id === 'sp-s') { spS = e.target.value; spDraw(); } });
+  document.addEventListener('click', e => {
+    const b = e.target.closest && e.target.closest('#srp [data-sp]'); if (b) {
+      const k = b.dataset.sp, v = b.dataset.v;
+      if (k === 'rs') { spQ = v; spC = ''; const i = $1('#sp-q'); if (i) i.value = v; rsAdd(v); try { history.replaceState(null, '', '/search?q=' + encodeURIComponent(v)); } catch (x) {} spDraw(); }
+      else if (k === 'rx') { const a = rsGet(); a.splice(+b.dataset.i, 1); rsSet(a); spDraw(); }
+      else if (k === 'rclr') { rsSet([]); spDraw(); toast(T('تم مسح عمليات البحث', 'Search history cleared')); }
+      else if (k === 'cat') { spC = v; spDraw(); }
+      else if (k === 'clr') { spQ = ''; spC = ''; const i = $1('#sp-q'); if (i) { i.value = ''; i.focus(); } try { history.replaceState(null, '', '/search'); } catch (x) {} spDraw(); }
+      else if (k === 'back') { if (navDepth > 0) history.back(); else lcNav('/'); }
+      return;
+    }
+    const c = e.target.closest && e.target.closest('#srp .card'); if (c && spQ.trim().length > 1) rsAdd(spQ.trim());
+  }, true);
+  { const hq = $1('#sq'); if (hq) { hq.addEventListener('focus', () => { if (cur !== 'search') { hq.blur(); lcNav('/search'); } }); } }
 
   /* ---------- «أعلميني عند التوفر» ---------- */
   const wtApi = (body) => fetch((typeof API == 'function' && API() || '') + '/me/watch', { method: body ? 'POST' : 'GET', headers: { 'Content-Type': 'application/json', ...custAuth() }, body: body ? JSON.stringify(body) : undefined }).then(r => r.json());
