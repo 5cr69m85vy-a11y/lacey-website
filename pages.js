@@ -111,12 +111,12 @@
     const gal = [pd.i, ...(pd.im || [])].filter(Boolean), im = gal[pimg] || gal[0], b = typeof brd == 'function' ? brd(pd) : null;
     const low = pd.left > 0 && pd.left <= (pd.lw ?? 5), same = prodList().filter(x => x.c !== pd.c && x.k === pd.k).slice(0, 4);
     el.innerHTML = `<div class="w"><p><button class="pbk" data-pback="1" aria-label="${T('رجوع', 'Back')}">→ ${T('رجوع', 'Back')}</button></p><div class="pgd"><div><div class="pim" style="${im ? `background-image:url('${E(im)}')` : ''}"></div>${gal.length > 1 ? `<div class="pth">${gal.map((u, k) => `<button data-pi="${k}" class="${k === pimg ? 'on' : ''}" style="background-image:url('${E(u)}')" aria-label="${k + 1}"></button>`).join('')}</div>` : ''}</div>
-      <div><small>${E(pd.c)}${b ? ' · ' + E(b.n) : ''}${pd.k ? ' · ' + E(pd.k) : ''}</small><h1>${E(pd.n)}</h1><div class="pr">${fmM(pd.p)}${pd.o > pd.p ? ` <s>${fmM(pd.o)}</s>` : ''}</div>
+      <div><small>${E(pd.c)}${b ? ' · ' + E(b.n) : ''}${pd.k ? ' · ' + E(pd.k) : ''}</small><div class="ph1"><h1>${E(pd.n)}</h1>${typeof favBtn == 'function' ? favBtn(pd.c) : ''}</div><div class="pr">${fmM(pd.p)}${pd.o > pd.p ? ` <s>${fmM(pd.o)}</s>` : ''}</div>
       ${pd.left === 0 ? `<p class="so2">${T('نفد من المخزون', 'Sold out')}</p><button type="button" class="btn g wt" data-wt="${E(pd.c)}">${lcIco('bell')} ${T('أعلميني عند التوفر', 'Notify me when back')}</button>` : low ? `<p class="lw2">${T('متبقي ' + pd.left + ' قطع فقط', 'Only ' + pd.left + ' left')}</p>` : ''}
       ${ingOf(pd).length ? `<h3>${T('المكونات الفعالة', 'Active ingredients')}</h3>${ingHTML(pd)}` : ''}
       ${typeof descHTML == 'function' ? descHTML(pd) : ''}
       <div class="row2"><span class="qsw" data-q="${E(pd.c)}" data-big="1">${qsHTML(pd.c, true)}</span><button class="btn g" data-a="rtn" data-c="${E(pd.c)}">${T('اسأل روتين', 'Ask Routine')}</button><button class="btn g" data-pcopy="1">${T('نسخ الرابط', 'Copy link')}</button></div></div></div>
-      ${same.length ? `<h3>${T('منتجات مشابهة', 'Similar products')}</h3><div class="grid">${same.map(card).join('')}</div>` : ''}</div>`;
+      ${same.length ? `<h3>${T('منتجات مشابهة', 'Similar products')}</h3><div class="grid">${same.map(card).join('')}</div>` : ''}</div>${pd.left === 0 ? '' : `<div class="pstick"><div><small>${E(pd.n)}</small><b>${fmM(pd.p)}</b></div><span class="qsw" data-q="${E(pd.c)}" data-big="1">${qsHTML(pd.c, true)}</span></div>`}`;
   }
   document.addEventListener('click', e => {
     const b = e.target.closest && e.target.closest('[data-pback]'); if (!b) return;
