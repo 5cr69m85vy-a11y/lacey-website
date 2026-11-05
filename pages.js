@@ -424,6 +424,10 @@
     if (tab !== 'support' && window.LCChat) LCChat.unmount();
     if (tab === 'test' && !quiet) { const L0 = tqList(); tqi = tqResult() ? L0.length : Math.min(rq.ans.filter(x => x != null).length, L0.length - 1); }
     const tabs = [['quiz', '/routine', T('روتيني', 'My routine')], ['test', '/routine/test', T('اختبار البشرة', 'Skin test')], ['diary', '/routine/diary', T('يومياتي', 'Diary')], ['products', '/routine/products', T('كل المنتجات', 'All products')], ['guide', '/routine/guide', T('دليل المكونات', 'Ingredients')], ['ask', '/routine/ask', T('اسألي عن منتج', 'Ask about a product')], ['support', '/routine/support', T('الدعم', 'Support')]];
+    if (tab === 'support') {
+      el.innerHTML = `<div class="w"><div class="rh"><h2>${lcIco('headset')} ${T('دعم روتين', 'Routine support')}</h2><p><a href="/routine">← ${T('العودة إلى روتين', 'Back to Routine')}</a> · <a href="/help/chat">${T('خدمة الزبائن', 'Customer service')}</a></p></div><div id="rt-chat"></div></div>`;
+      if (window.LCChat) LCChat.mount(document.getElementById('rt-chat'), 'routine'); return;
+    }
     el.innerHTML = `<div class="w"><div class="rh"><h2>${lcIco('flower')} ${T('روتين', 'Routine')}</h2><p>${T('مستشارتك الشخصية للعناية بالبشرة: تحليل بشرتك، اقتراح منتجات، وتحدّثي مع فريقنا.', 'Your personal skincare advisor: analyse your skin, get product picks, and chat with our team.')}</p></div>
       <nav class="rt-tabs" aria-label="Routine">${tabs.map(([k, h, n]) => `<a href="${h}" class="${tab === k ? 'on' : ''}">${n}</a>`).join('')}</nav>
       <div id="rtb">${tab === 'quiz' ? quizHTML() : tab === 'ask' ? askHTML() : tab === 'guide' ? guideHTML() : tab === 'products' ? prodsHTML() : tab === 'test' ? tqHTML() : tab === 'diary' ? diaryHTML() : `<div id="rt-chat"></div>`}</div></div>`;

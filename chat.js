@@ -17,7 +17,7 @@
   const prod = c => (typeof S !== 'undefined' && S.P || []).find(p => String(p.c).toUpperCase() == String(c).toUpperCase());
 
   const who = s => s.mode == 'human' ? (s.staff ? T('يرد عليك: ', 'Replying: ') + s.staff : T('بانتظار موظف…', 'Waiting for an agent…')) : T('المساعد الذكي', 'Smart assistant');
-  const pcard = m => { const p = m.meta && m.meta.product; return p ? `<a class="pc" href="/routine/ask?p=${encodeURIComponent(p.c)}"><i style="${p.i ? `background-image:url('${E(p.i)}')` : ''}"></i><span><b>${E(p.n)}</b><small>${E(p.c)}</small></span></a>` : ''; };
+  const pcard = m => { const p = m.meta && m.meta.product; return p ? `<a class="pc" href="/routine/ask?p=${encodeURIComponent(p.c)}"><i style="${p.i !== '' ? `background-image:url('${E((typeof API == 'function' && API() || '') + '/pimg/' + encodeURIComponent(p.c))}')` : ''}"></i><span><b>${E(p.n)}</b><small>${E(p.c)}</small></span></a>` : ''; };
   const tm = t => { try { const d = new Date(String(t).replace(' ', 'T') + (/Z|\+/.test(t) ? '' : 'Z')); return isNaN(d) ? '' : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); } catch (e) { return ''; } };
   function bubble(m, s) {
     if (m.sender == 'customer') { const ok = m.id <= s.seen; return `<div class="m customer">${pcard(m)}${E(m.body)}<span class="tk${ok ? ' sn' : ''}" title="${ok ? T('تمت القراءة', 'Seen') : T('أُرسلت', 'Sent')}">${tm(m.created_at || m.at)} ${ok ? '✓✓' : '✓'}</span></div>`; }

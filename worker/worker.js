@@ -421,6 +421,17 @@ async function handle(request, rawEnv, ctx) {
       return J({ error: 'server error' }, 500);
     }
 
+    /* صورة المنتج كملف مستقل (تُستعمل في رسائل الدعم بدل تضمين base64 المقطوع) */
+    const im = M === 'GET' && /^\/pimg\/([^/]+)\/?$/.exec(p);
+    if (im) {
+      const row = await env.DB.prepare('SELECT data FROM products WHERE UPPER(code)=?').bind(decodeURIComponent(im[1]).toUpperCase()).first();
+      let src = ''; try { src = String(JSON.parse(row && row.data || '{}').i || ''); } catch (e) {}
+      const dm = /^data:([\w\/+.-]+);base64,(.+)$/s.exec(src);
+      if (dm) { const bin = Uint8Array.from(atob(dm[2]), c => c.charCodeAt(0)); return new Response(bin, { headers: { 'Content-Type': dm[1], 'Cache-Control': 'public, max-age=86400' } }); }
+      if (/^https?:\/\//.test(src) || src.startsWith('/')) return Response.redirect(new URL(src, request.url).href, 302);
+      return new Response('', { status: 404 });
+    }
+
     /* SEO: صفحة مستقلة لكل منتج + sitemap + robots */
     if (env.ASSETS && M === 'GET') {
       const pm = /^\/p\/([^/]+)\/?$/.exec(p);

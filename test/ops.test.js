@@ -171,5 +171,12 @@ const authFor = require('./sess');
     const sm = await (await call('/sitemap.xml')).text(); assert(/<loc>https:\/\/x\.dev\/p\/A1<\/loc>/.test(sm) && /<loc>https:\/\/x\.dev\/p\/A2<\/loc>/.test(sm));
     const rb = await (await call('/robots.txt')).text(); assert(/Sitemap: https:\/\/x\.dev\/sitemap\.xml/.test(rb) && /Disallow: \/account/.test(rb));
   });
+  await ok('chat product card: image served from /pimg/CODE (not a truncated base64)', async () => {
+    const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', big = 'data:image/png;base64,' + png;
+    const cur = await get('/settings', adm); const P = (cur.data ? cur.data.P : cur.P) || [];
+    await post('/settings', { data: { ...(cur.data || cur), P: P.map(p => p.c === 'A2' ? { ...p, i: big } : p) } }, adm);
+    const r = await call('/pimg/A2'); assert.strictEqual(r.status, 200); assert.strictEqual(r.headers.get('content-type'), 'image/png'); assert.strictEqual((await r.arrayBuffer()).byteLength, Buffer.from(png, 'base64').length);
+    assert.strictEqual((await call('/pimg/NOPE')).status, 404);
+  });
   console.log(n + ' ops tests passed');
 })().catch(e => { console.error('FAIL', e); process.exit(1); });

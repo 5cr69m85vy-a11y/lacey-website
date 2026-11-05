@@ -159,7 +159,7 @@ export async function extraRoutes(c) {
     let prod = null;
     if (!quick && !b.intent) {
       const cm = String(b.product || '').trim().toUpperCase().slice(0, 20) || ((/(?:^|[^A-Za-z0-9])([A-Za-z]{1,4}\d{2,6})(?![A-Za-z0-9])/.exec(text) || [])[1] || '').toUpperCase();
-      if (cm) { const row = await env.DB.prepare('SELECT code,name,price,data FROM products WHERE UPPER(code)=?').bind(cm).first(); if (row) prod = { c: row.code, n: row.name, p: row.price, i: String(jp(row.data, {}).i || '').slice(0, 300) }; }
+      if (cm) { const row = await env.DB.prepare('SELECT code,name,price,data FROM products WHERE UPPER(code)=?').bind(cm).first(); if (row) prod = { c: row.code, n: row.name, p: row.price, i: jp(row.data, {}).i ? '/pimg/' + encodeURIComponent(row.code) : '' }; }
     }
     await addMsg(ch.id, 'customer', text, '', prod ? JSON.stringify({ product: prod }) : '');
     let mode = ch.mode;
