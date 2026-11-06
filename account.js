@@ -158,12 +158,12 @@
     if (!oItems.length) { try { oItems = (await call('/me/orders')).orders; } catch (e) {} }
     const act = oItems.filter(o => o.s >= 1 && o.s <= 4).length, un = nItems.filter(n => n.unread).length, sk = SK.find(s => s[0] === me.skin);
     box.innerHTML = `<span>${lcIco('box')} <b>${oItems.length}</b> ${T('طلب', 'orders')}</span>${act ? `<span class="on">${lcIco('flame')} <b>${act}</b> ${T('جارية', 'in progress')}</span>` : ''}${sk ? `<span>${lcIco('flower')} ${T(sk[1], sk[2])}</span>` : ''}${un ? `<span class="on">${lcIco('bell')} <b>${un}</b> ${T('جديدة', 'new')}</span>` : ''}`;
-    const bd = (sel, n) => { const t = document.querySelector('.tiles2 ' + sel + ' b'); if (!t) return; let i = t.querySelector('.tb'); if (!n) { if (i) i.remove(); return; } if (!i) { i = document.createElement('i'); i.className = 'tb'; t.appendChild(i); } i.textContent = n > 9 ? '9+' : n; };
+    const bd = (sel, n) => { const t = document.querySelector('.tiles2 ' + sel + ' b'); if (!t) return; let i = t.querySelector('.tbd'); if (!n) { if (i) i.remove(); return; } if (!i) { i = document.createElement('i'); i.className = 'tbd'; t.appendChild(i); } i.textContent = n > 9 ? '9+' : n; };
     bd('a[href="/help"]', nItems.filter(n => n.unread && n.kind === 'support' && n.href === '/help/chat').length);
     bd('a[href="/routine/support"]', nItems.filter(n => n.unread && n.kind === 'support' && n.href === '/routine/support').length);
     bd('a[href="/tracking"]', act);
-    const tn = document.querySelector('.act [data-v="n"]'); if (tn) { let i = tn.querySelector('.tb'); if (un) { if (!i) { i = document.createElement('i'); i.className = 'tb'; tn.appendChild(i); } i.textContent = un > 9 ? '9+' : un; } else if (i) i.remove(); }
-    const to = document.querySelector('.act [data-v="o"]'); if (to) { let i = to.querySelector('.tb'); if (act) { if (!i) { i = document.createElement('i'); i.className = 'tb'; to.appendChild(i); } i.textContent = act; } else if (i) i.remove(); }
+    const tn = document.querySelector('.act [data-v="n"]'); if (tn) { let i = tn.querySelector('.tbd'); if (un) { if (!i) { i = document.createElement('i'); i.className = 'tbd'; tn.appendChild(i); } i.textContent = un > 9 ? '9+' : un; } else if (i) i.remove(); }
+    const to = document.querySelector('.act [data-v="o"]'); if (to) { let i = to.querySelector('.tbd'); if (act) { if (!i) { i = document.createElement('i'); i.className = 'tbd'; to.appendChild(i); } i.textContent = act; } else if (i) i.remove(); }
   }
   /* مزامنة السلة مع الحساب (لتذكير السلة المتروكة) */
   let cst = 0;

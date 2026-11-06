@@ -51,7 +51,7 @@
   async function draw(o) {
     try { await document.fonts.ready } catch (e) {}
     const fam = getComputedStyle(document.body).fontFamily || 'sans-serif';
-    const items = o.items || [], H = 760 + items.length * 190 + ((o.dsc || 0) > 0 ? 50 : 0) + (o.sh ? 50 : 0);
+    const items = o.items || [], H = 900 + items.length * 190 + ((o.dsc || 0) > 0 ? 50 : 0) + (o.sh ? 50 : 0);
     const imgs = await Promise.all(items.map(i => loadImg(((typeof pr == 'function' && pr(i.c)) || {}).i)));
     const cv = document.createElement('canvas'); cv.width = W; cv.height = H; const c = cv.getContext('2d');
     c.direction = 'rtl'; c.textAlign = 'right'; c.textBaseline = 'alphabetic';
