@@ -4,7 +4,7 @@
   const N = n => Number(n || 0).toLocaleString('en-US');
   const dt = t => new Date(t).toLocaleString('ar-IQ', { dateStyle: 'medium', timeStyle: 'short' });
   const up = (tag, html) => `<div class="cd" style="margin-bottom:14px"><h3>${tag}</h3>${html}</div>`;
-  const prodChecks = (name, sel = [], withQty = false) => `<div class="pck">${S.P.map(p => { const on = sel.find(x => (x.c || x) == p.c); return `<label><input type="checkbox" name="${name}" value="${esc(p.c)}" ${on ? 'checked' : ''}> ${esc(p.n)}${withQty ? ` <input type="number" min="1" max="20" name="q_${esc(p.c)}" value="${on && on.q || 1}" style="width:54px">` : ''}</label>`; }).join('')}</div>`;
+  const prodChecks = (name, sel = [], withQty = false) => `<div class="pck">${S.P.map(p => { const on = sel.find(x => (x.c || x) == p.c); return `<label><input type="checkbox" name="${name}" value="${esc(p.c)}" ${on ? 'checked' : ''}><i class="pth" ${p.i ? `style="background-image:url('${esc(p.i)}')"` : ''}></i><span>${esc(p.n)}<small>${esc(p.c)}</small></span>${withQty ? ` <input type="number" min="1" max="20" name="q_${esc(p.c)}" value="${on && on.q || 1}" style="width:54px">` : ''}</label>`; }).join('')}</div>`;
   const act = () => document.querySelector('#ab');
   const J = async (u, o) => { const r = await apiJ(u, o); if (r && r.error) throw new Error(r.error); return r; };
   const barSvg = (rows, key, color) => {

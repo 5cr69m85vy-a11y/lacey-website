@@ -45,9 +45,10 @@
     if (page !== 'routine' && page !== 'help') document.body.classList.remove('cfull');
     cur = page; document.body.dataset.pg = page; document.title = TITLES[page] || TITLES.home;
     secVisible(page);
-    if (bn) { bn.querySelectorAll('a[data-p]').forEach(a => { const on = a.dataset.p === 'orders' ? (page === 'tracking' || (page === 'account' && sub === 'orders')) : (a.dataset.p === page || (page === 'checkout' && a.dataset.p === 'cart')); a.classList.toggle('on', on); on ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'); }); const ac = document.getElementById('accb'); if (ac) ac.classList.toggle('cur', page === 'account' && sub !== 'orders'); }
+    if (bn) { bn.querySelectorAll('a[data-p]').forEach(a => { const isB = page === 'categories' && u.hash === '#brands'; const on = a.dataset.p === 'brands' ? isB : a.dataset.p === 'categories' ? (page === 'categories' && !isB) : a.dataset.p === 'orders' ? (page === 'tracking' || (page === 'account' && sub === 'orders')) : (a.dataset.p === page || (page === 'checkout' && a.dataset.p === 'cart')); a.classList.toggle('on', on); on ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'); }); const ac = document.getElementById('accb'); if (ac) ac.classList.toggle('cur', page === 'account' && sub !== 'orders'); }
     if (page === 'cart' || page === 'checkout') { try { view = page === 'cart' ? 'bag' : 'form'; rc(); const cv = $1('#cv'); cv.classList.add('on', 'pgv'); } catch (e) { console.error(e); } }
     if (page === 'account' && window.accountShow) accountShow({ '': 'p', orders: 'o', receipts: 'r', alerts: 'n' }[sub] || 'p');
+    if (page === 'categories' && u.hash === '#brands') setTimeout(() => { const b = $1('#brs'); if (b) { const y = b.getBoundingClientRect().top + scrollY - 70; scrollTo({ top: y, behavior: 'smooth' }); } }, 80);
     if (page === 'routine') renderRoutine(sub, u);
     if (page === 'help') renderHelp(sub);
     if (page === 'product') renderProduct(sub);
