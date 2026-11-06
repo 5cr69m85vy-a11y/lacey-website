@@ -561,7 +561,9 @@
       el.innerHTML = `<div class="w"><div class="rh"><h2>${E(b.n)}</h2><p><a href="/brands">← ${T('كل البراندات', 'All brands')}</a> · ${ps.length} ${T('منتج', 'products')}</p></div>${ps.length ? `<div class="grid">${ps.map(card).join('')}</div>` : `<p class="em">${T('لا توجد منتجات لهذا البراند حالياً.', 'No products for this brand yet.')}</p>`}</div>`;
       return;
     }
-    el.innerHTML = `<div class="w"><div class="rh"><h2>${T('البراندات', 'Brands')}</h2><p>${T('تسوّقي حسب البراند.', 'Shop by brand.')}</p></div>${L.length ? `<div class="brg">${L.map(x => `<a class="brt" href="/brands/${encodeURIComponent(x.id)}">${logo(x)}<b>${E(x.n)}</b><small>${(S.P || []).filter(q => String(q.br) === String(x.id)).length} ${T('منتج', 'products')}</small></a>`).join('')}</div>` : `<p class="em">${T('لا توجد براندات بعد.', 'No brands yet.')}</p>`}</div>`;
+    const tile = x => `<a class="brt" href="/brands/${encodeURIComponent(x.id)}">${logo(x)}<b>${E(x.n)}</b><small>${(S.P || []).filter(q => String(q.br) === String(x.id)).length} ${T('منتج', 'products')}</small></a>`;
+    const grp = [['skin', T('براندات سكن كير', 'Skincare brands')], ['cos', T('براندات كوزمتك', 'Cosmetics brands')]].map(([k, n]) => { const g = L.filter(x => (x.g === 'cos' ? 'cos' : 'skin') === k); return g.length ? `<h3 class="brh">${n}</h3><div class="brg">${g.map(tile).join('')}</div>` : ''; }).join('');
+    el.innerHTML = `<div class="w"><div class="rh"><h2>${T('البراندات', 'Brands')}</h2><p>${T('تسوّقي حسب البراند.', 'Shop by brand.')}</p></div>${L.length ? grp : `<p class="em">${T('لا توجد براندات بعد.', 'No brands yet.')}</p>`}</div>`;
   }
   function renderSearch(u) {
     const el = $1('#srp'); if (!el) return; spQ = (u && u.searchParams.get('q')) || ''; spC = ''; spS = '';

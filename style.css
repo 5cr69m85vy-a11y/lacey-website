@@ -414,3 +414,4 @@ body.cfull #chp.inl #chcp{max-height:40vh;overflow:auto}
 @media (max-width:420px){#bnav{padding:8px 6px 6px}#bnav .bni{width:40px;height:40px}#bnav small{font-size:10px}}
 
 .brg{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:14px}.brt{display:grid;justify-items:center;gap:6px;padding:18px 10px;border-radius:20px;background:#fff;border:1px solid var(--mist);color:inherit;text-align:center;text-decoration:none}.brt .bi{width:84px;height:84px}.brt small{opacity:.6}
+.brh{font-size:20px;margin:22px 0 12px}
