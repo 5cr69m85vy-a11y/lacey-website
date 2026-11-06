@@ -42,6 +42,7 @@
     const dept = /^#\/[\w-]/.test(u.hash || '');
     if (push) history.pushState(null, '', full); else if (replace) history.replaceState(null, '', full);
     if (!dept && (location.hash || '') === '' && was === 'categories' && page !== 'categories') { try { dispatchEvent(new HashChangeEvent('hashchange')); } catch (e) {} }
+    if (page !== 'routine' && page !== 'help') document.body.classList.remove('cfull');
     cur = page; document.body.dataset.pg = page; document.title = TITLES[page] || TITLES.home;
     secVisible(page);
     if (bn) { bn.querySelectorAll('a[data-p]').forEach(a => { const on = a.dataset.p === 'orders' ? (page === 'tracking' || (page === 'account' && sub === 'orders')) : (a.dataset.p === page || (page === 'checkout' && a.dataset.p === 'cart')); a.classList.toggle('on', on); on ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'); }); const ac = document.getElementById('accb'); if (ac) ac.classList.toggle('cur', page === 'account' && sub !== 'orders'); }
@@ -424,8 +425,9 @@
     if (tab !== 'support' && window.LCChat) LCChat.unmount();
     if (tab === 'test' && !quiet) { const L0 = tqList(); tqi = tqResult() ? L0.length : Math.min(rq.ans.filter(x => x != null).length, L0.length - 1); }
     const tabs = [['quiz', '/routine', T('روتيني', 'My routine')], ['test', '/routine/test', T('اختبار البشرة', 'Skin test')], ['diary', '/routine/diary', T('يومياتي', 'Diary')], ['products', '/routine/products', T('كل المنتجات', 'All products')], ['guide', '/routine/guide', T('دليل المكونات', 'Ingredients')], ['ask', '/routine/ask', T('اسألي عن منتج', 'Ask about a product')], ['support', '/routine/support', T('الدعم', 'Support')]];
+    document.body.classList.toggle('cfull', tab === 'support');
     if (tab === 'support') {
-      el.innerHTML = `<div class="w"><div class="rh"><h2>${lcIco('headset')} ${T('دعم روتين', 'Routine support')}</h2><p><a href="/routine">← ${T('العودة إلى روتين', 'Back to Routine')}</a> · <a href="/help/chat">${T('خدمة الزبائن', 'Customer service')}</a></p></div><div id="rt-chat"></div></div>`;
+      el.innerHTML = `<a class="cfx" href="/routine" aria-label="${T('رجوع', 'Back')}">✕</a><div id="rt-chat"></div>`;
       if (window.LCChat) LCChat.mount(document.getElementById('rt-chat'), 'routine'); return;
     }
     el.innerHTML = `<div class="w"><div class="rh"><h2>${lcIco('flower')} ${T('روتين', 'Routine')}</h2><p>${T('مستشارتك الشخصية للعناية بالبشرة: تحليل بشرتك، اقتراح منتجات، وتحدّثي مع فريقنا.', 'Your personal skincare advisor: analyse your skin, get product picks, and chat with our team.')}</p></div>
@@ -595,8 +597,9 @@
   ];
   function renderHelp(sub) {
     const el = $1('#hlpg'); if (!el) return;
+    document.body.classList.toggle('cfull', sub === 'chat');
     if (sub === 'chat') {
-      el.innerHTML = `<div class="w"><div class="rh"><h2>${lcIco('headset')} ${T('محادثة خدمة الزبائن', 'Customer service chat')}</h2><p><a href="/help">← ${T('مركز المساعدة', 'Help centre')}</a></p></div><div id="hl-chat"></div></div>`;
+      el.innerHTML = `<a class="cfx" href="/help" aria-label="${T('رجوع', 'Back')}">✕</a><div id="hl-chat"></div>`;
       if (window.LCChat) LCChat.mount($1('#hl-chat'), 'service'); return;
     }
     if (window.LCChat) LCChat.unmount();
