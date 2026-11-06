@@ -149,7 +149,7 @@ const assert = require('assert');
   /* bottom bar: isolated pages with their own links; Routine = quiz + product questions + support */
   const rp = await mk(); await rp.goto(base + '/');
   assert.strictEqual(await rp.$$eval('#bnav a[data-p], #bnav #accb', e => e.length), 7);
-  await rp.click('#bnav a[data-p=brands]'); await rp.waitForFunction(() => location.pathname === '/categories' && location.hash === '#brands' && document.querySelector('#bnav a[data-p=brands].on')); ok('bottom bar has a Brands item that opens the brands section');
+  await rp.click('#bnav a[data-p=brands]'); await rp.waitForFunction(() => location.pathname === '/brands' && document.body.dataset.pg === 'brands' && document.querySelector('#bnav a[data-p=brands].on')); await rp.waitForSelector('#brp .rh h2'); ok('bottom bar has a Brands item that opens the brands section');
   for (const [p, path] of [['categories', '/categories'], ['offers', '/offers'], ['routine', '/routine'], ['cart', '/cart'], ['home', '/']]) { await rp.click(`#bnav a[data-p=${p}]`); await rp.waitForFunction(x => location.pathname === x, path); assert.strictEqual(await rp.evaluate(() => document.body.dataset.pg), p === 'cart' ? 'cart' : p); }
   ok('bottom bar: 6 entries, each opens its own page/link');
   await rp.goto(base + '/routine'); await rp.waitForSelector('#rtn [data-rt=skin][data-v=oily]'); await rp.click('#rtn [data-rt=skin][data-v=oily]'); await rp.click('#rtn [data-rt=go]'); await rp.waitForSelector('#rtn .rt-step');

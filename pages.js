@@ -5,8 +5,8 @@
   const E = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const $1 = s => document.querySelector(s);
   const ls = { get: k => { try { return localStorage.getItem(k) } catch (e) { return null } }, set: (k, v) => { try { localStorage.setItem(k, v) } catch (e) {} } };
-  const PAGES = { '': 'home', categories: 'categories', offers: 'offers', routine: 'routine', help: 'help', tracking: 'tracking', preferences: 'preferences', p: 'product', search: 'search', cart: 'cart', checkout: 'checkout', account: 'account', support: 'support' };
-  const TITLES = { home: 'Lacey Skincare', categories: 'الفئات | Lacey', offers: 'عروضنا | Lacey', routine: 'روتين | Lacey', cart: 'السلة | Lacey', checkout: 'إتمام الطلب | Lacey', account: 'حسابي | Lacey', support: 'الدعم | Lacey', product: 'Lacey', search: 'البحث | Lacey', help: 'مركز المساعدة | Lacey', tracking: 'تتبع الطلب | Lacey', preferences: 'الإعدادات | Lacey' };
+  const PAGES = { '': 'home', categories: 'categories', offers: 'offers', routine: 'routine', help: 'help', tracking: 'tracking', preferences: 'preferences', p: 'product', search: 'search', brands: 'brands', cart: 'cart', checkout: 'checkout', account: 'account', support: 'support' };
+  const TITLES = { home: 'Lacey Skincare', categories: 'الفئات | Lacey', offers: 'عروضنا | Lacey', routine: 'روتين | Lacey', cart: 'السلة | Lacey', checkout: 'إتمام الطلب | Lacey', account: 'حسابي | Lacey', support: 'الدعم | Lacey', product: 'Lacey', search: 'البحث | Lacey', brands: 'البراندات | Lacey', help: 'مركز المساعدة | Lacey', tracking: 'تتبع الطلب | Lacey', preferences: 'الإعدادات | Lacey' };
   const OVERLAY = ['cart', 'checkout', 'account'];
   const hdr = document.getElementById('hlp'); if (hdr) hdr.addEventListener('click', e => { e.preventDefault(); lcNav('/help'); });
   let cur = '', prevPath = '/', bn = null, navDepth = 0; const scrolls = {};
@@ -45,14 +45,14 @@
     if (page !== 'routine' && page !== 'help') document.body.classList.remove('cfull');
     cur = page; document.body.dataset.pg = page; document.title = TITLES[page] || TITLES.home;
     secVisible(page);
-    if (bn) { bn.querySelectorAll('a[data-p]').forEach(a => { const isB = page === 'categories' && u.hash === '#brands'; const on = a.dataset.p === 'brands' ? isB : a.dataset.p === 'categories' ? (page === 'categories' && !isB) : a.dataset.p === 'orders' ? (page === 'tracking' || (page === 'account' && sub === 'orders')) : (a.dataset.p === page || (page === 'checkout' && a.dataset.p === 'cart')); a.classList.toggle('on', on); on ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'); }); const ac = document.getElementById('accb'); if (ac) ac.classList.toggle('cur', page === 'account' && sub !== 'orders'); }
+    if (bn) { bn.querySelectorAll('a[data-p]').forEach(a => { const on = a.dataset.p === 'orders' ? (page === 'tracking' || (page === 'account' && sub === 'orders')) : (a.dataset.p === page || (page === 'checkout' && a.dataset.p === 'cart')); a.classList.toggle('on', on); on ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'); }); const ac = document.getElementById('accb'); if (ac) ac.classList.toggle('cur', page === 'account' && sub !== 'orders'); }
     if (page === 'cart' || page === 'checkout') { try { view = page === 'cart' ? 'bag' : 'form'; rc(); const cv = $1('#cv'); cv.classList.add('on', 'pgv'); } catch (e) { console.error(e); } }
     if (page === 'account' && window.accountShow) accountShow({ '': 'p', orders: 'o', receipts: 'r', alerts: 'n' }[sub] || 'p');
-    if (page === 'categories' && u.hash === '#brands') setTimeout(() => { const b = $1('#brs'); if (b) { const y = b.getBoundingClientRect().top + scrollY - 70; scrollTo({ top: y, behavior: 'smooth' }); } }, 80);
     if (page === 'routine') renderRoutine(sub, u);
     if (page === 'help') renderHelp(sub);
     if (page === 'product') renderProduct(sub);
     if (page === 'search') renderSearch(u);
+    if (page === 'brands') renderBrands(sub);
     if (page === 'tracking') renderTrack(u);
     if (page === 'preferences') renderPrefs();
     if (!(was === page && page === 'routine')) { const sy = !push && !replace ? scrolls[u.pathname + u.search] : 0; scrollTo(0, sy || 0); if (sy) setTimeout(() => scrollTo(0, sy), 120); }
@@ -93,7 +93,7 @@
     A.go = c => { const pg = MAP[c]; if (pg && cur !== pg) { lcNav(pg === 'home' ? '/' : '/' + pg); setTimeout(() => ogo(c), 80); return; } ogo(c); };
     window.openAccount = t => lcNav('/account' + ({ o: '/orders', r: '/receipts', n: '/alerts' }[t] || ''));
     const sq = $1('#sq'); if (sq) sq.addEventListener('input', () => { if (sq.value.trim() && cur !== 'categories') lcNav('/categories'); });
-    const r0 = window.render; window.render = function () { r0.apply(this, arguments); langBar(); if (cur === 'product') renderProduct(psub, true); if (cur === 'routine') renderRoutine(rsub, null, true); };
+    const r0 = window.render; window.render = function () { r0.apply(this, arguments); langBar(); if (cur === 'product') renderProduct(psub, true); if (cur === 'routine') renderRoutine(rsub, null, true); if (cur === 'brands') renderBrands(location.pathname.split('/')[2] || ''); };
     const ls0 = $1('#lsw'); if (ls0) ls0.addEventListener('change', () => setTimeout(() => { langBar(); if (cur === 'routine') renderRoutine(rsub, null, true); }, 50));
     const pm = $1('#pm'); if (pm) new MutationObserver(() => {
       const md = pm.querySelector('.md'), add = md && md.querySelector('[data-a=add]');
@@ -552,6 +552,17 @@
       <div class="grid">${L.map(card).join('')}</div>${sm.length ? `<h3 class="sh"><span>${T('منتجات مشابهة', 'Similar products')}</span></h3><div class="grid">${sm.map(card).join('')}</div>` : ''}`;
   }
   function spDraw() { const r = $1('#sp-res'), x = $1('#sp-x'); if (!r) return; if (x) x.hidden = !spQ; r.innerHTML = spQ.trim() ? spResults() : spHome(); }
+  /* ---------- البراندات: صفحة معزولة /brands و /brands/<id> ---------- */
+  function renderBrands(id) {
+    const el = $1('#brp'); if (!el) return; const L = S.br || [], b = id && L.find(x => String(x.id) === String(id));
+    const logo = x => `<span class="bi" ${x.i ? `style="background-image:url('${E(x.i)}')"` : ''}>${x.i ? '' : E((x.n || '?')[0])}</span>`;
+    if (b) {
+      const ps = (S.P || []).filter(q => String(q.br) === String(b.id));
+      el.innerHTML = `<div class="w"><div class="rh"><h2>${E(b.n)}</h2><p><a href="/brands">← ${T('كل البراندات', 'All brands')}</a> · ${ps.length} ${T('منتج', 'products')}</p></div>${ps.length ? `<div class="grid">${ps.map(card).join('')}</div>` : `<p class="em">${T('لا توجد منتجات لهذا البراند حالياً.', 'No products for this brand yet.')}</p>`}</div>`;
+      return;
+    }
+    el.innerHTML = `<div class="w"><div class="rh"><h2>${T('البراندات', 'Brands')}</h2><p>${T('تسوّقي حسب البراند.', 'Shop by brand.')}</p></div>${L.length ? `<div class="brg">${L.map(x => `<a class="brt" href="/brands/${encodeURIComponent(x.id)}">${logo(x)}<b>${E(x.n)}</b><small>${(S.P || []).filter(q => String(q.br) === String(x.id)).length} ${T('منتج', 'products')}</small></a>`).join('')}</div>` : `<p class="em">${T('لا توجد براندات بعد.', 'No brands yet.')}</p>`}</div>`;
+  }
   function renderSearch(u) {
     const el = $1('#srp'); if (!el) return; spQ = (u && u.searchParams.get('q')) || ''; spC = ''; spS = '';
     document.title = (spQ ? spQ + ' | ' : '') + TITLES.search;
