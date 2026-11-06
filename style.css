@@ -62,7 +62,7 @@ footer{background:var(--ink);color:#e3eef0;text-align:center;padding:30px 20px;f
 .cx{display:grid;gap:30px;align-items:center}.cx.im2{grid-template-columns:1fr 1fr}.pic{aspect-ratio:4/3;border-radius:var(--r);background:center/cover}@media(max-width:760px){.cx.im2{grid-template-columns:1fr}}
 #lsw{width:auto;padding:9px 12px;border-radius:99px;background:var(--mist);border-color:transparent}
 html[dir=rtl] body{font-family:var(--af),sans-serif}html[dir=rtl] h1,html[dir=rtl] h2,html[dir=rtl] h3{font-family:var(--af),sans-serif;font-weight:600}#ad,#ad h2,#ad h3{font-family:'Cairo','Segoe UI',Tahoma,'Noto Naskh Arabic',Arial,sans-serif}html[dir=rtl] #ann{letter-spacing:0}html[dir=rtl] .dr{right:auto;left:0;transform:translateX(-100%)}html[dir=rtl] .ov.on .dr{transform:none}html[dir=rtl] .hero h1{line-height:1.25}
-#adv{padding-top:10px}#adv .sl{position:relative;height:clamp(230px,30vw,400px);border-radius:var(--r);overflow:hidden}
+#adv,#adv2{padding-top:10px}#adv .sl,#adv2 .sl{position:relative;height:clamp(230px,30vw,400px);border-radius:var(--r);overflow:hidden}
 .s{position:absolute;inset:0;display:flex;align-items:center;padding:0 7%;color:#fff;opacity:0;transition:opacity .8s;pointer-events:none}.s.on{opacity:1;pointer-events:auto}
 .s h2{font-size:clamp(30px,5vw,64px);margin-bottom:8px;line-height:1.1}.s p{font-size:clamp(15px,1.8vw,22px);margin-bottom:18px;max-width:560px}.s .btn{background:#fff;color:var(--ink)}
 .dots{display:flex;gap:8px;justify-content:center;margin-top:14px}.dots button{width:10px;height:10px;border-radius:50%;background:#cfe0e3;transition:.3s}.dots .on{background:var(--ink);width:28px;border-radius:9px}
@@ -78,7 +78,7 @@ html[dir=rtl] body{font-family:var(--af),sans-serif}html[dir=rtl] h1,html[dir=rt
 #ct{text-align:center;margin-bottom:16px}#ct h3{font-size:26px;margin-bottom:10px}#ct div{display:flex;flex-wrap:wrap;gap:10px;justify-content:center}
 #ct a{padding:8px 20px;border-radius:99px;border:1px solid #cfe0e3;background:#fff;color:var(--ink);text-decoration:none;font-weight:500}#ct a:hover{background:var(--mist)}
 .dpt{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}.dc.t3{background:linear-gradient(135deg,var(--ink),#7f9c9b)}
-body.pg .hero,body.pg #adv,body.pg #dpt,body.pg #tiles,body.pg main>section:not(#shop){display:none!important}
+body.pg .hero,body.pg #adv,body.pg #adv2,body.pg #dpt,body.pg #tiles,body.pg main>section:not(#shop){display:none!important}
 body.pg #shop{padding-top:28px}html[dir=rtl] #bk span{display:inline-block;transform:scaleX(-1)}
 .grid,.rail{display:grid;grid-template-columns:repeat(4,1fr);gap:22px 18px;max-width:none;overflow:visible;padding:0}.rail>*{scroll-snap-align:none}
 .card{display:block;padding:0;background:none;border:0;box-shadow:none;cursor:pointer}.card:hover{transform:none;box-shadow:none}
@@ -415,3 +415,8 @@ body.cfull #chp.inl #chcp{max-height:40vh;overflow:auto}
 
 .brg{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:14px}.brt{display:grid;justify-items:center;gap:6px;padding:18px 10px;border-radius:20px;background:#fff;border:1px solid var(--mist);color:inherit;text-align:center;text-decoration:none}.brt .bi{width:84px;height:84px}.brt small{opacity:.6}
 .brh{font-size:20px;margin:22px 0 12px}
+
+/* الوردة المتحركة صغيرة بجانب زر التسوق، والشاشة الإعلانية الإضافية مكانها */
+.hero .disc{max-width:150px;justify-self:end}
+@media(max-width:760px){.hero .w{position:relative}.hero .disc{position:absolute;inset-inline-end:18px;bottom:0;width:120px;max-width:120px;margin:0}.hero{padding:28px 0 20px}.hero p{margin-bottom:24px}.hero .btn{margin-bottom:0}}
+.hero .disc svg{width:78%;height:78%}
