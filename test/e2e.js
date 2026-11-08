@@ -166,6 +166,7 @@ const assert = require('assert');
   await adm.evaluate(() => A.grp(0)); await adm.waitForSelector('#lvb .kg .kc', { timeout: 8000 }); assert((await adm.$$eval('#lvb svg', e => e.length)) >= 6); ok('live dashboard: KPI cards with sparklines + charts render');
   await adm.evaluate(() => A.tab('hl')); await adm.waitForSelector('#hlb .ck', { timeout: 8000 }); assert((await adm.$$eval('#hlb .ck', e => e.length)) >= 10); ok('store readiness checklist renders');
   await adm.evaluate(() => A.tab('s')); await adm.waitForSelector('#sf');
+  assert(await adm.$('#sf details.stg')); await adm.fill('#stgq', 'تلجرام'); assert(await adm.evaluate(() => [...document.querySelectorAll('#sf details.stg')].some(s => s.style.display === 'none'))); await adm.fill('#stgq', ''); await adm.fill('#sf input[name=n]', 'اسم'); assert(await adm.$('#sf.dirty')); await adm.fill('#sf input[name=n]', await adm.$eval('#sf input[name=n]', e => e.defaultValue)); ok('settings: collapsible sections, search, unsaved-changes indicator');
   await adm.click('#sf .btn >> nth=0'); await adm.waitForFunction(() => document.querySelector('.toast, #toast') ? true : true); 
   assert.strictEqual(await adm.$('.cfv'), null, 'no dialog without changes'); ok('settings save with no change shows no dialog');
   await adm.fill('#sf input[name=n]', 'لاسي الجديد'); await adm.click('#sf .btn >> nth=0'); await adm.waitForSelector('.cfv .cfr');

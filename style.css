@@ -423,3 +423,14 @@ body.cfull #chp.inl #chcp{max-height:40vh;overflow:auto}
 /* الوردة الافتراضية محذوفة؛ يبقى #hd فقط عند رفع صورة/فيديو للواجهة من لوحة التحكم */
 .hero .disc:not(.hm){display:none}.hero .w{grid-template-columns:1fr}.hero .w:has(#hd.hm){grid-template-columns:1.2fr 1fr}
 @media(max-width:760px){.hero .w:has(#hd.hm){grid-template-columns:1fr}.hero .disc.hm{position:static;width:100%;max-width:none;aspect-ratio:auto;border-radius:28px;margin-top:16px}}
+/* الإعدادات: أقسام قابلة للطي + شريط حفظ ثابت */
+.stg-top{grid-column:1/-1;display:flex;gap:8px;position:sticky;top:0;z-index:5;background:var(--bg,#fff);padding:8px 0}.stg-top input{flex:1}
+details.stg{grid-column:1/-1;border:1px solid var(--mist,#dde8ea);border-radius:18px;background:#fff;overflow:hidden}
+details.stg>summary{list-style:none;cursor:pointer;padding:14px 16px;font-weight:700;display:flex;align-items:center;gap:10px}details.stg>summary::-webkit-details-marker{display:none}
+details.stg>summary:after{content:"▾";margin-inline-start:auto;transition:.2s}details.stg[open]>summary:after{transform:rotate(180deg)}
+.stg-n{font-style:normal;font-weight:400;font-size:12px;opacity:.55}
+.stg-b{padding:4px 16px 16px;display:grid;gap:10px}.stg-b .full{display:none}.stg-tools{display:flex;flex-wrap:wrap;gap:8px}
+.stg-bar{grid-column:1/-1;position:sticky;bottom:10px;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;border-radius:999px;background:#fff;box-shadow:0 6px 24px rgba(0,0,0,.14);z-index:6}
+form.dirty .stg-bar #stgd{color:#c0392b;font-weight:700}.stg-b input.bad{border-color:#c0392b}
+.stg-b label{position:relative}.stg-eye{position:absolute;inset-inline-end:10px;bottom:10px;background:none;border:0;font-size:16px;cursor:pointer}
+.stg-all{padding:0 14px;border-radius:14px;border:1px solid var(--mist,#dde8ea);background:#fff;cursor:pointer}
