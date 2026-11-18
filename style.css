@@ -434,3 +434,11 @@ details.stg>summary:after{content:"▾";margin-inline-start:auto;transition:.2s}
 form.dirty .stg-bar #stgd{color:#c0392b;font-weight:700}.stg-b input.bad{border-color:#c0392b}
 .stg-b label{position:relative}.stg-eye{position:absolute;inset-inline-end:10px;bottom:10px;background:none;border:0;font-size:16px;cursor:pointer}
 .stg-all{padding:0 14px;border-radius:14px;border:1px solid var(--mist,#dde8ea);background:#fff;cursor:pointer}
+/* اختبار البشرة المطوّر: مراحل، محاور، ثقة، أدلة، اعتماد */
+.tq-st{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;margin:-6px 0 12px}.tq-st span{font-size:12px;padding:3px 10px;border-radius:99px;background:#f0f3f3;color:#7a8a8a}.tq-st .on{background:#526e6d;color:#fff}.tq-st .dn{background:#dfe9e9;color:#526e6d}
+.tq-intro h2{margin:0 0 6px}.tq-pts{list-style:none;padding:0;margin:12px 0 16px;display:grid;gap:8px}.tq-pts li{display:flex;gap:8px;align-items:flex-start}
+.tq-ax{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:10px 0}.tq-ax span{background:#f3f7f7;border-radius:14px;padding:10px 12px;display:grid;gap:2px}.tq-ax small{opacity:.6;font-size:11px}.tq-ax b{font-size:15px}
+.tq-conf{border-radius:12px;padding:10px 12px;font-size:14px;margin:8px 0}.tq-conf.c-high{background:#e8f5ec;color:#25613a}.tq-conf.c-mid{background:#fff6dd;color:#7a5a00}.tq-conf.c-low{background:#fdeaea;color:#a12828}
+.tq-ev{border-inline-start:3px solid #8fb3b5;padding:2px 12px;margin:10px 0}.tq-ev p{margin:4px 0;font-size:14px;line-height:1.7}.tq-ev .rf,.tq-res .rf{font-size:11px;text-decoration:none;color:#3e7d80;vertical-align:super}
+.tq-ok{font-weight:700}.tq-src ol{padding-inline-start:20px}.tq-src li{margin:6px 0;font-size:13px}
+.rt-man{margin-top:12px}
