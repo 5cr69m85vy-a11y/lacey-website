@@ -466,3 +466,11 @@ form.dirty .stg-bar #stgd{color:#c0392b;font-weight:700}.stg-b input.bad{border-
 .rt-add{width:42px;height:42px;border-radius:50%;background:#526e6d;color:#fff;display:grid;place-items:center;flex:none}
 .rp-b .rt-rm{text-align:start}.rp-b .rt-row{margin:10px 0 0}.rp-b .rt-cart{border-radius:50%;width:42px;height:42px}
 .rp-b .rt-rm,.rp-b .rt-rm *{text-align:start!important}.rp-b .rp-alt{width:100%;text-align:start}
+
+/* ===== حركات موحّدة ومرتبة ===== */
+:root{--ez:cubic-bezier(.22,.8,.3,1)}
+html{-webkit-tap-highlight-color:transparent}
+@keyframes pgin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+body.pgan>section:not([hidden]):not(.hid),body.pgan #cv.on{animation:pgin .28s var(--ez) both}
+.btn,.card,.tl,button,a.bn,#bn a{transition:transform .18s var(--ez),box-shadow .2s var(--ez),background-color .2s,opacity .2s,border-color .2s}
+.btn:active,.card:active,#bn a:active,button:active{transform:scale(.97)}

@@ -45,6 +45,7 @@
     if (page !== 'routine' && page !== 'help') document.body.classList.remove('cfull');
     cur = page; document.body.dataset.pg = page; document.title = TITLES[page] || TITLES.home;
     secVisible(page);
+    if (was !== page) { const b = document.body; b.classList.remove('pgan'); void b.offsetWidth; b.classList.add('pgan'); }
     if (bn) { bn.querySelectorAll('a[data-p]').forEach(a => { const on = a.dataset.p === 'orders' ? (page === 'tracking' || (page === 'account' && sub === 'orders')) : (a.dataset.p === page || (page === 'checkout' && a.dataset.p === 'cart')); a.classList.toggle('on', on); on ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'); }); const ac = document.getElementById('accb'); if (ac) ac.classList.toggle('cur', page === 'account' && sub !== 'orders'); }
     if (page === 'cart' || page === 'checkout') { try { view = page === 'cart' ? 'bag' : 'form'; rc(); const cv = $1('#cv'); cv.classList.add('on', 'pgv'); } catch (e) { console.error(e); } }
     if (page === 'account' && window.accountShow) accountShow({ '': 'p', orders: 'o', receipts: 'r', alerts: 'n' }[sub] || 'p');

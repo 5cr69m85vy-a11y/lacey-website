@@ -178,5 +178,12 @@ const authFor = require('./sess');
     const r = await call('/pimg/A2'); assert.strictEqual(r.status, 200); assert.strictEqual(r.headers.get('content-type'), 'image/png'); assert.strictEqual((await r.arrayBuffer()).byteLength, Buffer.from(png, 'base64').length);
     assert.strictEqual((await call('/pimg/NOPE')).status, 404);
   });
+  await ok('public catalog strips base64 images to /pimg URLs; admin keeps full data; saving the public URL never overwrites the image', async () => {
+    const pub = await (await call('/catalog')).json(); const a2 = (pub.data || pub).P.find(p => p.c === 'A2');
+    assert(/^\/pimg\/A2\?v=/.test(a2.i), 'public image should be a URL: ' + String(a2.i).slice(0, 30));
+    const adm1 = await get('/settings', adm); const full = (adm1.data || adm1).P.find(p => p.c === 'A2'); assert(full.i.startsWith('data:image'));
+    const cur = adm1.data || adm1; await post('/settings', { data: { ...cur, P: cur.P.map(p => p.c === 'A2' ? { ...p, i: a2.i } : p) } }, adm);
+    const again = await get('/settings', adm); assert(((again.data || again).P.find(p => p.c === 'A2')).i.startsWith('data:image'));
+  });
   console.log(n + ' ops tests passed');
 })().catch(e => { console.error('FAIL', e); process.exit(1); });

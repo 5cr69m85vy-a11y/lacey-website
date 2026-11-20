@@ -36,8 +36,11 @@
 
 
   /* ---------- PWA ---------- */
-  if ('serviceWorker' in navigator && location.protocol.startsWith('http') && !/localhost:\d+$/.test(location.host + '') ) navigator.serviceWorker.register('/sw.js').catch(() => {});
-  else if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('/sw.js').catch(() => {});
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+    const had = !!navigator.serviceWorker.controller; let rl = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => { if (had && !rl) { rl = true; location.reload(); } });   // نسخة جديدة → تحديث تلقائي مرة واحدة
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  }
   let dip = null; addEventListener('beforeinstallprompt', e => { e.preventDefault(); dip = e; const b = document.createElement('button'); b.id = 'inst'; b.textContent = T('📲 ثبّت التطبيق', '📲 Install app'); b.onclick = async () => { dip.prompt(); await dip.userChoice; b.remove(); dip = null; }; document.body.appendChild(b); });
   const tm = document.querySelector('meta[name=theme-color]'); if (tm && S.ac) tm.content = S.ac;
 })();

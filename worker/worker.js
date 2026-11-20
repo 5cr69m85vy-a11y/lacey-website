@@ -125,6 +125,7 @@ async function readCatalog(env, full) {
   if (!row && !P.length) return null;
   const B = ((await env.DB.prepare(`SELECT data FROM boxes ${full ? '' : 'WHERE active=1'} ORDER BY sort,id`).all()).results || []).map(r => jp(r.data, null)).filter(Boolean);
   { const sm = await stockMap(env); for (const x of P) { const s = sm[x.c]; if (s) { x.left = s.qty; x.lw = s.low; } else { delete x.left; delete x.lw; } } }
+  if (!full) for (const x of P) { if (typeof x.i === 'string' && x.i.startsWith('data:')) { let h = x.i.length; for (let k = 0; k < x.i.length; k += 997) h = (h * 31 + x.i.charCodeAt(k)) >>> 0; x.i = '/pimg/' + encodeURIComponent(x.c) + '?v=' + h.toString(36); } }
   const data = { ...(row ? jp(row.value, {}) : {}), P, B };
   if (!full) for (const k of PRIVATE) delete data[k];
   return data;
@@ -133,11 +134,12 @@ async function saveCatalog(env, data) {
   const P = Array.isArray(data.P) ? data.P : [];
   if (P.length > 2000) throw Object.assign(new Error('too many products'), { status: 400 });
   const t = now(), seen = new Set(), stmts = [];
-  P.forEach((p, i) => {
+  for (const [i, p] of P.entries()) {
     const code = String((p && p.c) ?? '').trim();
-    if (!code || seen.has(code)) return;
+    if (!code || seen.has(code)) continue;
     seen.add(code);
     delete p.left; delete p.lw;       // الكمية تُدار من تبويب المخزون فقط
+    if (typeof p.i === 'string' && p.i.startsWith('/pimg/')) { const old = await env.DB.prepare('SELECT data FROM products WHERE code=?').bind(code).first(); p.i = (old && jp(old.data, {}).i) || ''; }   // الكتالوج العام يعرض رابط الصورة فقط: لا نحفظ الرابط مكان الصورة
     const json = JSON.stringify(p);
     if (json.length > MAX_PRODUCT_BYTES) throw Object.assign(new Error(`صور المنتج ${code} كبيرة جداً؛ صغّرها`), { status: 413 });
     stmts.push(env.DB.prepare(
@@ -145,7 +147,7 @@ async function saveCatalog(env, data) {
        ON CONFLICT(code) DO UPDATE SET sort=excluded.sort,name=excluded.name,price=excluded.price,old_price=excluded.old_price,
        category=excluded.category,grp=excluded.grp,best=excluded.best,data=excluded.data,updated_at=excluded.updated_at`)
       .bind(code, i, String(p.n || ''), Math.round(+p.p || 0), Math.round(+p.o || 0), String(p.k || ''), String(p.g || 'skin'), p.b ? 1 : 0, json, t));
-  });
+  }
   const have = (await env.DB.prepare('SELECT code FROM products').all()).results.map(r => r.code);
   have.filter(c => !seen.has(c)).forEach(c => stmts.push(env.DB.prepare('DELETE FROM products WHERE code=?').bind(c)));
   if (Array.isArray(data.B)) {
