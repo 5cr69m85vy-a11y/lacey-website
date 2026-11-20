@@ -6,7 +6,7 @@
   const $1 = s => document.querySelector(s);
   const ls = { get: k => { try { return localStorage.getItem(k) } catch (e) { return null } }, set: (k, v) => { try { localStorage.setItem(k, v) } catch (e) {} } };
   const PAGES = { '': 'home', categories: 'categories', offers: 'offers', routine: 'routine', help: 'help', tracking: 'tracking', preferences: 'preferences', p: 'product', search: 'search', brands: 'brands', cart: 'cart', checkout: 'checkout', account: 'account', support: 'support' };
-  const TITLES = { home: 'Lacey Skincare', categories: 'الفئات | Lacey', offers: 'عروضنا | Lacey', routine: 'روتين | Lacey', cart: 'السلة | Lacey', checkout: 'إتمام الطلب | Lacey', account: 'حسابي | Lacey', support: 'الدعم | Lacey', product: 'Lacey', search: 'البحث | Lacey', brands: 'البراندات | Lacey', help: 'مركز المساعدة | Lacey', tracking: 'تتبع الطلب | Lacey', preferences: 'الإعدادات | Lacey' };
+  const TITLES = { home: 'Lacey Skincare', categories: 'الفئات | Lacey', offers: 'عروضنا | Lacey', routine: 'اكتشف روتينك | Lacey', cart: 'السلة | Lacey', checkout: 'إتمام الطلب | Lacey', account: 'حسابي | Lacey', support: 'الدعم | Lacey', product: 'Lacey', search: 'البحث | Lacey', brands: 'البراندات | Lacey', help: 'مركز المساعدة | Lacey', tracking: 'تتبع الطلب | Lacey', preferences: 'الإعدادات | Lacey' };
   const OVERLAY = ['cart', 'checkout', 'account'];
   const hdr = document.getElementById('hlp'); if (hdr) hdr.addEventListener('click', e => { e.preventDefault(); lcNav('/help'); });
   let cur = '', prevPath = '/', bn = null, navDepth = 0; const scrolls = {};
@@ -153,6 +153,11 @@
   const ingOf = p => String(p.ing || '').split(/[,،;\n]/).map(x => x.trim()).filter(Boolean).slice(0, 8);
   const ingHTML = p => ingOf(p).length ? `<div class="ingc">${ingOf(p).map(x => `<span>${E(x)}</span>`).join('')}</div>` : '';
   const unsafePreg = p => !!p.np || /retinol|ريتينول|salicylic|ساليسيليك|benzoyl|بنزويل/i.test(plain(p));
+  /* قواعد الأمان: الأحماض المقشّرة والريتينول لا تُستعمل صباحاً (تزيد حساسية الشمس)، وفيتامين سي صباحاً فقط، ومن تستخدم علاجاً موصوفاً (إيزوتريتينوين) تُستبعد عنها الأحماض والمقشّرات والريتينول كلياً */
+  const ACID_AM = /\b(glycolic|lactic|mandelic|salicylic)\b|\b(bha|aha|pha)\b|hydroxy acid|retinol|retinal|exfoliat|peeling|\bpeel\b|ساليسيليك|جلايكوليك|لاكتيك|ماندليك|هيدروكسي|ريتينول|مقشّر|مقشر/i;
+  const ACID_ALL = new RegExp(ACID_AM.source + '|azelaic|adapalene|tretinoin|retinoid|benzoyl|أزيليك|أدابالين|بنزويل|ريتينويد', 'i');
+  const VITC = /vitamin\s*c|ascorb|فيتامين\s*(سي|c)/i;
+  const fitTime = (p, w) => { if (!w) return true; const t = plain(p); if (w === 'am' && ACID_AM.test(t)) return false; if (w === 'pm' && VITC.test(t)) return false; const tm = timeOf(p); return !(tm === 'am' && w === 'pm') && !(tm === 'pm' && w === 'am'); };
   const DQ = [
     ['كيف تبدو بشرتك بعد ساعتين من غسلها؟', 'How does your skin look 2 hours after washing?', [['oily', 2, 'لامعة في كل الوجه', 'Shiny all over'], ['combo', 2, 'لامعة في الجبهة والأنف فقط', 'Shiny on forehead & nose only'], ['dry', 2, 'مشدودة أو متقشرة', 'Tight or flaky'], ['normal', 2, 'مريحة ومتوازنة', 'Comfortable & balanced']]],
     ['كيف تبدو مسامك؟', 'How do your pores look?', [['oily', 1, 'واسعة وظاهرة في الوجه', 'Large & visible'], ['combo', 1, 'واسعة في منطقة T فقط', 'Large in the T-zone only'], ['dry', 1, 'صغيرة أو غير ظاهرة', 'Small or invisible'], ['normal', 1, 'متوسطة', 'Medium']]],
@@ -199,7 +204,7 @@
 
   function okFor(p) {
     const me = typeof custMe == 'function' ? custMe() : null, young = me && me.age != null && me.age < 18;
-    return !(young && /retinol|ريتينول/i.test(plain(p))) && !(rq.preg && unsafePreg(p));
+    return !(young && /retinol|ريتينول/i.test(plain(p))) && !(rq.preg && unsafePreg(p)) && !(rq.rx && ACID_ALL.test(plain(p)));
   }
   function score(p) {
     const t = plain(p); let s = rq.budget === 'low' ? -p.p / 1e6 : 0;
@@ -209,8 +214,8 @@
     return s;
   }
   const suit = p => { if (!okFor(p)) return 'avoid'; if (!rq.skin) return ''; const s = score(p); return s >= 4 ? 'good' : s < 0 ? 'weak' : 'ok'; };
-  function recommend() {
-    const list = prodList().filter(okFor);
+  function recommend(w) {
+    const list = prodList().filter(okFor).filter(p => fitTime(p, w));
     return STEPS.map(([id, ar, en, re, when]) => {
       const pool = list.filter(p => stepOf(p) === id);
       const scored = pool.map(p => [score(p), p]).sort((a, b) => b[0] - a[0] || a[1].p - b[1].p);
@@ -245,13 +250,13 @@
     if (!rq.skin) return '';
     let out = savedHTML();
 
-      const rec = recommend(), show1 = (w) => rec.filter(s => w === 'am' ? true : s.when !== 'am');
+      const recA = recommend('am'), recP = recommend('pm'), show1 = w => w === 'am' ? recA : recP.filter(s => s.when !== 'am'), rec = [...(rq.when !== 'pm' ? show1('am') : []), ...(rq.when !== 'am' ? show1('pm') : [])];
       const blk = (title, steps, w) => `<div class="rt-c"><h3>${title}</h3>${steps.map((s, i) => `<div class="rt-step" data-step="${s.id}"><b>${i + 1}</b><div><b>${T(s.ar, s.en)}</b><p class="em rt-why">${T(WHY[s.id][0], WHY[s.id][1])} ${T(HOW[s.id][0], HOW[s.id][1])}</p>${s.items.length ? s.items.map((p, pi) => `<div class="rt-pw${pi ? '' : ' on'}">${pi === 0 && s.items.length > 1 ? `<small class="rt-sel-l">${T('المختار لك', 'Your pick')}</small>` : ''}${pcard(p, true)}${pi ? `<button class="g rt-swap" data-rt="pick" data-s="${s.id}" data-c="${E(p.c)}">${T('اختاري هذا بدلاً منه', 'Use this instead')}</button>` : ''}</div>`).join('') : `<p class="em">${T('لا يوجد منتج مناسب حالياً — اسألي مختصاً.', 'No matching product yet — ask a specialist.')}</p>`}</div></div>`).join('')}</div>`;
       const sk = SKINS.find(x => x[0] === rq.skin);
       out += `<div class="rt-c"><h3>${lcIco('flower')} ${T('روتينك للبشرة ' + sk[1], 'Your routine for ' + sk[2] + ' skin')}</h3><p class="em">${E(TIPS[rq.skin])}</p></div>`;
-      const chosen = rec.filter(s => (rq.when === 'pm' ? s.when !== 'am' : true)).map(s => s.items[0]).filter(Boolean), uniq = [...new Map(chosen.map(x => [x.c, x])).values()], tot = uniq.reduce((a, x) => a + (x.p || 0), 0);
-      out += `<div class="rt-c rt-ov"><h3>${lcIco('list')} ${T('منتجاتك المختارة', 'Your picks')}</h3><div class="rt-ovg">${rec.filter(s => s.items[0] && (rq.when === 'pm' ? s.when !== 'am' : true)).map(s => { const x = s.items[0]; return `<div class="rt-ovc"><div class="th" style="${x.i ? `background-image:url('${E(x.i)}')` : ''}"></div><small>${T(s.ar, s.en)}</small><b>${E(x.n)}</b><em>${fmM(x.p)}</em>${s.items.length > 1 ? `<button type="button" class="g" data-rt="alts" data-s="${s.id}">${T('بدائل', 'Alternatives')} (${s.items.length - 1})</button>` : `<span class="em">${T('لا بدائل', 'No alternatives')}</span>`}</div>`; }).join('')}</div></div>`;
-      const pick = w => (w === 'am' ? rec : rec.filter(s => s.when !== 'am')).map(s => s.items[0]).filter(Boolean);
+      const chosen = rec.map(s => s.items[0]).filter(Boolean), uniq = [...new Map(chosen.map(x => [x.c, x])).values()], tot = uniq.reduce((a, x) => a + (x.p || 0), 0);
+      out += `<div class="rt-c rt-ov"><h3>${lcIco('list')} ${T('منتجاتك المختارة', 'Your picks')}</h3><div class="rt-ovg">${rec.filter(s => s.items[0]).map(s => { const x = s.items[0]; return `<div class="rt-ovc"><div class="th" style="${x.i ? `background-image:url('${E(x.i)}')` : ''}"></div><small>${T(s.ar, s.en)}</small><b>${E(x.n)}</b><em>${fmM(x.p)}</em>${s.items.length > 1 ? `<button type="button" class="g" data-rt="alts" data-s="${s.id}">${T('بدائل', 'Alternatives')} (${s.items.length - 1})</button>` : `<span class="em">${T('لا بدائل', 'No alternatives')}</span>`}</div>`; }).join('')}</div></div>`;
+      const pick = w => show1(w).map(s => s.items[0]).filter(Boolean);
       const warn = w => conflicts(actsOf(pick(w))).map(x => `<p class="rt-warn">${lcIco('warn')} ${E(x)}</p>`).join('');
       if (rq.when !== 'pm') out += blk(lcIco('sun') + ' ' + T('الصباح', 'Morning'), show1('am')) + warn('am');
       if (rq.when !== 'am') out += blk(lcIco('moon') + ' ' + T('المساء', 'Evening'), show1('pm')) + warn('pm') + weekHTML(show1('pm'));
@@ -293,10 +298,11 @@
     ['preg', ['أمان', 'Safety'], ['هل أنتِ حامل أو مرضعة أو تخططين للحمل قريباً؟', 'Are you pregnant, nursing or planning a pregnancy soon?'], [
       ['لا', 'No', {}], ['نعم', 'Yes', { preg: 1 }]]],
   ];
+  TQ.splice(TQ.findIndex(q => q[0] === 'rx'), 0, ['goal', ['هدفك', 'Your goal'], ['ما هدفك الأهم من العناية بالبشرة؟', 'What is your main skincare goal?'], [['بشرة صافية وخالية من الحبوب', 'Clear skin', {}], ['نضارة وإشراق وتوحيد اللون', 'Glow & even tone', {}], ['ترطيب وترميم الحاجز', 'Hydration & repair', {}], ['التحكم بالدهون والمسام', 'Oil & pore control', {}], ['مكافحة علامات العمر', 'Anti-ageing', {}]]]);
   TQ.unshift(TQ.splice(TQ.findIndex(q => q[0] === 'age'), 1)[0]);
   TQ.splice(TQ.findIndex(q => q[0] === 'preg'), 0, ['rx', ['أمان', 'Safety'], ['هل تستخدمين حالياً دواءً موصوفاً للبشرة (مثل إيزوتريتينوين/روكيوتين، مضاداً حيوياً، أو كريماً علاجياً من الطبيب)؟', 'Do you currently use a prescribed skin treatment (e.g. isotretinoin, an antibiotic or a prescription cream)?'], [['لا', 'No', {}], ['نعم', 'Yes', { rx: 1 }]]]);
   const STG = [['عنك', 'About you'], ['بشرتك', 'Your skin'], ['الحساسية', 'Sensitivity'], ['مشاكل وشمس', 'Concerns & sun'], ['الأمان', 'Safety']];
-  const STAGE = { age: 0, oil: 1, pores: 1, slide: 1, tight: 1, dehy: 1, sting: 2, flush: 2, react: 2, acne: 3, pig: 3, sun: 3, wr: 3, rx: 4, preg: 4 };
+  const STAGE = { age: 0, oil: 1, pores: 1, slide: 1, tight: 1, dehy: 1, sting: 2, flush: 2, react: 2, acne: 3, pig: 3, sun: 3, wr: 3, goal: 3, rx: 4, preg: 4 };
   const REFS = {
     baumann: ['Baumann L. Understanding and treating various skin types: the Baumann Skin Type Indicator. Dermatol Ther. 2008.', 'https://pubmed.ncbi.nlm.nih.gov/18555952/'],
     ss10: ['Misery L, et al. A new ten-item questionnaire for assessing sensitive skin: the Sensitive Scale-10. Acta Derm Venereol. 2014;94(6).', 'https://medicaljournals.se/acta/content/abstract/10.2340/00015555-1870'],
@@ -318,7 +324,7 @@
     redness: ['الاحمرار: اختاري منتجات لطيفة خالية من العطور وتجنّبي المقشّرات القوية. الاحمرار الدائم أو الشعيرات الظاهرة قد يدل على وردية (روزاسيا) ويحتاج تقييماً طبياً.', 'Redness: choose gentle fragrance-free products and avoid strong exfoliants. Persistent redness or visible capillaries may be rosacea and needs medical assessment.', ['ros']],
     pores: ['المسام: حجمها تحدده الوراثة والدهون ولا يمكن «إغلاقها»، لكن التنظيف اللطيف ومقشّر BHA يحسّنان مظهرها.', 'Pores: size is set by genetics and oil and cannot be “closed”, but gentle cleansing and a BHA exfoliant improve their look.', []]
   };
-  let tqi = -2, tqEdit = false, adjOpen = false;
+  let tqi = -2, tqEdit = false, adjOpen = false, rtView = false;
   rq.a = rq.a && typeof rq.a == 'object' && !Array.isArray(rq.a) ? rq.a : {}; rq.adopted = +rq.adopted || 0; rq.rx = !!rq.rx;
   const ageBand = () => { const me = typeof custMe == 'function' ? custMe() : null; if (me && me.age != null) return me.age < 20 ? 0 : me.age < 30 ? 1 : me.age < 40 ? 2 : me.age < 50 ? 3 : 4; return rq.a.age; };
   const SKIP = { wr: () => ageBand() === 0, slide: () => rq.a.oil >= 3 };
@@ -339,8 +345,9 @@
     const sensHigh = m.sens >= 6, sens = m.sens >= 3 || !!m.rx, skin = sensHigh ? 'sensitive' : base;
     const concerns = []; if (m.acne >= 2 || (m.acne === 1 && m.oil >= 3)) concerns.push('acne'); if (m.pig >= 1) concerns.push('spots'); if (m.dry >= 4 || m.dh >= 2) concerns.push('dry');
     if (m.wr >= 2 || (m.wr >= 1 && m.age >= 3)) concerns.push('aging'); if (m.flush >= 2 || m.sens >= 5) concerns.push('redness'); if (m.oil >= 4 && (base === 'oily' || base === 'combo')) concerns.push('pores');
+    const GL = ['acne', 'spots', 'dry', 'pores', 'aging']; if (rq.a.goal >= 0 && !concerns.includes(GL[rq.a.goal])) concerns.push(GL[rq.a.goal]);
     const clash = CONTRA.filter(([a, av, b, bv]) => av.includes(rq.a[a]) && bv.includes(rq.a[b])).map(c => c[0]);
-    const conf = clash.length ? 'low' : border ? 'mid' : 'high';
+    const skips = tqList().filter(q => rq.a[q[0]] === -1).length, conf = clash.length || skips >= 5 ? 'low' : border || skips >= 2 ? 'mid' : 'high';
     const notes = [];
     if ((base === 'oily' || base === 'combo') && (m.dry >= 3 || m.dh >= 2)) notes.push(T('بشرتك دهنية لكنها «ناقصة ماء»: اختاري مرطباً مائياً خفيفاً (هيالورونيك/غليسرين) ولا تفرطي في التنظيف.', 'Your skin is oily but dehydrated: use a light water-based moisturiser and do not over-cleanse.'));
     if (sens && m.dry >= 3) notes.push(T('قد يكون حاجز بشرتك متعباً: بسّطي الروتين (غسول لطيف، مرطب بالسيراميد، واقي شمس) وأدخلي منتجاً جديداً كل أسبوعين.', 'Your barrier may be stressed: keep it simple (gentle cleanser, ceramide moisturiser, sunscreen) and add one new product every two weeks.'));
@@ -350,7 +357,7 @@
     const see = []; if (m.acne >= 3) see.push(T('حب الشباب العميق أو المسبب للندبات يحتاج طبيب جلدية.', 'Deep or scarring acne needs a dermatologist.')); if (m.flush >= 3) see.push(T('الاحمرار الدائم أو الشعيرات الظاهرة قد يكون وردية (روزاسيا): راجعي طبيب جلدية.', 'Persistent redness or visible capillaries may be rosacea: see a dermatologist.')); if (m.derm) see.push(T('الإكزيما أو التهاب الجلد يحتاج متابعة طبية.', 'Eczema or dermatitis needs medical follow-up.')); if (m.pig >= 3) see.push(T('الكلف أو البقع الداكنة الواسعة يُفضّل تقييمها عند طبيب جلدية.', 'Melasma or broad dark patches are best assessed by a dermatologist.'));
     const pc = (v, mx) => Math.max(0, Math.min(100, Math.round(v / mx * 100)));
     const axes = [[T('دهنية', 'Oily'), T('جافة', 'Dry'), base === 'oily' ? T('دهنية', 'Oily') : base === 'dry' ? T('جافة', 'Dry') : base === 'combo' ? T('مختلطة', 'Combination') : T('متوازنة', 'Balanced')], [T('حساسة', 'Sensitive'), T('مقاومة', 'Resistant'), sensHigh ? T('حساسة', 'Sensitive') : sens ? T('حساسة قليلاً', 'Mildly sensitive') : T('مقاومة', 'Resistant')], [T('مصطبغة', 'Pigmented'), T('غير مصطبغة', 'Non-pigmented'), m.pig >= 1 ? T('مصطبغة', 'Pigmented') : T('غير مصطبغة', 'Non-pigmented')], [T('تجاعيد', 'Wrinkle-prone'), T('مشدودة', 'Firm'), m.wr >= 1 || m.age >= 4 ? T('عرضة للتجاعيد', 'Wrinkle-prone') : T('مشدودة', 'Firm')]];
-    return { m, base, skin, sens, sensHigh, concerns, notes, see, conf, clash, axes, bars: [[T('الدهون', 'Oil'), pc(m.oil, 7)], [T('الجفاف', 'Dryness'), pc(m.dry, 9)], [T('الحساسية', 'Sensitivity'), pc(m.sens, 8)], [T('حب الشباب', 'Acne'), pc(m.acne, 3)], [T('التصبغ', 'Pigmentation'), pc(m.pig, 3)], [T('خطوط وتجاعيد', 'Lines'), pc(m.wr, 3)]] };
+    return { skips, m, base, skin, sens, sensHigh, concerns, notes, see, conf, clash, axes, bars: [[T('الدهون', 'Oil'), pc(m.oil, 7)], [T('الجفاف', 'Dryness'), pc(m.dry, 9)], [T('الحساسية', 'Sensitivity'), pc(m.sens, 8)], [T('حب الشباب', 'Acne'), pc(m.acne, 3)], [T('التصبغ', 'Pigmentation'), pc(m.pig, 3)], [T('خطوط وتجاعيد', 'Lines'), pc(m.wr, 3)]] };
   }
   function resultHTML(res) {
     const me = typeof custMe == 'function' ? custMe() : null, PH = ['', 'I', 'II', 'III', 'IV', 'V', 'VI'];
@@ -360,7 +367,7 @@
     const ev = cons.map(c => `<div class="tq-ev"><b>${E(T(CONCERNS.find(x => x[0] === c)[1], CONCERNS.find(x => x[0] === c)[2]))}</b><p>${E(T(EVID[c][0], EVID[c][1]))} ${EVID[c][2].map(refN).join(' ')}</p></div>`).join('');
     const confMsg = { high: T('ثقة عالية: إجاباتك متسقة ونتيجتها واضحة.', 'High confidence: your answers are consistent and the result is clear.'), mid: T('ثقة متوسطة: بشرتك قريبة من الحد الفاصل بين نوعين. يمكنك تعديل النوع يدوياً إن شعرتِ أنه لا يطابقك.', 'Medium confidence: your skin is close to the boundary between two types. Adjust it manually if it does not feel right.'), low: T('ثقة منخفضة: بعض إجاباتك متعارضة. راجعي هذه الأسئلة لنتيجة أدق:', 'Low confidence: some answers conflict. Review these questions for a more accurate result:') }[res.conf];
     const adopted = rq.adopted ? `<p class="rt-ok tq-ok">${lcIco('check')} ${T('نتيجة معتمدة', 'Result adopted')} · ${new Date(rq.adopted).toLocaleDateString('en-GB')}${me ? ' · ' + T('محفوظة في حسابك', 'saved to your account') : ''}</p>` : '';
-    return `<div class="rt-c tq-res"><small class="em">${T('نتيجتك', 'Your result')}</small><h2>${T('بشرة ' + sk[1], sk[2] + ' skin')}</h2>
+    return `<div class="tq-ready"><div class="tq-bub">${lcIco('flower')}</div><h2>${T('ملف بشرتك جاهز', 'Your skin profile is ready')}</h2><p class="em">${T('حلّلنا إجاباتك وجهّزنا روتيناً مناسباً لك', 'We analysed your answers and prepared a routine for you')}</p></div><div class="rt-c tq-res"><small class="em">${T('نوع بشرتك', 'Your skin type')}</small><h2>${T('بشرة ' + sk[1], sk[2] + ' skin')}</h2>
       ${over ? `<p class="em">${T('عدّلتِ النوع يدوياً (النتيجة الأصلية: ' + orig[1] + ')', 'Manually adjusted (original result: ' + orig[2] + ')')}</p>` : res.sensHigh ? `<p class="em">${T('النوع الأساسي: ' + bs[1] + ' مع حساسية عالية', 'Base type: ' + bs[2] + ' with high sensitivity')}</p>` : res.sens ? `<p class="em">${T('مع حساسية متوسطة', 'With moderate sensitivity')}</p>` : ''}
       <div class="tq-ax">${res.axes.map(a => `<span><small>${a[0]} ↔ ${a[1]}</small><b>${a[2]}</b></span>`).join('')}${res.m.dh >= 2 ? `<span><small>${T('الماء', 'Water')}</small><b>${T('ناقصة ماء', 'Dehydrated')}</b></span>` : ''}</div>
       <p class="tq-conf c-${res.conf}">${confMsg}</p>${res.conf === 'low' ? `<div class="rt-opts">${[...new Set(res.clash)].map(id => { const q = TQ.find(x => x[0] === id); return `<button type="button" data-rt="tgo" data-q="${id}">${E(T(q[2][0], q[2][1]).slice(0, 46))}…</button>`; }).join('')}</div>` : ''}
@@ -370,26 +377,39 @@
       ${res.notes.map(n => `<p class="rt-warn">${lcIco('check')} ${E(n)}</p>`).join('')}${res.see.map(n => `<p class="rt-warn">${lcIco('warn')} ${E(n)}</p>`).join('')}
       ${ev ? `<h4>${T('ماذا تقول الأدلة العلمية عن حالتك', 'What the evidence says about your concerns')}</h4>${ev}` : ''}
       ${adopted}
-      <div class="row2">${rq.adopted ? '' : `<button class="btn" data-rt="tadopt">${lcIco('check')} ${T('اعتمدي النتيجة واحفظي روتيني', 'Adopt this result & save my routine')}</button>`}<button class="btn g" data-rt="adj">${adjOpen ? T('إخفاء التعديل', 'Hide adjustments') : T('هذه النتيجة لا تطابقني — عدّلي', 'Doesn’t match me — adjust')}</button><button class="btn g" data-rt="trestart">${T('أعيدي الاختبار', 'Retake')}</button></div>
+      <div class="tq-cta"><button class="btn" data-rt="tshow">${lcIco('list')} ${T('عرض روتيني', 'View my routine')}</button>${rq.adopted ? '' : `<button class="btn g" data-rt="tadopt">${lcIco('check')} ${T('اعتمدي النتيجة', 'Adopt result')}</button>`}</div>
+      <div class="row2"><button class="btn g" data-rt="adj">${adjOpen ? T('إخفاء التعديل', 'Hide adjustments') : T('هذه النتيجة لا تطابقني — عدّلي', 'Doesn’t match me — adjust')}</button><button class="btn g" data-rt="trestart">${T('أعيدي الاختبار', 'Retake')}</button></div>
       <details class="tq-src"><summary>${T('المصادر العلمية وحدود الاختبار', 'Scientific sources & limits')}</summary><ol>
         ${[...new Set(['baumann', 'ss10', ...used])].map(k => `<li id="rf-${k}">${E(REFS[k][0])} <a href="${REFS[k][1]}" target="_blank" rel="noopener">↗</a></li>`).join('')}</ol>
         <p class="em">${T('الاختبار أداة فرز مبنية على أدوات سريرية منشورة (أسئلته صياغة معدّلة مختصرة وليست النسخ المعتمدة نفسها)، وليس تشخيصاً طبياً، ودقته تعتمد على صدق إجاباتك. لا يوجد اختبار إلكتروني دقيق بنسبة 100٪؛ فحص طبيب الجلدية هو المرجع، خاصةً عند حب الشباب الشديد أو الاحمرار الدائم أو الإكزيما أو الكلف.', 'This is a screening tool based on published clinical instruments (questions are shortened adaptations, not the validated originals), not a medical diagnosis, and its accuracy depends on honest answers. No online test is 100% accurate; a dermatologist exam is the reference, especially for severe acne, persistent redness, eczema or melasma.')}</p></details></div>
-      ${adjOpen ? manualHTML() : ''}${routineOut()}`;
+      ${adjOpen ? manualHTML() : ''}`;
+  }
+  const NOTE = { am: ['صباحاً: بلا أحماض مقشّرة أو ريتينول (تزيد حساسية الشمس). فيتامين سي مناسب صباحاً لأنه يعزّز عمل واقي الشمس.', 'Morning: no exfoliating acids or retinol (sun sensitivity). Vitamin C suits the morning as it supports your sunscreen.'], pm: ['مساءً: بلا فيتامين سي.', 'Evening: no vitamin C.'] };
+  function cmpBlk(w, steps) {
+    const rows = steps.map((s, i) => { const x = s.items[0]; return `<div class="rt-row${x ? '' : ' none'}"><div class="th" style="${x && x.i ? `background-image:url('${E(x.i)}')` : ''}"></div><div class="rt-rm"><small>${T('الخطوة', 'Step')} ${i + 1} · ${T(s.ar, s.en)}</small>${x ? `<b>${E(x.n)}</b><em>${fmM(x.p)}</em>` : `<b>${T('لا يوجد منتج مناسب حالياً', 'No matching product yet')}</b>`}</div>${x ? `<div class="rt-ra">${typeof favBtn == 'function' ? favBtn(x.c) : ''}<button type="button" class="rt-cart" data-rt="add" data-c="${E(x.c)}" aria-label="${T('أضف للسلة', 'Add to bag')}"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h2l2.4 10.200a1 1 0 001 .8h8.600a1 1 0 001-.8L20 8H6.200"/><circle cx="9.500" cy="19" r="1.300"/><circle cx="16.500" cy="19" r="1.300"/></svg></button></div>` : ''}</div>`; }).join('');
+    return `<div class="rt-blk"><h3>${w === 'am' ? lcIco('sun') + ' ' + T('روتين الصباح', 'Morning routine') : lcIco('moon') + ' ' + T('روتين المساء', 'Night routine')}</h3>${rows}<p class="em rt-note">${T(NOTE[w][0], NOTE[w][1])}</p></div>`;
+  }
+  function routineView(res) {
+    const sk = SKINS.find(x => x[0] === rq.skin), recA = recommend('am'), recP = recommend('pm').filter(s => s.when !== 'am');
+    return `<div class="rt-hd"><button class="tq-b" data-rt="tprof">→ ${T('ملف البشرة', 'Skin profile')}</button><h2>${T('روتينك المثالي', 'Your perfect routine')}</h2><p class="em">${T('مبني على ملف بشرتك: ' + sk[1], 'Based on your ' + sk[2] + ' skin profile')}</p></div>
+      ${rq.rx ? `<p class="rt-warn">${lcIco('warn')} ${T('بسبب علاجك الموصوف استبعدنا كل الأحماض والمقشّرات والريتينول.', 'Because of your prescribed treatment we left out all acids, exfoliants and retinol.')}</p>` : ''}
+      ${rq.when !== 'pm' ? cmpBlk('am', recA) : ''}${rq.when !== 'am' ? cmpBlk('pm', recP) : ''}
+      <div class="tq-cta"><button class="btn g" data-rt="trestart">${T('أعيدي الاختبار', 'Retake quiz')}</button><button class="btn" data-rt="addall">${T('أضيفي الكل للسلة', 'Add all to bag')}</button></div>
+      <details class="tq-more"><summary>${T('طريقة الاستخدام، البدائل، وجدول الأسبوع', 'How to use, alternatives & weekly plan')}</summary>${routineOut()}</details>`;
   }
   function tqHTML() {
     const L = tqList(), res = tqResult();
-    if (res && tqi >= L.length) return resultHTML(res);
+    if (res && tqi >= L.length) return rtView ? routineView(res) : resultHTML(res);
     if (tqi === -1 && rq.skin) return `<div class="rt-c"><h3>${lcIco('flask')} ${T('نوع بشرتك: ', 'Your skin type: ')}${E(T(SKINS.find(x => x[0] === rq.skin)[1], SKINS.find(x => x[0] === rq.skin)[2]))}</h3><p class="em">${T('اخترتِه يدوياً. للحصول على نتيجة أدق ومبنية على مصادر علمية ابدئي الاختبار (دقيقتان تقريباً).', 'You chose this manually. For a more accurate, evidence-based result take the test (about two minutes).')}</p><button class="btn" data-rt="tstart">${T('ابدئي اختبار البشرة', 'Start the skin test')}</button></div>${manualHTML()}${routineOut()}`;
-    if (tqi <= -1) return `<div class="rt-c tq-intro"><h2>${lcIco('flask')} ${T('اختبار البشرة', 'Skin test')}</h2><p>${T('أجيبي عن أسئلة قصيرة (نحو دقيقتين) لنحدد نوع بشرتك وحساسيتها ومشاكلها، ثم نعرض روتيناً مناسباً لك مع المنتجات.', 'Answer a few short questions (about two minutes) so we can work out your skin type, sensitivity and concerns, then show a matching routine with products.')}</p>
+    if (tqi <= -1) return `<div class="rt-c tq-intro" style="text-align:center"><div class="tq-bub">${lcIco('flower')}</div><h2>${T('لنكتشف روتينك المثالي', 'Let’s build your perfect routine')}</h2><p>${T('أجيبي عن أسئلة قصيرة (نحو دقيقتين) لنحدد نوع بشرتك وحساسيتها ومشاكلها، ثم نعرض روتيناً مناسباً لك مع المنتجات.', 'Answer a few short questions (about two minutes) so we can work out your skin type, sensitivity and concerns, then show a matching routine with products.')}</p>
       <ul class="tq-pts"><li>${lcIco('check')} ${T('سؤال واحد في كل مرة، وتنتقلين تلقائياً', 'One question at a time, auto-advance')}</li><li>${lcIco('check')} ${T('مبني على أدوات سريرية: مؤشر بومان وSensitive Scale-10 وتصنيف فيتزباتريك', 'Based on clinical tools: Baumann, Sensitive Scale-10, Fitzpatrick')}</li><li>${lcIco('check')} ${T('تقدرين تراجعين النتيجة وتعتمدينها أو تعدّلينها', 'Review the result, then adopt or adjust it')}</li></ul>
       <button class="btn" data-rt="tstart">${T('ابدئي الاختبار', 'Start the test')}</button></div>`;
-    const q = L[Math.min(tqi, L.length - 1)], left = L.length - 1 - tqi, cur = rq.a[q[0]], st = STAGE[q[0]];
-    return `<div class="tq" data-i="${tqi}"><div class="tq-top"><button class="tq-b" data-rt="tback" ${tqi ? '' : 'disabled'} aria-label="${T('السابق', 'Back')}">→ ${T('السابق', 'Back')}</button><span>${T('السؤال', 'Question')} ${tqi + 1} ${T('من', 'of')} ${L.length}</span></div>
-      <div class="tq-prog"><b style="width:${Math.round((tqi) / L.length * 100)}%"></b></div>
-      <div class="tq-st">${STG.map((s, i) => `<span class="${i === st ? 'on' : i < st ? 'dn' : ''}">${T(s[0], s[1])}</span>`).join('')}</div>
-      <div class="tq-stack">${left >= 2 ? '<div class="tq-l tq-l2"></div>' : ''}${left >= 1 ? '<div class="tq-l tq-l1"></div>' : ''}
+    const q = L[Math.min(tqi, L.length - 1)], cur = rq.a[q[0]], last = tqi >= L.length - 1;
+    return `<div class="tq tq2" data-i="${tqi}"><div class="tq-hd"><button class="tq-b" data-rt="tback" ${tqi ? '' : 'disabled'} aria-label="${T('السابق', 'Back')}">→</button><b>${T('اختبار البشرة', 'Skin test')}</b><span>${tqi + 1} ${T('من', 'of')} ${L.length}</span></div>
+      <div class="tq-prog"><b style="width:${Math.round((tqi + 1) / L.length * 100)}%"></b></div>
       <div class="tq-card"><small class="tq-sec">${T(q[1][0], q[1][1])}</small><h3>${T(q[2][0], q[2][1])}</h3>
-      <div class="tq-opts">${q[3].map((o, oi) => `<button type="button" data-rt="ta" data-v="${oi}" class="${cur === oi ? 'on' : ''}">${T(o[0], o[1])}</button>`).join('')}</div></div></div>
+      <div class="tq-ropts">${q[3].map((o, oi) => `<button type="button" data-rt="ta" data-v="${oi}" class="tq-r${cur === oi ? ' on' : ''}" aria-pressed="${cur === oi}"><i></i><span>${T(o[0], o[1])}</span></button>`).join('')}</div></div>
+      <div class="tq-nav"><button class="btn" data-rt="tnext" ${cur >= 0 ? '' : 'disabled'}>${last ? T('إنهاء الاختبار', 'Finish quiz') : T('التالي', 'Next')}</button><button class="btn g" data-rt="tskip">${T('تخطي', 'Skip')}</button></div>
       <p class="em tq-hint">${T('اختاري الأقرب لحالك المعتادة، وليس لحالتك اليوم.', 'Pick what is closest to your usual skin, not just today.')}</p></div>`;
   }
   function savedHTML() {
@@ -473,14 +493,14 @@
     const tab = rsub === 'ask' ? 'ask' : rsub === 'support' ? 'support' : rsub === 'guide' ? 'guide' : rsub === 'products' ? 'products' : rsub === 'diary' ? 'diary' : 'test';
     if (u && u.searchParams.get('p')) { askP = u.searchParams.get('p'); }
     if (tab !== 'support' && window.LCChat) LCChat.unmount();
-    if (tab === 'test' && !quiet) { const L0 = tqList(); tqEdit = false; { const r0 = tqResult(); if (r0 && !rq.skin) { rq.skin = r0.skin; rq.sens = r0.sens; rq.concerns = r0.concerns.slice(); rq.preg = !!r0.m.preg; rq.rx = !!r0.m.rx; sv(); } } tqi = tqResult() ? L0.length : Object.keys(rq.a).length ? firstOpen() : rq.skin ? -1 : -2; }
+    if (tab === 'test' && !quiet) { const L0 = tqList(); tqEdit = false; rtView = false; { const r0 = tqResult(); if (r0 && !rq.skin) { rq.skin = r0.skin; rq.sens = r0.sens; rq.concerns = r0.concerns.slice(); rq.preg = !!r0.m.preg; rq.rx = !!r0.m.rx; sv(); } } tqi = tqResult() ? L0.length : Object.keys(rq.a).length ? firstOpen() : rq.skin ? -1 : -2; }
     const tabs = [['test', '/routine', T('اختبار البشرة وروتينك', 'Skin test & routine')], ['diary', '/routine/diary', T('يومياتي', 'Diary')], ['products', '/routine/products', T('كل المنتجات', 'All products')], ['guide', '/routine/guide', T('دليل المكونات', 'Ingredients')], ['ask', '/routine/ask', T('اسألي عن منتج', 'Ask about a product')], ['support', '/routine/support', T('الدعم', 'Support')]];
     document.body.classList.toggle('cfull', tab === 'support');
     if (tab === 'support') {
       el.innerHTML = `<a class="cfx" href="/routine" aria-label="${T('رجوع', 'Back')}">✕</a><div id="rt-chat"></div>`;
       if (window.LCChat) LCChat.mount(document.getElementById('rt-chat'), 'routine'); return;
     }
-    el.innerHTML = `<div class="w"><div class="rh"><h2>${lcIco('flower')} ${T('روتين', 'Routine')}</h2><p>${T('مستشارتك الشخصية للعناية بالبشرة: تحليل بشرتك، اقتراح منتجات، وتحدّثي مع فريقنا.', 'Your personal skincare advisor: analyse your skin, get product picks, and chat with our team.')}</p></div>
+    el.innerHTML = `<div class="w"><div class="rh"><h2>${lcIco('flower')} ${T('اكتشف روتينك', 'Find your routine')}</h2><p>${T('مستشارتك الشخصية للعناية بالبشرة: تحليل بشرتك، اقتراح منتجات، وتحدّثي مع فريقنا.', 'Your personal skincare advisor: analyse your skin, get product picks, and chat with our team.')}</p></div>
       <nav class="rt-tabs" aria-label="Routine">${tabs.map(([k, h, n]) => `<a href="${h}" class="${tab === k ? 'on' : ''}">${n}</a>`).join('')}</nav>
       <div id="rtb">${tab === 'ask' ? askHTML() : tab === 'guide' ? guideHTML() : tab === 'products' ? prodsHTML() : tab === 'test' ? tqHTML() : tab === 'diary' ? diaryHTML() : `<div id="rt-chat"></div>`}</div></div>`;
     if (tab === 'support' && window.LCChat) LCChat.mount(document.getElementById('rt-chat'), 'routine');
@@ -491,7 +511,7 @@
     const low = v.toLowerCase(); return prodList().find(p => String(p.n).toLowerCase().includes(low)) || null;
   }
   async function doSaveR(quiet) {
-      const rec = recommend(), r = { skin: rq.skin, am: rec.map(s => s.items[0] && s.items[0].c).filter(Boolean), pm: rec.filter(s => s.when !== 'am').map(s => s.items[0] && s.items[0].c).filter(Boolean) };
+      const r = { skin: rq.skin, am: recommend('am').map(s => s.items[0] && s.items[0].c).filter(Boolean), pm: recommend('pm').filter(s => s.when !== 'am').map(s => s.items[0] && s.items[0].c).filter(Boolean) };
       if (rq.when === 'pm') r.am = []; if (rq.when === 'am') r.pm = [];
       ls.set('lc_rt', JSON.stringify(r)); const me = typeof custMe == 'function' ? custMe() : null;
       if (me) { try { const x = await fetch((typeof API == 'function' && API() || '') + '/me', { method: 'POST', headers: { 'Content-Type': 'application/json', ...custAuth() }, body: JSON.stringify({ routine: r, skin: rq.skin }) }); if (x.ok && typeof accountRefresh == 'function') accountRefresh(); } catch (x) {} }
@@ -514,19 +534,26 @@
       const okSync = await dyPush(o); toast(k === 'dyd' ? T('تم الحذف', 'Deleted') : dyMe() ? (okSync ? T('تم الحفظ في حسابك', 'Saved to your account') : T('حُفظ على الجهاز وتعذّرت المزامنة', 'Saved locally; sync failed')) : T('تم الحفظ على هذا الجهاز', 'Saved on this device')); renderRoutine(rsub, null, true);
     }
     else if (k === 'ta') {
-      const L = tqList(), q0 = L[tqi]; if (!q0) return; rq.a[q0[0]] = +v; sv();
-      const card = $1('#rtn .tq-card'); if (card) card.classList.add('out');
-      setTimeout(() => { const L2 = tqList(); tqi = tqEdit && tqDone() ? L2.length : tqi + 1; if (tqi >= L2.length) { const r = tqResult(); if (r) { rq.skin = r.skin; rq.sens = r.sens; rq.concerns = r.concerns.slice(); rq.preg = !!r.m.preg; rq.rx = !!r.m.rx; rq.adopted = 0; tqEdit = false; adjOpen = false; sv(); } else tqi = firstOpen(); } renderRoutine(rsub, null, true); window.scrollTo({ top: 0 }); }, 190);
+      const q0 = tqList()[tqi]; if (!q0) return; rq.a[q0[0]] = +v; sv();
+      document.querySelectorAll('#rtn .tq-r').forEach(x => { const on = x.dataset.v === String(v); x.classList.toggle('on', on); x.setAttribute('aria-pressed', on); }); const nx = $1('#rtn [data-rt=tnext]'); if (nx) nx.disabled = false;
     }
+    else if (k === 'tnext' || k === 'tskip') {
+      const q0 = tqList()[tqi]; if (!q0) return; if (k === 'tskip') { rq.a[q0[0]] = -1; sv(); } else if (rq.a[q0[0]] == null || rq.a[q0[0]] < 0) return;
+      const L2 = tqList(); tqi = tqEdit && tqDone() ? L2.length : tqi + 1;
+      if (tqi >= L2.length) { const r = tqResult(); if (r) { rq.skin = r.skin; rq.sens = r.sens; rq.concerns = r.concerns.slice(); rq.preg = !!r.m.preg; rq.rx = !!r.m.rx; rq.adopted = 0; tqEdit = false; adjOpen = false; rtView = false; sv(); } else tqi = firstOpen(); }
+      renderRoutine(rsub, null, true); window.scrollTo({ top: 0 });
+    }
+    else if (k === 'tshow') { rtView = true; renderRoutine(rsub, null, true); window.scrollTo({ top: 0 }); }
+    else if (k === 'tprof') { rtView = false; renderRoutine(rsub, null, true); window.scrollTo({ top: 0 }); }
     else if (k === 'tback') { if (tqi > 0) { tqi--; renderRoutine(rsub, null, true); } }
-    else if (k === 'trestart') { rq.a = {}; rq.adopted = 0; tqi = 0; tqEdit = false; adjOpen = false; sv(); renderRoutine(rsub, null, true); }
+    else if (k === 'trestart') { rq.a = {}; rq.adopted = 0; tqi = 0; tqEdit = false; adjOpen = false; rtView = false; sv(); renderRoutine(rsub, null, true); }
     else if (k === 'tstart') { tqi = Object.keys(rq.a).length ? firstOpen() : 0; if (tqi >= tqList().length) tqi = 0; renderRoutine(rsub, null, true); }
     else if (k === 'tgo') { const i = tqList().findIndex(q => q[0] === b.dataset.q); if (i >= 0) { tqi = i; tqEdit = true; renderRoutine(rsub, null, true); window.scrollTo({ top: 0 }); } }
     else if (k === 'adj') { adjOpen = !adjOpen; renderRoutine(rsub, null, true); }
     else if (k === 'tadopt') {
       rq.adopted = Date.now(); sv(); await doSaveR(true); const me = typeof custMe == 'function' ? custMe() : null;
       if (me) { try { await fetch((typeof API == 'function' && API() || '') + '/me', { method: 'POST', headers: { 'Content-Type': 'application/json', ...custAuth() }, body: JSON.stringify({ skin: rq.skin }) }); if (window.accountRefresh) accountRefresh(); } catch (x) {} }
-      toast(T('تم اعتماد نتيجتك وحفظ روتينك ✓', 'Result adopted and routine saved ✓')); renderRoutine(rsub, null, true);
+      toast(T('تم اعتماد نتيجتك وحفظ روتينك ✓', 'Result adopted and routine saved ✓')); rtView = true; renderRoutine(rsub, null, true); window.scrollTo({ top: 0 });
     }
     else if (k === 'tsave') {
       const me = typeof custMe == 'function' ? custMe() : null; if (!me) { toast(T('سجّلي الدخول أولاً', 'Sign in first')); return lcNav('/account'); }
@@ -547,7 +574,7 @@
     else if (k === 'saveR') { await doSaveR(); }
     else if (k === 'alts') { const t = document.querySelector('#rtn .rt-step[data-step="' + b.dataset.s + '"]'); if (t) { t.scrollIntoView({ behavior: 'smooth', block: 'center' }); t.classList.add('flash'); setTimeout(() => t.classList.remove('flash'), 1400); } }
     else if (k === 'pick') { rq.pick[b.dataset.s] = c; sv(); renderRoutine(rsub, null, true); }
-    else if (k === 'addall') { recommend().filter(s => rq.when === 'pm' ? s.when !== 'am' : true).forEach(s => { if (s.items[0]) cart[s.items[0].c] = (cart[s.items[0].c] || 0) + 1; }); save(); rcount(); toast(T('أُضيفت منتجات الروتين للسلة', 'Routine products added to bag')); }
+    else if (k === 'addall') { { const seen = new Set(); [...(rq.when !== 'pm' ? recommend('am') : []), ...(rq.when !== 'am' ? recommend('pm').filter(s => s.when !== 'am') : [])].forEach(s => { const c = s.items[0] && s.items[0].c; if (c && !seen.has(c)) { seen.add(c); cart[c] = (cart[c] || 0) + 1; } }); } save(); rcount(); toast(T('أُضيفت منتجات الروتين للسلة', 'Routine products added to bag')); }
     else if (k === 'add') { cart[c] = (cart[c] || 0) + 1; save(); rcount(); toast(T('تمت الإضافة للسلة', 'Added to bag')); }
     else if (k === 'ask') { askP = c; lcNav('/routine/ask?p=' + encodeURIComponent(c)); }
     else if (k === 'q') { const t = $1('#rt-ask textarea'); if (t) { t.value = v; t.focus(); } }
@@ -557,7 +584,7 @@
       try { await fetch((typeof API == 'function' && API() || '') + '/me', { method: 'POST', headers: { 'Content-Type': 'application/json', ...custAuth() }, body: JSON.stringify({ skin: rq.skin }) }); toast(T('تم الحفظ', 'Saved')); } catch (x) { toast('error'); }
     }
     else if (k === 'send') {
-      const sk = SKINS.find(x => x[0] === rq.skin), cn = rq.concerns.map(x => CONCERNS.find(y => y[0] === x)[1]).join('، ') || '—', rec = recommend();
+      const sk = SKINS.find(x => x[0] === rq.skin), cn = rq.concerns.map(x => CONCERNS.find(y => y[0] === x)[1]).join('، ') || '—', rec = [...recommend('am'), ...recommend('pm')];
       const text = `طلب استشارة روتين\nنوع البشرة: ${sk ? sk[1] : '—'}\nالاهتمامات: ${cn}\nالمنتجات المقترحة: ${rec.map(s => s.items.map(p => p.c).join('/')).filter(Boolean).join(' · ') || '—'}`;
       try { await LCChat.send(text, '', 'routine'); } catch (x) {} lcNav('/routine/support');
     }
