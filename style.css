@@ -455,3 +455,14 @@ form.dirty .stg-bar #stgd{color:#c0392b;font-weight:700}.stg-b input.bad{border-
 .rt-ra{display:flex;gap:8px;align-items:center}.rt-row .fv{position:static;width:34px;height:34px}.rt-cart{width:36px;height:36px;border-radius:10px;border:0;background:#526e6d;color:#fff;display:grid;place-items:center;cursor:pointer}.rt-note{margin:6px 4px 0;font-size:12.5px}
 .tq-more{margin-top:8px}.tq-more>summary{cursor:pointer;font-weight:700;padding:12px 4px}
 #bnav a small{line-height:1.1;text-align:center;white-space:normal;max-width:58px}
+
+/* زر + في بطاقة المنتج دائري */
+.card .qsw .btn.sm{width:42px;height:42px;padding:0;border-radius:50%;font-size:22px;line-height:1;display:grid;place-items:center}
+/* خطة الروتين المدروسة */
+.rp-step{display:grid;grid-template-columns:34px 1fr;gap:12px;background:#fff;border-radius:18px;padding:14px;margin:10px 0}.rp-n{width:30px;height:30px;border-radius:50%;background:#526e6d;color:#fff;display:grid;place-items:center;font-weight:700}
+.rp-b h4{margin:0 0 4px;font-size:16px}.rp-why{margin:2px 0 6px;font-size:14px;line-height:1.7}.rp-look{margin:4px 0;font-size:13px;background:#eef4f4;border-radius:10px;padding:6px 10px}.rp-how{display:flex;gap:6px;align-items:flex-start;font-size:13px;opacity:.8;margin:6px 0}
+.rp-alt{margin-top:6px;font-size:12px}.rp-notes{background:#fff8e8;border-radius:14px;padding:10px 14px;margin-top:10px}.rp-notes ul{margin:6px 0 0;padding-inline-start:18px;display:grid;gap:4px;font-size:13.5px}
+.rp-time div{display:flex;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid #eef0f0}.rp-none{font-size:13px}
+.rt-add{width:42px;height:42px;border-radius:50%;background:#526e6d;color:#fff;display:grid;place-items:center;flex:none}
+.rp-b .rt-rm{text-align:start}.rp-b .rt-row{margin:10px 0 0}.rp-b .rt-cart{border-radius:50%;width:42px;height:42px}
+.rp-b .rt-rm,.rp-b .rt-rm *{text-align:start!important}.rp-b .rp-alt{width:100%;text-align:start}
