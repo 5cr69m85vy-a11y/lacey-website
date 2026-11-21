@@ -2,9 +2,9 @@
 (function () {
   'use strict';
   const E = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  let tok = '', name = '', cur = 0, timer = 0, chats = [], dept = '', quick = [], tpAt = 0;
+  let tok = '', name = '', allow = ['service', 'routine'], team = '', cur = 0, timer = 0, chats = [], dept = '', quick = [], tpAt = 0;
   const DN = { service: 'خدمة الزبائن', routine: 'روتين' };
-  try { tok = sessionStorage.getItem('lc_st') || ''; name = sessionStorage.getItem('lc_sn') || ''; } catch (e) {}
+  try { tok = sessionStorage.getItem('lc_st') || ''; name = sessionStorage.getItem('lc_sn') || ''; allow = JSON.parse(sessionStorage.getItem('lc_sd') || 'null') || allow; team = sessionStorage.getItem('lc_stm') || ''; } catch (e) {}
   const base = () => (typeof API == 'function' && API()) || location.origin;
   const api = async (p, body) => { const r = await fetch(base() + p, { method: body ? 'POST' : 'GET', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok }, body: body ? JSON.stringify(body) : undefined }); const j = await r.json().catch(() => ({})); if (r.status === 401 && tok && p !== '/staff/login') { out(); } if (!r.ok) throw new Error(j.error || 'error'); return j; };
   const ov = document.createElement('div'); ov.id = 'stf'; document.body.appendChild(ov);
@@ -23,16 +23,17 @@
     try { chats = (await api('/adm/chats?channel=support')).chats; } catch (e) { return; }
     const el = document.getElementById('stc'); if (!el) return;
     const un = d => chats.filter(c => (!d || c.dept == d) && c.unread > 0).reduce((n, c) => n + c.unread, 0), tb = document.getElementById('std');
-    if (tb) tb.innerHTML = [['', 'الكل'], ['service', DN.service], ['routine', DN.routine]].map(([k, n]) => `<button data-s="dept" data-d="${k}" class="${dept == k ? 'on' : ''}">${n}${un(k) ? ` <i class="ub">${un(k)}</i>` : ''}</button>`).join('');
+    if (tb) tb.innerHTML = [...(allow.length > 1 ? [['', 'الكل']] : []), ...allow.map(d => [d, DN[d]])].map(([k, n]) => `<button data-s="dept" data-d="${k}" class="${dept == k ? 'on' : ''}">${n}${un(k) ? ` <i class="ub">${un(k)}</i>` : ''}</button>`).join('');
     el.innerHTML = chats.filter(c => !dept || c.dept == dept).map(c => `<div class="row ${c.id == cur ? 'sel' : ''}" data-s="open" data-id="${c.id}"><span><b>${E(c.name || 'زائر')}</b> <small class="dp ${c.dept}">${DN[c.dept] || ''}</small> ${(c.topic || '').startsWith('product:') ? '<small>🛍 استفسار منتج ' + E(c.topic.slice(8)) + '</small>' : ''} ${c.status == 'open' ? '' : '<small>(منتهية)</small>'}<br><small>${c.mode == 'human' ? '👤 ' + E(c.staff || 'بانتظار موظف') : '🤖 المساعد'} — ${E(c.last.slice(0, 40))}</small></span>${c.status == 'open' && c.unread > 0 ? `<i class="ub">${c.unread}</i>` : c.status == 'open' && c.mode == 'human' && !c.staff ? '<i class="dot"></i>' : ''}</div>`).join('') || '<p class="em">لا محادثات</p>';
   }
   async function open(id, quiet) {
     cur = id; let j; try { j = await api('/adm/chat?id=' + id + (quiet && document.hidden ? '&quiet=1' : '')); } catch (e) { return; }
     const el = document.getElementById('stm'); if (!el) return;
     const typed = el.querySelector('input[name=text]'), keep = typed ? typed.value : '', focus = typed && document.activeElement === typed;
-    const c = j.chat, mine = c.staff == name, inf = j.info || {};
+    const c = j.chat, mine = c.staff == name, inf = c.info || {};
     el.innerHTML = `<div class="chhd"><b>${E(c.name || 'زائر')}</b> ${E(c.ph || '')} · <small class="dp ${c.dept}">${DN[c.dept] || ''}</small> · ${c.mode == 'human' ? '👤 ' + E(c.staff || 'بانتظار موظف') : '🤖 المساعد'} ${c.status == 'closed' ? '(منتهية)' : ''}</div>
-      ${j.info ? `<div class="inf"><span>🛒 ${inf.orders || 0} طلب</span><span>💰 ${Number(inf.spent || 0).toLocaleString('en-US')} د.ع</span>${inf.city ? `<span>📍 ${E(inf.city)}</span>` : ''}${inf.age != null ? `<span>🎂 ${inf.age} سنة</span>` : ''}${inf.skin ? `<span>🧴 ${E(inf.skin)}</span>` : ''}</div>` : ''}
+      ${c.info ? `<div class="inf"><span>🛒 ${inf.orders || 0} طلب</span><span>💰 ${Number(inf.spent || 0).toLocaleString('en-US')} د.ع</span>${inf.city ? `<span>📍 ${E(inf.city)}</span>` : ''}${inf.age != null ? `<span>🎂 ${inf.age} سنة</span>` : ''}${inf.skin ? `<span>🧴 ${E(inf.skin)}</span>` : ''}</div>` : ''}
+      ${inf.routine ? `<div class="inf" style="display:block"><b>🌸 روتين الزبونة المحفوظ</b> <small>(إرشادي وليس تشخيصاً طبياً — للاطلاع فقط)</small><br>🌅 ${E((inf.routine.am || []).join('، ') || '—')}<br>🌙 ${E((inf.routine.pm || []).join('، ') || '—')}</div>` : ''}
       <div class="msgs">${j.messages.map(m => `<div class="m ${m.sender}"><small class="au">${E(m.author || '')}</small>${pc(m)}${E(m.body)}<small>${dt(m.at)}</small></div>`).join('')}</div>
       ${c.status == 'open' && quick.length ? `<select id="stq" aria-label="ردود جاهزة"><option value="">⚡ ردود جاهزة</option>${quick.map((q, i) => `<option value="${i}">${E(q.slice(0, 60))}</option>`).join('')}</select> <button type="button" class="btn g" data-s="tr" data-d="${c.dept == 'routine' ? 'service' : 'routine'}">تحويل إلى ${DN[c.dept == 'routine' ? 'service' : 'routine']}</button>` : ''}
       ${c.status == 'open' ? `<form id="str" class="fm" style="grid-template-columns:1fr auto auto auto"><input name="text" placeholder="${mine || !c.staff ? 'اكتب رداً باسمك…' : 'المحادثة بيد ' + E(c.staff)}" autocomplete="off"><button class="btn">إرسال</button>${mine ? '' : '<button type="button" class="btn g" data-s="claim">استلام</button>'}<button type="button" class="btn g" data-s="close">إنهاء</button></form>` : ''}`;
@@ -51,7 +52,7 @@
   });
   ov.addEventListener('submit', async e => {
     e.preventDefault(); e.stopPropagation();
-    if (e.target.id == 'stl') { const v = Object.fromEntries(new FormData(e.target)); try { const j = await api('/staff/login', v); tok = j.token; name = j.name; try { sessionStorage.setItem('lc_st', tok); sessionStorage.setItem('lc_sn', name); } catch (x) {} draw(); } catch (x) { const el = document.getElementById('ster'); if (el) el.textContent = x.message; } }
+    if (e.target.id == 'stl') { const v = Object.fromEntries(new FormData(e.target)); try { const j = await api('/staff/login', v); tok = j.token; name = j.name; allow = j.depts || allow; team = j.team || ''; try { sessionStorage.setItem('lc_sd', JSON.stringify(allow)); sessionStorage.setItem('lc_stm', team); } catch (x) {}  try { sessionStorage.setItem('lc_st', tok); sessionStorage.setItem('lc_sn', name); } catch (x) {} draw(); } catch (x) { const el = document.getElementById('ster'); if (el) el.textContent = x.message; } }
     else if (e.target.id == 'str') { const i = e.target.querySelector('input'), t = i.value.trim(); if (!t) return; i.value = ''; try { await api('/adm/chat/reply', { id: cur, text: t }); } catch (x) { toast(x.message); i.value = t; } open(cur); load(); }
   });
   ov.addEventListener('change', e => { if (e.target.id == 'stq') { const i = document.querySelector('#str input'); if (i && e.target.value !== '') { i.value = quick[+e.target.value] || ''; i.focus(); } e.target.value = ''; } });
