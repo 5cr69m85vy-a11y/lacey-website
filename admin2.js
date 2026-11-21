@@ -205,35 +205,35 @@
   A.igtg = async () => { try { await J('/adm/integrations/test', { method: 'POST', body: JSON.stringify({ kind: 'telegram' }) }); toast('✅ وصلت رسالة تلجرام'); } catch (e) { toast(e.message || 'فشل الاختبار'); } };
 
   /* ---------- بوتات تلغرام (طلبات / دعم / تقارير) ---------- */
-  let tgd = [];
-  const TGP = { view: 'عرض', confirm: 'تأكيد', reject: 'رفض', processing: 'تجهيز', ship: 'شحن', deliver: 'تسليم', assign: 'استلام', status: 'تغيير حالة', resolve: 'حل' };
+  let tgd = [], tgs = [];
+  const TGP = { view: 'عرض', confirm: 'تأكيد', reject: 'رفض', processing: 'تجهيز', ship: 'شحن', deliver: 'تسليم', assign: 'استلام', status: 'تغيير حالة', resolve: 'حل', dept_service: 'قسم الدعم', dept_routine: 'قسم الروتين' };
   const TGI = { orders: '🛍', support: '💬', reports: '📊' };
   const tgT = t => t ? new Date(t).toLocaleString('ar-IQ') : '—';
   TB.tg = () => { setTimeout(loadTg, 0); return '<div id="tgb"><p class="em">جارٍ التحميل…</p></div>'; };
   async function loadTg() {
     const el = $('#tgb'); if (!el) return;
-    try { tgd = (await J('/adm/tg')).bots; } catch (e) { el.innerHTML = '<p class="em">سجّل الدخول أولاً</p>'; return; }
+    try { tgd = (await J('/adm/tg')).bots; tgs = (await J('/adm/staff')).staff || []; } catch (e) { el.innerHTML = '<p class="em">سجّل الدخول أولاً</p>'; return; }
     el.innerHTML = `<p class="em">ثلاثة بوتات مستقلة: لكل بوت توكن وقائمة معرّفات خاصة به (أنشئ كل بوت من <b>@BotFather</b>). كل مستلم يضغط <b>Start</b> على البوت أولاً، ويكتب /start ليعرف رقمه ويعطيك إياه. إضافة معرّف لبوت لا تضيفه تلقائياً للبوتات الأخرى، والتوكن لا يظهر في الموقع بعد الحفظ.</p>` + tgd.map(b => `<div class="cd tgc" data-bot="${b.bot}">
       <h3>${TGI[b.bot]} ${esc(b.label)} ${b.username ? `<small dir="ltr">@${esc(b.username)}</small>` : ''}</h3>
       <p class="em">${b.enabled ? '✅ مفعّل' : '⛔ معطّل'} · ${b.connected ? '🔗 متصل' : '⚠️ غير مربوط'} · المعرّفات الفعّالة: <b>${b.count}</b>/${b.total} · آخر إرسال ناجح: ${tgT(b.last_ok)}${b.last_err ? `<br>⚠️ آخر خطأ: ${esc(b.last_err)} (${tgT(b.last_err_at)})` : ''}</p>
       <form class="fm" data-f="tgb"><input type="hidden" name="bot" value="${b.bot}"><label>اسم البوت<input name="name" value="${esc(b.name)}" placeholder="${esc(b.label)}"></label>
         <label>التوكن <small>(من @BotFather)</small><input name="token" type="password" dir="ltr" autocomplete="off" placeholder="${b.hasToken ? 'محفوظ ' + b.tokenHint + ' — اتركه فارغاً للإبقاء عليه' : '123456789:AA…'}"></label>
-        <label class="ck"><input type="checkbox" name="enabled" ${b.enabled ? 'checked' : ''}> تفعيل البوت</label>
+        ${b.bot == 'support' ? `<label>تذكير «زبون ينتظر» بعد (دقيقة)<input name="wait_min" type="number" min="2" max="240" value="${(b.cfg || {}).wait_min || 10}"></label>` : ''}<label class="ck"><input type="checkbox" name="enabled" ${b.enabled ? 'checked' : ''}> تفعيل البوت</label>
         <button class="btn">حفظ</button><button type="button" class="btn g" data-a="tgcn" data-c="${b.bot}">اختبار الاتصال وربط البوت</button><button type="button" class="btn g" data-a="tglg" data-c="${b.bot}">سجل الإرسال</button></form>
       <h4>المعرّفات المسموح لها (${b.total})</h4>
-      ${b.recipients.length ? `<table class="tbd"><tr><th>الاسم</th><th>المعرّف</th><th>الصلاحيات</th><th>الحالة</th><th></th></tr>${b.recipients.map(r => `<tr><td>${esc(r.name || '—')}</td><td dir="ltr">${esc(r.chat_id)}</td><td>${r.perms.map(x => TGP[x] || x).join('، ') || '—'}</td>
+      ${b.recipients.length ? `<table class="tbd"><tr><th>الاسم</th><th>المعرّف</th><th>الصلاحيات</th><th>الحالة</th><th></th></tr>${b.recipients.map(r => `<tr><td>${esc(r.name || '—')}${r.staff_id ? `<br><small>🔗 ${esc((tgs.find(x => x.id == r.staff_id) || {}).name || 'موظف')}</small>` : ''}</td><td dir="ltr">${esc(r.chat_id)}</td><td>${r.perms.map(x => TGP[x] || x).join('، ') || '—'}</td>
         <td>${r.active ? '✅ فعّال' : '⏸ موقوف'}<br><small>${r.last_err ? '⚠️ ' + esc(r.last_err) : r.last_ok ? 'آخر وصول ' + tgT(r.last_ok) : 'لم يُرسل بعد'}</small></td>
         <td><button class="btn g" data-a="tget" data-c="${r.id}">اختبار</button> <button class="btn g" data-a="tgee" data-c="${b.bot}|${r.id}">تعديل</button> <button class="btn g" data-a="tgea" data-c="${r.id}|${r.active ? 0 : 1}">${r.active ? 'إيقاف' : 'تفعيل'}</button> <button class="btn g" data-a="tgdl" data-c="${r.id}">حذف</button></td></tr>`).join('')}</table>` : '<p class="em">لا توجد معرّفات بعد.</p>'}
       <form class="fm" data-f="tgr"><input type="hidden" name="bot" value="${b.bot}"><input type="hidden" name="id" value=""><input name="name" placeholder="الاسم (مثلاً: مدير المبيعات)"><input name="chat_id" dir="ltr" inputmode="numeric" placeholder="Telegram ID أو Chat ID" required>
-        <div class="full tgp">${b.perms.map(k => `<label class="ck"><input type="checkbox" name="pm" value="${k}" ${['deliver'].includes(k) ? '' : 'checked'}> ${TGP[k]}</label>`).join('')}</div><button class="btn">إضافة / حفظ معرّف</button></form>
+        ${b.bot == 'support' ? `<select name="staff_id" title="ربط بحساب موظف (لزر استلام المحادثة)"><option value="">بدون ربط بحساب موظف</option>${tgs.filter(x => x.active).map(x => `<option value="${x.id}">${esc(x.name)} (${esc(x.username)})</option>`).join('')}</select>` : ''}<div class="full tgp">${b.perms.map(k => `<label class="ck"><input type="checkbox" name="pm" value="${k}" ${['deliver'].includes(k) ? '' : 'checked'}> ${TGP[k]}</label>`).join('')}</div><button class="btn">إضافة / حفظ معرّف</button></form>
     </div>`).join('') + '<div id="tglog"></div>';
   }
   document.addEventListener('submit', async e => {
     const f = e.target.closest && e.target.closest('form[data-f^="tg"]'); if (!f) return; e.preventDefault(); e.stopImmediatePropagation();
     const fd = new FormData(f), v = Object.fromEntries(fd);
     try {
-      if (f.dataset.f === 'tgb') { await J('/adm/tg/bot', { method: 'POST', body: JSON.stringify({ bot: v.bot, name: v.name, token: v.token, enabled: !!v.enabled }) }); toast('تم الحفظ'); }
-      else { await J('/adm/tg/rec', { method: 'POST', body: JSON.stringify({ bot: v.bot, id: v.id ? +v.id : undefined, name: v.name, chat_id: v.chat_id, perms: fd.getAll('pm') }) }); toast('تم حفظ المعرّف'); }
+      if (f.dataset.f === 'tgb') { await J('/adm/tg/bot', { method: 'POST', body: JSON.stringify({ bot: v.bot, name: v.name, token: v.token, enabled: !!v.enabled, cfg: v.wait_min ? { wait_min: +v.wait_min } : undefined }) }); toast('تم الحفظ'); }
+      else { await J('/adm/tg/rec', { method: 'POST', body: JSON.stringify({ bot: v.bot, id: v.id ? +v.id : undefined, name: v.name, chat_id: v.chat_id, perms: fd.getAll('pm'), staff_id: v.staff_id ? +v.staff_id : null }) }); toast('تم حفظ المعرّف'); }
       loadTg();
     } catch (x) { toast(x.message || 'تعذر الحفظ'); }
   }, true);
@@ -241,9 +241,9 @@
   A.tget = async id => { try { await J('/adm/tg/rec/test', { method: 'POST', body: JSON.stringify({ id: +id }) }); toast('✅ وصلت رسالة الاختبار'); } catch (e) { toast(e.message); } loadTg(); };
   A.tgdl = async id => { if (!confirm('حذف هذا المعرّف؟ لن يستلم إشعارات ولن ينفّذ أي إجراء.')) return; try { await J('/adm/tg/rec?id=' + id, { method: 'DELETE' }); toast('تم الحذف'); } catch (e) { toast(e.message); } loadTg(); };
   A.tgea = async c => { const [id, on] = String(c).split('|'), bot = tgd.find(b => b.recipients.some(r => r.id == id)), r = bot.recipients.find(r => r.id == id);
-    try { await J('/adm/tg/rec', { method: 'POST', body: JSON.stringify({ bot: bot.bot, id: r.id, name: r.name, chat_id: r.chat_id, perms: r.perms, active: on == 1 }) }); toast(on == 1 ? 'تم التفعيل' : 'تم الإيقاف'); } catch (e) { toast(e.message); } loadTg(); };
+    try { await J('/adm/tg/rec', { method: 'POST', body: JSON.stringify({ bot: bot.bot, id: r.id, name: r.name, chat_id: r.chat_id, perms: r.perms, staff_id: r.staff_id, active: on == 1 }) }); toast(on == 1 ? 'تم التفعيل' : 'تم الإيقاف'); } catch (e) { toast(e.message); } loadTg(); };
   A.tgee = c => { const [bot, id] = String(c).split('|'), b = tgd.find(x => x.bot == bot), r = b.recipients.find(x => x.id == id), f = document.querySelector(`.tgc[data-bot="${bot}"] form[data-f="tgr"]`);
-    f.id.value = r.id; f.name.value = r.name; f.chat_id.value = r.chat_id; f.querySelectorAll('[name=pm]').forEach(i => i.checked = r.perms.includes(i.value)); f.scrollIntoView({ behavior: 'smooth', block: 'center' }); toast('عدّل ثم اضغط حفظ'); };
+    f.id.value = r.id; f.name.value = r.name; if (f.staff_id) f.staff_id.value = r.staff_id || ''; f.chat_id.value = r.chat_id; f.querySelectorAll('[name=pm]').forEach(i => i.checked = r.perms.includes(i.value)); f.scrollIntoView({ behavior: 'smooth', block: 'center' }); toast('عدّل ثم اضغط حفظ'); };
   A.tglg = async b => { try { const j = await J('/adm/tg/log?bot=' + b); $('#tglog').innerHTML = `<div class="cd"><h3>سجل ${esc((tgd.find(x => x.bot == b) || {}).label || '')}</h3><table class="tbd"><tr><th>الوقت</th><th>المعرّف</th><th>النوع</th><th>النتيجة</th></tr>${j.log.map(l => `<tr><td>${tgT(l.at)}</td><td dir="ltr">${esc(l.chat_id)}</td><td>${esc(l.kind)}</td><td>${l.ok ? '✅' : '⚠️ ' + esc(l.detail)}</td></tr>`).join('') || '<tr><td colspan=4>لا سجلات</td></tr>'}</table></div>`; } catch (e) { toast(e.message); } };
 
   /* ---------- الموظفون ---------- */

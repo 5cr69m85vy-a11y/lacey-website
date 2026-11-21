@@ -18,6 +18,7 @@
     if (mc) { ov.innerHTML = `<form id="stp" class="stc"><h2>تغيير كلمة السر</h2><p class="em">هذا أول دخول لك: اختر كلمة سر جديدة خاصة بك (8 أحرف على الأقل وليست أرقاماً فقط).</p><input name="old" type="password" placeholder="كلمة السر الحالية" required autocomplete="current-password"><input name="pw" type="password" placeholder="كلمة السر الجديدة" required minlength="8" autocomplete="new-password"><button class="btn">حفظ والمتابعة</button></form>`; return; }
     ov.innerHTML = `<div class="sth"><b>مرحباً ${E(name)}</b><span><a href="#" data-s="home">المتجر</a> · <button data-s="pw">كلمة السر</button> · <button data-s="out">خروج</button></span></div><div class="stg"><div><div class="dtabs" id="std"></div><div id="stc"></div></div><div id="stm"><p class="em">اختر محادثة</p></div></div>`;
     api('/adm/quick').then(j => { quick = j.items || []; }).catch(() => {});
+    { const m = /chat=(\d+)/.exec(location.hash); if (m && !draw.dl) { draw.dl = 1; cur = +m[1]; setTimeout(() => open(cur), 300); } }   // رابط «فتح المحادثة» من تلغرام
     load(); clearInterval(timer); timer = setInterval(() => { load(); if (cur) open(cur, true); }, 5000);
   }
   const pc = m => { let x = null; try { x = m.meta && JSON.parse(m.meta).product } catch (e) {} return x ? `<div class="pc"><i style="${x.i ? `background-image:url('${E(x.i)}')` : ''}"></i><span><b>${E(x.n)}</b><small>${E(x.c)} · ${Number(x.p || 0).toLocaleString('en-US')} د.ع</small></span></div>` : ''; };

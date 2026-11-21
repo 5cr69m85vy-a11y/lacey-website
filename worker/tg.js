@@ -8,10 +8,10 @@ export const BOTS = ['orders', 'support', 'reports'];
 export const BOT_LABEL = { orders: 'بوت الطلبات', support: 'بوت الدعم', reports: 'بوت التقارير' };
 export const PERMS = {
   orders: ['view', 'confirm', 'reject', 'processing', 'ship', 'deliver'],
-  support: ['view', 'assign', 'status', 'resolve'],
+  support: ['view', 'assign', 'status', 'resolve', 'dept_service', 'dept_routine'],
   reports: ['view'],
 };
-const DEFAULT_PERMS = { orders: ['view', 'confirm', 'reject', 'processing', 'ship'], support: ['view', 'assign', 'status', 'resolve'], reports: ['view'] };
+const DEFAULT_PERMS = { orders: ['view', 'confirm', 'reject', 'processing', 'ship'], support: ['view', 'assign', 'status', 'resolve', 'dept_service', 'dept_routine'], reports: ['view'] };
 const esc = s => String(s ?? '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 const money = n => Number(n || 0).toLocaleString('en-US');
 const fmt = t => t ? new Date(t + 3 * 3600e3).toISOString().replace('T', ' ').slice(0, 16) : '—';
@@ -43,10 +43,12 @@ const mark = async (env, b, rec, res, kind) => {
 export const botReady = async (env, bot) => { const b = await getBot(env, bot); return !!(b && b.enabled && b.token) && (await recipients(env, bot)).length > 0; };
 
 /* إرسال لكل المستلمين الفعّالين في هذا البوت فقط (قوائم البوتات مستقلة) */
-export async function tgSend(env, bot, text, { keyboard, kind = 'notify', only, perm } = {}) {
+const deptOk = (r, dept) => { const p = jp(r.perms, []), has = p.includes('dept_service') || p.includes('dept_routine'); return !has || p.includes('dept_' + dept); };   // بلا تحديد = كل الأقسام
+export async function tgSend(env, bot, text, { keyboard, kind = 'notify', only, perm, dept } = {}) {
   const b = await getBot(env, bot); if (!b || !b.enabled || !b.token) return [];
   let rs = await recipients(env, bot); if (only) rs = rs.filter(r => only.includes(r.chat_id));
   if (perm) rs = rs.filter(r => jp(r.perms, []).includes(perm));
+  if (dept) rs = rs.filter(r => deptOk(r, dept));
   return (await Promise.all(rs.map(async r => {
     const res = await tgApi(b.token, 'sendMessage', { chat_id: r.chat_id, text: text.slice(0, 4000), parse_mode: 'HTML', disable_web_page_preview: true, ...(keyboard ? { reply_markup: { inline_keyboard: keyboard } } : {}) });
     await mark(env, b, r, res, kind);
@@ -126,6 +128,77 @@ async function orderCallback(env, b, cq, deps) {
   if (others.length) await tgSend(env, 'orders', `ℹ️ ${esc(who)}: ${esc(note)} — الطلب <code>${esc(code)}</code>`, { only: others, kind: 'order_action' });
 }
 
+/* ================= بوت الدعم ================= */
+const WFL = { new: '🆕 جديدة', assigned: '👤 معيّنة', progress: '🔄 قيد المعالجة', waiting: '⏳ بانتظار الزبون', resolved: '✅ محلولة' };
+const DN = { service: 'الدعم', routine: 'اكتشف روتينك' };
+const wfOf = ch => ch.status === 'closed' ? 'resolved' : (ch.wf || (ch.assigned_to ? 'assigned' : 'new'));
+const originOf = async env => { const b = await getBot(env, 'support'); try { return b.webhook ? new URL(b.webhook).origin : (env.STORE_URL || ''); } catch (e) { return env.STORE_URL || ''; } };
+const staffRow = (env, id) => env.DB.prepare('SELECT id,name,active,team,perms FROM staff WHERE id=?').bind(id).first();
+async function supportCard(env, ch, head, text) {
+  const asg = ch.assigned_to ? ((await staffRow(env, ch.assigned_to)) || {}).name : '';
+  const o = await originOf(env), id = ch.id;
+  const t = `${head}\n\n👤 ${esc(ch.name || 'زائر')}\n🆔 ${ch.customer_id ? esc(ch.phone || '') + ' (عميل #' + ch.customer_id + ')' : esc(ch.phone || 'زائر بلا حساب')}\n🔖 محادثة #${id} — ${esc(DN[ch.dept] || DN.service)}\n🕐 ${fmt(now())}\n📌 ${WFL[wfOf(ch)]}${asg ? '\n🧑‍💼 الموظف: ' + esc(asg) : ''}\n\n💬 ${esc(String(text || '').slice(0, 600))}`;
+  const kb = [[...(o ? [{ text: '🔗 فتح المحادثة', url: `${o}/support#chat=${id}` }] : [])], [{ text: '🙋 استلمها', callback_data: 's:as:' + id }, { text: '🔄 قيد المعالجة', callback_data: 's:pg:' + id }], [{ text: '✅ تم الحل', callback_data: 's:rs:' + id }]].filter(r => r.length);
+  return { text: t, kb };
+}
+/* kind: new | reply | escalate | waiting */
+export async function tgSupportEvent(env, chatId, kind, text) {
+  try {
+    if (!(await botReady(env, 'support'))) return false;
+    const ch = await env.DB.prepare("SELECT * FROM chats WHERE id=? AND channel='support'").bind(chatId).first(); if (!ch) return false;
+    const head = { new: '🆕 <b>طلب دعم جديد</b>', reply: '💬 <b>رد جديد من الزبون</b>', escalate: '🚨 <b>تصعيد محادثة</b>', waiting: '⏰ <b>زبون ينتظر الرد</b>' }[kind] || '💬 <b>دعم</b>';
+    const c = await supportCard(env, ch, head, text);
+    return (await tgSend(env, 'support', c.text, { keyboard: c.kb, kind: 'support_' + kind, dept: ch.dept || 'service' })).length > 0;
+  } catch (e) { return false; }
+}
+/* تذكير: زبون ينتظر أكثر من N دقيقة بلا رد من الموظف (يعمل مع الـ cron كل دقيقة) */
+export async function tgSupportWaiting(env) {
+  const b = await getBot(env, 'support'); if (!b.enabled || !b.token) return 0;
+  const lim = now() - Math.max(2, +jp(b.cfg, {}).wait_min || 10) * 60e3;
+  const rows = (await env.DB.prepare(`SELECT c.id, c.tg_wait_at,
+      (SELECT body FROM chat_messages m WHERE m.chat_id=c.id AND m.sender<>'bot' ORDER BY m.id DESC LIMIT 1) body, (SELECT sender FROM chat_messages m WHERE m.chat_id=c.id AND m.sender<>'bot' ORDER BY m.id DESC LIMIT 1) sender, (SELECT at FROM chat_messages m WHERE m.chat_id=c.id AND m.sender<>'bot' ORDER BY m.id DESC LIMIT 1) lastat
+    FROM chats c WHERE c.channel='support' AND c.status='open' AND c.mode='human' AND c.tg_wait_at < ? LIMIT 20`).bind(lim).all()).results;
+  let n = 0;
+  for (const r of rows) { if (r.sender !== 'customer' || r.lastat > lim || r.tg_wait_at >= r.lastat) continue; await env.DB.prepare('UPDATE chats SET tg_wait_at=? WHERE id=?').bind(now(), r.id).run(); if (await tgSupportEvent(env, r.id, 'waiting', r.body)) n++; }
+  return n;
+}
+async function supportCallback(env, b, cq) {
+  const [, act, idS] = String(cq.data || '').split(':'), id = +idS, from = String((cq.from || {}).id || '');
+  const ans = (t, alert = true) => tgApi(b.token, 'answerCallbackQuery', { callback_query_id: cq.id, text: t.slice(0, 190), show_alert: alert });
+  const NEEDS = { as: 'assign', pg: 'status', rs: 'resolve' };
+  const rec = await env.DB.prepare('SELECT * FROM tg_recipients WHERE bot=? AND chat_id=? AND active=1').bind('support', from).first();
+  if (!rec || !NEEDS[act] || !jp(rec.perms, []).includes(NEEDS[act])) { await log(env, 'support', from, 'denied', false, `${act} ${id}`); await audit(env, null, 'tg:' + from, 'tg_denied', String(id), null, { act }); return ans('⛔ غير مصرّح لك بهذا الإجراء'); }
+  if (!(await hit(env, 'tg:' + from, 40, 60e3))) return ans('⏳ محاولات كثيرة، انتظر قليلاً');
+  const ch = await env.DB.prepare("SELECT * FROM chats WHERE id=? AND channel='support'").bind(id).first(); if (!ch) return ans('المحادثة غير موجودة');
+  if (!deptOk(rec, ch.dept || 'service')) return ans('⛔ هذه المحادثة تابعة لقسم غير مسموح لك به');
+  if (ch.status !== 'open') return ans('المحادثة مغلقة (محلولة) مسبقاً');
+  const who = rec.name || ('ID ' + from), actor = 'tg:' + who; let note = '';
+  if (act === 'as') {                                       // استلام: يتطلب ربط المعرّف بحساب موظف فعّال ضمن قسمه
+    const sf = rec.staff_id ? await staffRow(env, rec.staff_id) : null;
+    if (!sf || !sf.active) return ans('اطلب من المدير ربط معرّفك بحساب موظف فعّال لتستلم المحادثات');
+    const dp = [...new Set([sf.team === 'routine' ? 'routine' : 'service', ...jp(sf.perms, []).filter(x => x.startsWith('dept:')).map(x => x.slice(5))])];
+    if (!dp.includes(ch.dept || 'service')) return ans('⛔ حساب الموظف المربوط لا يتبع قسم هذه المحادثة');
+    const r = await env.DB.prepare("UPDATE chats SET mode='human',wf='progress',assigned_to=? WHERE id=? AND status='open' AND (assigned_to IS NULL OR assigned_to=?)").bind(sf.id, id, sf.id).run();
+    if (!r.meta.changes) return ans('المحادثة مع موظف آخر بالفعل');
+    await env.DB.prepare('INSERT INTO chat_messages(chat_id,sender,body,at,author,meta) VALUES(?,?,?,?,?,?)').bind(id, 'bot', `انضم ${sf.name} إلى المحادثة وسيكمل معك 🌸`, now(), 'bot', '').run();
+    note = 'استلم المحادثة: ' + sf.name;
+  } else if (act === 'pg') {
+    if (wfOf(ch) === 'progress') return ans('المحادثة قيد المعالجة مسبقاً');
+    await env.DB.prepare("UPDATE chats SET wf='progress' WHERE id=? AND status='open'").bind(id).run(); note = 'قيد المعالجة';
+  } else if (act === 'rs') {
+    const r = await env.DB.prepare("UPDATE chats SET status='closed',wf='resolved',closed_at=? WHERE id=? AND status='open'").bind(now(), id).run();
+    if (!r.meta.changes) return ans('المحادثة مغلقة مسبقاً'); note = 'تم الحل';
+  }
+  await audit(env, null, actor, 'tg_chat_' + act, String(id), null, { note });
+  await log(env, 'support', from, 'action', true, `${act} ${id}`);
+  await ans('✔️ ' + note, false);
+  const fresh = await env.DB.prepare('SELECT * FROM chats WHERE id=?').bind(id).first();
+  const card = await supportCard(env, fresh, `📝 <b>${esc(note)}</b> — بواسطة ${esc(who)}`, 'تم تحديث المحادثة');
+  if (cq.message) await tgApi(b.token, 'editMessageReplyMarkup', { chat_id: cq.message.chat.id, message_id: cq.message.message_id, reply_markup: { inline_keyboard: fresh.status === 'closed' ? card.kb.filter(r => r[0].url) : card.kb } });
+  const others = (await recipients(env, 'support')).filter(r => r.chat_id !== from && deptOk(r, fresh.dept || 'service')).map(r => r.chat_id);
+  if (others.length) await tgSend(env, 'support', `ℹ️ ${esc(who)}: ${esc(note)} — محادثة #${id}`, { only: others, kind: 'support_action' });
+}
+
 /* ================= webhook ================= */
 export async function tgHook(env, bot, request, deps) {
   const b = await getBot(env, bot); if (!b || !b.token || !b.enabled) return J({ ok: true });
@@ -135,6 +208,7 @@ export async function tgHook(env, bot, request, deps) {
   if (!ins.meta.changes) return J({ ok: true, dup: true });                       // حماية من التكرار
   try {
     if (u.callback_query && bot === 'orders' && String(u.callback_query.data || '').startsWith('o:')) await orderCallback(env, b, u.callback_query, deps);
+    else if (u.callback_query && bot === 'support' && String(u.callback_query.data || '').startsWith('s:')) await supportCallback(env, b, u.callback_query);
     else if (u.callback_query && deps.onCallback) await deps.onCallback(env, bot, b, u.callback_query);
     else if (u.message && u.message.text) {
       const m = u.message, txt = m.text.trim(), cid = String(m.chat.id), uid = String((m.from || {}).id || cid);
@@ -149,7 +223,7 @@ export async function tgHook(env, bot, request, deps) {
 const pubBot = async (env, b) => {
   const rs = await recipients(env, b.bot, false), last = (await env.DB.prepare('SELECT at,detail FROM tg_log WHERE bot=? AND ok=0 ORDER BY id DESC LIMIT 1').bind(b.bot).first()) || null;
   return { bot: b.bot, label: BOT_LABEL[b.bot], enabled: !!b.enabled, name: b.name, hasToken: !!b.token, tokenHint: b.token ? '••••' + b.token.slice(-4) : '', username: b.username, connected: !!b.webhook, last_ok: b.last_ok, last_err: b.last_err, last_err_at: b.last_err_at, cfg: jp(b.cfg, {}), perms: PERMS[b.bot], count: rs.filter(r => r.active).length, total: rs.length,
-    recipients: rs.map(r => ({ id: r.id, chat_id: r.chat_id, name: r.name, active: !!r.active, perms: jp(r.perms, []), last_ok: r.last_ok, last_err: r.last_err, last_err_at: r.last_err_at })), lastFail: last };
+    recipients: rs.map(r => ({ id: r.id, staff_id: r.staff_id || null, chat_id: r.chat_id, name: r.name, active: !!r.active, perms: jp(r.perms, []), last_ok: r.last_ok, last_err: r.last_err, last_err_at: r.last_err_at })), lastFail: last };
 };
 export async function tgRoutes(c) {
   const { env, request, url, p, M, body, authed, deps } = c;
@@ -187,12 +261,12 @@ export async function tgRoutes(c) {
     if (b.id) {
       const r = await env.DB.prepare('SELECT * FROM tg_recipients WHERE id=?').bind(+b.id).first(); if (!r) return J({ error: 'not found' }, 404);
       if (await env.DB.prepare('SELECT 1 x FROM tg_recipients WHERE bot=? AND chat_id=? AND id<>?').bind(r.bot, chat, r.id).first()) return J({ error: 'المعرّف موجود مسبقاً في هذا البوت' }, 409);
-      await env.DB.prepare('UPDATE tg_recipients SET chat_id=?,name=?,active=?,perms=? WHERE id=?').bind(chat, String(b.name || '').slice(0, 60), b.active === false ? 0 : 1, perms, r.id).run();
+      await env.DB.prepare('UPDATE tg_recipients SET chat_id=?,name=?,active=?,perms=?,staff_id=? WHERE id=?').bind(chat, String(b.name || '').slice(0, 60), b.active === false ? 0 : 1, perms, b.staff_id ? +b.staff_id : null, r.id).run();
       await audit(env, request, 'admin', 'tg_rec_edit', r.bot + ':' + chat, null, { active: b.active !== false, perms });
     } else {
       if ((await env.DB.prepare('SELECT COUNT(*) n FROM tg_recipients WHERE bot=?').bind(b.bot).first()).n >= 50) return J({ error: 'الحد الأقصى 50 معرّفاً لكل بوت' }, 400);
       if (await env.DB.prepare('SELECT 1 x FROM tg_recipients WHERE bot=? AND chat_id=?').bind(b.bot, chat).first()) return J({ error: 'المعرّف موجود مسبقاً في هذا البوت' }, 409);
-      await env.DB.prepare('INSERT INTO tg_recipients(bot,chat_id,name,active,perms,created_at) VALUES(?,?,?,?,?,?)').bind(b.bot, chat, String(b.name || '').slice(0, 60), b.active === false ? 0 : 1, perms, now()).run();
+      await env.DB.prepare('INSERT INTO tg_recipients(bot,chat_id,name,active,perms,created_at,staff_id) VALUES(?,?,?,?,?,?,?)').bind(b.bot, chat, String(b.name || '').slice(0, 60), b.active === false ? 0 : 1, perms, now(), b.staff_id ? +b.staff_id : null).run();
       await audit(env, request, 'admin', 'tg_rec_add', b.bot + ':' + chat);
     }
     return J({ ok: true });

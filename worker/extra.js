@@ -5,6 +5,7 @@ import { botReply, BOT, MAIN, ROUTINE } from './bot.js';
 import { pbkdf2, eq, ageOf } from './auth.js';
 import { processQueue } from './wa.js';
 import { limit, audit, ipOf } from './guard.js';
+import { tgSupportEvent, botReady } from './tg.js';
 
 const QUICK = ['أهلاً بك في لاسي 🌸 كيف أقدر أساعدك؟', 'تم استلام طلبك وهو قيد التجهيز ✅', 'هل ممكن ترسلين كود الطلب (LC-XXXXXX)؟', 'شكراً لتواصلك، سنتابع الموضوع ونعود إليك بأقرب وقت 🌸', 'هل لديك حساسية من أي مكوّن؟', 'ننصح بتجربة المنتج على منطقة صغيرة أولاً (Patch test) 🌿'];
 const TZ = 3 * 3600;                                    // بغداد UTC+3
@@ -184,7 +185,11 @@ export async function extraRoutes(c) {
       if (r.handoff) { mode = 'human'; await env.DB.prepare("UPDATE chats SET mode='human',topic=? WHERE id=?").bind(r.topic || '', ch.id).run(); }
     }
     if (mode === 'human') await env.DB.prepare("UPDATE chats SET wf=CASE WHEN assigned_to IS NULL THEN 'new' ELSE 'progress' END WHERE id=?").bind(ch.id).run();   // رد الزبون: جديدة أو تعود قيد المعالجة
-    if (mode === 'human' && tg && ctx && ctx.waitUntil) ctx.waitUntil(tg(`💬 <b>دعم #${ch.id}</b> ${ch.name || 'زائر'} ${ch.phone || ''}${ch.assigned_to ? ' (للموظف ' + (await staffName(ch)) + ')' : ' — بانتظار موظف'}\n${text.replace(/[<>&]/g, '')}`));
+    if (mode === 'human') {                                 // بوت الدعم في تلغرام (إن كان مفعّلاً) وإلا الإشعار القديم
+      const kind = ch.mode === 'bot' ? 'new' : 'reply', job = tgSupportEvent(env, ch.id, kind, text);
+      if (ctx && ctx.waitUntil) ctx.waitUntil(job); else await job;
+    }
+    if (mode === 'human' && tg && ctx && ctx.waitUntil && !(await botReady(env, 'support'))) ctx.waitUntil(tg(`💬 <b>دعم #${ch.id}</b> ${ch.name || 'زائر'} ${ch.phone || ''}${ch.assigned_to ? ' (للموظف ' + (await staffName(ch)) + ')' : ' — بانتظار موظف'}\n${text.replace(/[<>&]/g, '')}`));
     return J({ ok: true, token: ch._tk || b.token || '', chat: ch.id });
   }
   if (p === '/chat/poll' && M === 'GET') {
@@ -330,9 +335,11 @@ export async function extraRoutes(c) {
     if (!DEPTS.includes(b.dept)) return J({ error: 'قسم غير صالح' }, 400);
     const ch = await env.DB.prepare("SELECT * FROM chats WHERE id=? AND channel='support'").bind(+b.id).first(); if (!ch) return J({ error: 'not found' }, 404);
     if (noDept(ch)) return FORBID();
+    const tgJob = () => tgSupportEvent(env, ch.id, 'escalate', 'حُوّلت المحادثة إلى قسم ' + (b.dept === 'routine' ? 'اكتشف روتينك' : 'الدعم'));
     await env.DB.prepare('UPDATE chats SET dept=?,assigned_to=NULL WHERE id=?').bind(b.dept, ch.id).run();
     await addMsg(ch.id, 'bot', `تم تحويل محادثتك إلى قسم ${b.dept === 'routine' ? 'روتين' : 'خدمة العملاء'} 🌸`, BOT);
     await audit(env, request, op.admin ? 'admin' : 'staff:' + op.un, 'chat_transfer', String(ch.id), ch.dept, b.dept);
+    if (ctx && ctx.waitUntil) ctx.waitUntil(tgJob()); else await tgJob();
     return J({ ok: true });
   }
   if (p === '/adm/quick' && M === 'GET') {

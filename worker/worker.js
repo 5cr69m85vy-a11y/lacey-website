@@ -21,7 +21,7 @@ import { runReminders } from './remind.js';
 import { opsRoutes, restock, takeStock, stockMap, refreshDeliveries, productPage, sitemap, robots } from './ops.js';
 import { ensureSchema, withIntegrations } from './lib.js';
 import { limit, hit, tooMany, audit, gc, ipOf } from './guard.js';
-import { tgRoutes, tgOrderNew, tgOrderRefresh, botReady, tgSend } from './tg.js';
+import { tgRoutes, tgOrderNew, tgOrderRefresh, botReady, tgSend, tgSupportWaiting } from './tg.js';
 
 const CANCEL_WINDOW_MS = 10 * 60 * 1000;
 
@@ -250,7 +250,7 @@ export default {
     let env = rawEnv; try { env = request.method === 'OPTIONS' ? rawEnv : await withIntegrations(rawEnv); } catch (e) {}
     return corsFilter(request, env, res);
   },
-  async scheduled(event, rawEnv) { await ensureSchema(rawEnv); const env = await withIntegrations(rawEnv); await sweep(env); try { await refreshDeliveries(env, setStatus); } catch (e) { console.error('delivery refresh', e && e.message); } await processQueue(env, 50); if (new Date().getMinutes() % 30 === 0) { await gc(env); try { await runReminders(env); } catch (e) { console.error('reminders', e && e.message); } } },
+  async scheduled(event, rawEnv) { await ensureSchema(rawEnv); const env = await withIntegrations(rawEnv); await sweep(env); try { await refreshDeliveries(env, setStatus); } catch (e) { console.error('delivery refresh', e && e.message); } try { await tgSupportWaiting(env); } catch (e) { console.error('tg waiting', e && e.message); } await processQueue(env, 50); if (new Date().getMinutes() % 30 === 0) { await gc(env); try { await runReminders(env); } catch (e) { console.error('reminders', e && e.message); } } },
 };
 
 async function handle(request, rawEnv, ctx) {

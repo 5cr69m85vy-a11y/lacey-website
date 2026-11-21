@@ -108,5 +108,43 @@ const authFor = require('./sess');
     await post('/adm/tg/bot', { bot: 'orders', enabled: false }, adm); calls = []; await post('/order', { code: 'LC-TG0004', name: 'Xyz', ph: '07701110001', city: 'بغداد', area: 'x', lm: 'y', items: [{ c: 'A1', q: 1 }] }, H);
     assert(!calls.some(c => c.tok === TOK_O && c.method === 'sendMessage'), 'disabled bot sends nothing');
   });
+  await ok('support bot: new / reply / escalation / waiting notifications; per-department recipients; assign, progress, resolve act on the real conversation', async () => {
+    assert.strictEqual((await post('/adm/tg/connect', { bot: 'support' }, adm)).status, 200);
+    const mkS = async (u, team) => (await post('/adm/staff', { name: u, username: u, pw: 'pass12345', team, role: team === 'routine' ? 'Routine Specialist' : 'Support Agent' }, adm)).status;
+    await mkS('tg_sup', 'support'); await mkS('tg_rou', 'routine'); const sid = u => DB.prepare('select id from staff where username=?').get(u).id;
+    const rid = c => DB.prepare("select id from tg_recipients where bot='support' and chat_id=?").get(c).id;
+    const edit = (c, extra) => post('/adm/tg/rec', { bot: 'support', id: rid(c), chat_id: c, name: 'دعم' + c, ...extra }, adm);
+    await edit('20010', { perms: ['view', 'assign', 'status', 'resolve', 'dept_service'], staff_id: sid('tg_sup') });                // يستلم باسم موظف الدعم
+    await edit('20020', { perms: ['view', 'assign', 'status', 'resolve', 'dept_routine'], staff_id: sid('tg_rou') }); // قسم الروتين فقط
+    await edit('20030', { perms: ['view'] });                                                                          // عرض فقط
+    calls = []; const c1 = await (await post('/chat/send', { text: 'أريد مساعدة بطلبي', dept: 'service', token: 'sp-1', name: 'زينب', intent: 'human' })).json();
+    const toS = () => calls.filter(c => c.method === 'sendMessage' && c.tok === TOK_S);
+    assert.deepStrictEqual(toS().map(c => c.body.chat_id).sort(), ['10010', '20010', '20030'], 'routine-only recipient is skipped for a service chat; orders/reports bots silent');
+    const t = toS()[0].body.text; for (const w of ['طلب دعم جديد', 'زينب', 'محادثة #' + c1.chat, 'أريد مساعدة بطلبي', 'جديدة']) assert(t.includes(w), w);
+    const kb = toS()[0].body.reply_markup.inline_keyboard.flat(); assert(kb.some(b => b.url === 'https://x.dev/support#chat=' + c1.chat) && kb.length === 4, 'open link + assign + progress + resolve');
+    assert(!calls.some(c => c.tok === TOK_O || c.tok === TOK_R));
+    calls = []; await post('/chat/send', { text: 'ردّيت عليكم؟', dept: 'service', token: 'sp-1', name: 'زينب' }); assert(toS().length === 3 && toS()[0].body.text.includes('رد جديد من الزبون'));
+    const ans = () => (calls.filter(c => c.method === 'answerCallbackQuery').pop() || { body: {} }).body.text || '';
+    const row = () => DB.prepare('select status,wf,assigned_to from chats where id=?').get(c1.chat);
+    for (const who of ['99990', '20030']) { await cb('support', who, 's:rs:' + c1.chat); assert.strictEqual(row().status, 'open', who); }
+    await cb('support', '20020', 's:pg:' + c1.chat); assert(/قسم غير مسموح/.test(ans()), 'routine-only recipient cannot touch a service chat'); assert.strictEqual(row().wf, 'new');
+    await cb('support', '10010', 's:as:' + c1.chat); assert(/ربط معرّفك/.test(ans()), 'no linked staff account → no assign');
+    await cb('support', '20010', 's:as:' + c1.chat); assert.strictEqual(row().assigned_to, sid('tg_sup')); assert.strictEqual(row().wf, 'progress');
+    assert(DB.prepare("select count(*) n from chat_messages where chat_id=? and body like '%انضم%'").get(c1.chat).n === 1);
+    await post('/adm/tg/rec', { bot: 'support', id: rid('10010'), chat_id: '10010', name: 'م', perms: ['assign'], staff_id: sid('tg_sup') }, adm); await cb('support', '10010', 's:as:' + c1.chat); assert.strictEqual(row().assigned_to, sid('tg_sup'), 'same staff may re-assign (idempotent)');
+    await post('/adm/staff', { id: sid('tg_rou'), name: 'tg_rou', username: 'tg_rou', team: 'routine', role: 'Routine Specialist' }, adm);
+    await post('/adm/tg/rec', { bot: 'support', id: rid('10010'), chat_id: '10010', name: 'م', perms: ['assign'], staff_id: sid('tg_rou') }, adm); await cb('support', '10010', 's:as:' + c1.chat); assert(/قسم|آخر/.test(ans())); assert.strictEqual(row().assigned_to, sid('tg_sup'));
+    await cb('support', '20010', 's:rs:' + c1.chat); assert.strictEqual(row().status, 'closed'); assert.strictEqual(row().wf, 'resolved');
+    await cb('support', '20010', 's:rs:' + c1.chat); assert(/مغلقة/.test(ans()));
+    assert(DB.prepare("select count(*) n from audit_log where action in ('tg_chat_as','tg_chat_rs')").get().n >= 2);
+    // تصعيد بين الأقسام + تذكير «ينتظر»
+    const c2 = await (await post('/chat/send', { text: 'ما روتيني؟', dept: 'routine', token: 'sp-2', name: 'هدى', intent: 'human' })).json();
+    assert.deepStrictEqual(toS().filter(c => c.body.text.includes('ما روتيني')).map(c => c.body.chat_id).sort(), ['10010', '20020', '20030'], 'routine chat skips the service-only recipient (unrestricted ones still receive it)');
+    calls = []; await post('/adm/chat/transfer', { id: c2.chat, dept: 'service' }, adm); assert(toS().some(c => c.body.text.includes('تصعيد محادثة')), 'transfer is an escalation notice');
+    const TG = await import('../worker/tg.js'); await post('/adm/tg/bot', { bot: 'support', enabled: true, cfg: { wait_min: 2 } }, adm);
+    DB.prepare('update chat_messages set at=? where chat_id=?').run(Date.now() - 5 * 60e3, c2.chat); calls = [];
+    assert.strictEqual(await TG.tgSupportWaiting(env), 1); assert(toS().some(c => c.body.text.includes('زبون ينتظر')));
+    calls = []; assert.strictEqual(await TG.tgSupportWaiting(env), 0, 'no repeat until the customer writes again');
+  });
   console.log(n + ' telegram tests passed');
 })().catch(e => { console.error('FAIL', e); process.exit(1); });
