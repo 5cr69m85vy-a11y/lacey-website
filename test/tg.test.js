@@ -146,5 +146,45 @@ const authFor = require('./sess');
     assert.strictEqual(await TG.tgSupportWaiting(env), 1); assert(toS().some(c => c.body.text.includes('زبون ينتظر')));
     calls = []; assert.strictEqual(await TG.tgSupportWaiting(env), 0, 'no repeat until the customer writes again');
   });
+  await ok('reports bot: commands, correct figures per period, access control, automatic delivery with per-report recipients and no duplicates', async () => {
+    const R = await import('../worker/reports.js'), TG = await import('../worker/tg.js');
+    const ins = DB.prepare('insert into orders(code,id,name,phone,items,subtotal,discount,shipping,total,pay_method,status,created_at,free_shipping) values(?,?,?,?,?,?,?,?,?,?,?,?,?)');
+    const it = JSON.stringify([{ c: 'A1', n: 'Cleanser', p: 10000, q: 2 }]), it1 = JSON.stringify([{ c: 'A1', n: 'Cleanser', p: 10000, q: 1 }]);
+    const D = (y, m, d) => Date.UTC(y, m - 1, d, 9);
+    ins.run('HX-1', 9001, 'a', '07700000011', it1, 10000, 0, 5000, 15000, 'cod', 5, D(2025, 2, 20), 0);      // فبراير: P1
+    ins.run('HX-2', 9002, 'a', '07700000011', it, 20000, 0, 5000, 25000, 'cod', 5, D(2025, 3, 10), 0);       // الأسبوع الماضي
+    ins.run('HX-3', 9003, 'b', '07700000022', it, 20000, 0, 5000, 25000, 'cod', 0, D(2025, 3, 12), 0);       // ملغى
+    ins.run('HX-4', 9004, 'a', '07700000011', it1, 10000, 1000, 5000, 14000, 'cod', 2, D(2025, 3, 13), 0);   // خصم
+    DB.prepare('insert into receipts(order_code,number,issued_at,data) values(?,?,?,?)').run('HX-2', 'R-HX-2', D(2025, 3, 10), '{}');
+    const sat = Date.UTC(2025, 2, 15, 12); assert.strictEqual(R.baghdad(sat).dow, 6);
+    const wk = await R.buildReport(env, 'weekly', { t: sat, auto: true });
+    for (const w of ['التقرير الأسبوعي', '2025-03-08', '2025-03-14', 'عدد الطلبات: <b>3</b>', 'الملغاة: <b>1</b>', 'إجمالي المبيعات: <b>30,000</b>', 'صافي المبيعات (بعد الخصم): <b>29,000</b>', 'عدد الزبائن: <b>1</b>', 'Cleanser — 3 قطعة', 'عدد الإيصالات/الفواتير: <b>1</b>', 'متوسط قيمة الطلب: <b>19,500</b>']) assert(wk.includes(w), 'weekly: ' + w + '\n' + wk);
+    const mo = await R.buildReport(env, 'monthly', { t: Date.UTC(2025, 3, 1, 12), auto: true });
+    for (const w of ['آذار 2025', 'إجمالي المبيعات: <b>30,000</b>', 'زبائن عائدون: <b>1</b>', 'زبائن جدد: <b>0</b>', 'المبيعات 200%']) assert(mo.includes(w), 'monthly: ' + w + '\n' + mo);
+    const yr = await R.buildReport(env, 'yearly', { t: Date.UTC(2026, 0, 1, 12), auto: true });
+    for (const w of ['سنة 2025', 'شباط: 10,000', 'آذار: 30,000', 'إجمالي المبيعات: <b>40,000</b>', 'النمو']) assert(yr.includes(w), 'yearly: ' + w + '\n' + yr);
+    const dy = await R.buildReport(env, 'daily', { t: Date.UTC(2025, 2, 10, 15) }); for (const w of ['2025-03-10', 'إجمالي المبيعات: <b>20,000</b>', 'إيراد التوصيل: <b>5,000</b>', 'إجمالي الخصومات: <b>0</b>']) assert(dy.includes(w), 'daily: ' + w + '\n' + dy);
+    // الأوامر
+    const cmd = (from, text) => hook('reports', { message: { chat: { id: +from }, from: { id: +from }, text } });
+    const said = () => (calls.filter(c => c.method === 'sendMessage' && c.tok === TOK_R).pop() || { body: {} }).body;
+    for (const c of ['/daily', '/weekly', '/monthly', '/yearly', '/sales', '/orders', '/customers', '/invoices']) { calls = []; await cmd('30010', c); assert(said().text && said().chat_id === '30010' && !/غير مصرّح/.test(said().text), c); }
+    calls = []; await cmd('30010', '/sales@lacey_reports_bot'); assert(/ملخص المبيعات/.test(said().text), 'bot-name suffix accepted');
+    for (const who of ['99990', '10010', '20010']) { calls = []; await cmd(who, '/daily'); assert(/غير مصرّح/.test(said().text) && !/إجمالي المبيعات/.test(said().text), who + ' must not read reports'); }
+    calls = []; await cmd('30010', '/orders'); assert(/مسلّمة/.test(said().text)); calls = []; await cmd('30010', '/invoices'); assert(/R-HX-2/.test(said().text) || /الإيصالات/.test(said().text));
+    calls = []; await call('/tg/hook/reports', { method: 'POST', body: JSON.stringify({ update_id: ++upd, message: { chat: { id: 30010 }, from: { id: 30010 }, text: '/daily' } }), headers: { 'X-Telegram-Bot-Api-Secret-Token': 'bad' } }); assert.strictEqual(calls.length, 0);
+    // الإرسال التلقائي: أوقات + مستلمون لكل تقرير + بلا تكرار
+    const auto = { daily: { on: true, time: '00:00', to: [] }, weekly: { on: true, time: '09:00', dow: 6, to: ['30020'] }, monthly: { on: true, time: '09:00', to: [] }, yearly: { on: false, time: '09:00', to: [] } };
+    assert.strictEqual((await post('/adm/tg/bot', { bot: 'reports', enabled: true, cfg: { auto } }, adm)).status, 200);
+    assert.strictEqual((await get('/adm/tg', adm)).bots[2].cfg.auto.weekly.to[0], '30020');
+    const toR = () => calls.filter(c => c.method === 'sendMessage' && c.tok === TOK_R);
+    calls = []; await TG.tgReportsTick(env, sat); assert.deepStrictEqual(toR().map(c => c.body.chat_id + (c.body.text.includes('الأسبوعي') ? 'W' : c.body.text.includes('اليومي') ? 'D' : '?')).sort(), ['30010D', '30020D', '30020W'], 'daily → all, weekly → only its recipients, monthly not due on the 15th');
+    calls = []; await TG.tgReportsTick(env, sat + 3600e3); assert.strictEqual(toR().length, 0, 'no duplicates on the same day');
+    calls = []; await TG.tgReportsTick(env, Date.UTC(2025, 3, 1, 12)); assert(toR().some(c => c.body.text.includes('الشهري')) && !toR().some(c => c.body.text.includes('السنوي')));
+    calls = []; await TG.tgReportsTick(env, Date.UTC(2025, 2, 22, 5)); assert(!toR().some(c => c.body.text.includes('الأسبوعي')), 'weekly waits for its configured time (09:00 Baghdad)');
+    calls = []; await TG.tgReportsTick(env, Date.UTC(2025, 2, 22, 7)); assert(toR().some(c => c.body.text.includes('الأسبوعي')), 'and is sent once the time passes');
+    await post('/adm/tg/rec', { bot: 'reports', id: DB.prepare("select id from tg_recipients where bot='reports' and chat_id='30020'").get().id, chat_id: '30020', name: 'x', active: false }, adm);
+    calls = []; await TG.tgReportsTick(env, Date.UTC(2025, 5, 16, 20)); assert(!toR().some(c => c.body.chat_id === '30020'), 'disabled recipient gets nothing');
+    calls = []; assert.strictEqual((await post('/adm/tg/report', { kind: 'monthly' }, adm)).status, 200); assert(toR().length >= 1); assert.strictEqual((await post('/adm/tg/report', { kind: 'x' }, adm)).status, 400);
+  });
   console.log(n + ' telegram tests passed');
 })().catch(e => { console.error('FAIL', e); process.exit(1); });

@@ -208,6 +208,9 @@
   let tgd = [], tgs = [];
   const TGP = { view: 'عرض', confirm: 'تأكيد', reject: 'رفض', processing: 'تجهيز', ship: 'شحن', deliver: 'تسليم', assign: 'استلام', status: 'تغيير حالة', resolve: 'حل', dept_service: 'قسم الدعم', dept_routine: 'قسم الروتين' };
   const TGI = { orders: '🛍', support: '💬', reports: '📊' };
+  const RKN = { daily: 'التقرير اليومي', weekly: 'التقرير الأسبوعي', monthly: 'التقرير الشهري', yearly: 'التقرير السنوي' }, DOW = ['الأحد', 'الاثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
+  const tgAuto = b => { const a = (b.cfg || {}).auto || {}, rs = b.recipients.filter(r => r.active); return `<h4>الإرسال التلقائي للتقارير</h4><p class="em">الأوامر داخل البوت: <b dir="ltr">/daily /weekly /monthly /yearly /sales /orders /customers /invoices</b> (للمعرّفات ذات صلاحية «عرض» فقط). الأسبوعي يغطي الأسبوع الماضي (السبت–الجمعة)، والشهري والسنوي يُرسلان في أول الشهر/السنة. اترك المستلمين بلا تحديد ليصل لكل المعرّفات الفعّالة. التوقيت بتوقيت بغداد.</p>
+    <form class="fm" data-f="tga">${Object.keys(RKN).map(k => { const c = a[k] || {}; return `<div class="full" style="border:1px solid var(--bd,#e3ecee);border-radius:10px;padding:8px 10px"><label class="ck"><input type="checkbox" name="on_${k}" ${c.on ? 'checked' : ''}> <b>${RKN[k]}</b></label> <input type="time" name="t_${k}" value="${c.time || '09:00'}" style="width:auto">${k == 'weekly' ? ` <select name="d_weekly" style="width:auto">${DOW.map((n, i) => `<option value="${i}" ${(c.dow ?? 6) == i ? 'selected' : ''}>${n}</option>`).join('')}</select>` : ''} <button type="button" class="btn g" data-a="tgrp" data-c="${k}">إرسال الآن</button><br>${rs.length ? rs.map(r => `<label class="ck"><input type="checkbox" name="to_${k}" value="${r.chat_id}" ${(c.to || []).includes(r.chat_id) ? 'checked' : ''}> ${esc(r.name || r.chat_id)}</label>`).join(' ') : '<small>أضف معرّفات فعّالة أولاً</small>'}</div>`; }).join('')}<button class="btn">حفظ جدول الإرسال</button></form>`; };
   const tgT = t => t ? new Date(t).toLocaleString('ar-IQ') : '—';
   TB.tg = () => { setTimeout(loadTg, 0); return '<div id="tgb"><p class="em">جارٍ التحميل…</p></div>'; };
   async function loadTg() {
@@ -220,6 +223,7 @@
         <label>التوكن <small>(من @BotFather)</small><input name="token" type="password" dir="ltr" autocomplete="off" placeholder="${b.hasToken ? 'محفوظ ' + b.tokenHint + ' — اتركه فارغاً للإبقاء عليه' : '123456789:AA…'}"></label>
         ${b.bot == 'support' ? `<label>تذكير «زبون ينتظر» بعد (دقيقة)<input name="wait_min" type="number" min="2" max="240" value="${(b.cfg || {}).wait_min || 10}"></label>` : ''}<label class="ck"><input type="checkbox" name="enabled" ${b.enabled ? 'checked' : ''}> تفعيل البوت</label>
         <button class="btn">حفظ</button><button type="button" class="btn g" data-a="tgcn" data-c="${b.bot}">اختبار الاتصال وربط البوت</button><button type="button" class="btn g" data-a="tglg" data-c="${b.bot}">سجل الإرسال</button></form>
+      ${b.bot == 'reports' ? tgAuto(b) : ''}
       <h4>المعرّفات المسموح لها (${b.total})</h4>
       ${b.recipients.length ? `<table class="tbd"><tr><th>الاسم</th><th>المعرّف</th><th>الصلاحيات</th><th>الحالة</th><th></th></tr>${b.recipients.map(r => `<tr><td>${esc(r.name || '—')}${r.staff_id ? `<br><small>🔗 ${esc((tgs.find(x => x.id == r.staff_id) || {}).name || 'موظف')}</small>` : ''}</td><td dir="ltr">${esc(r.chat_id)}</td><td>${r.perms.map(x => TGP[x] || x).join('، ') || '—'}</td>
         <td>${r.active ? '✅ فعّال' : '⏸ موقوف'}<br><small>${r.last_err ? '⚠️ ' + esc(r.last_err) : r.last_ok ? 'آخر وصول ' + tgT(r.last_ok) : 'لم يُرسل بعد'}</small></td>
@@ -232,11 +236,15 @@
     const f = e.target.closest && e.target.closest('form[data-f^="tg"]'); if (!f) return; e.preventDefault(); e.stopImmediatePropagation();
     const fd = new FormData(f), v = Object.fromEntries(fd);
     try {
-      if (f.dataset.f === 'tgb') { await J('/adm/tg/bot', { method: 'POST', body: JSON.stringify({ bot: v.bot, name: v.name, token: v.token, enabled: !!v.enabled, cfg: v.wait_min ? { wait_min: +v.wait_min } : undefined }) }); toast('تم الحفظ'); }
+      if (f.dataset.f === 'tga') {
+        const auto = {}; for (const k of Object.keys(RKN)) auto[k] = { on: !!v['on_' + k], time: v['t_' + k] || '09:00', to: fd.getAll('to_' + k), ...(k == 'weekly' ? { dow: +v.d_weekly } : {}) };
+        const cur = tgd.find(x => x.bot == 'reports'); await J('/adm/tg/bot', { method: 'POST', body: JSON.stringify({ bot: 'reports', enabled: cur.enabled, name: cur.name, cfg: { auto } }) }); toast('تم حفظ جدول الإرسال');
+      } else if (f.dataset.f === 'tgb') { await J('/adm/tg/bot', { method: 'POST', body: JSON.stringify({ bot: v.bot, name: v.name, token: v.token, enabled: !!v.enabled, cfg: v.wait_min ? { wait_min: +v.wait_min } : undefined }) }); toast('تم الحفظ'); }
       else { await J('/adm/tg/rec', { method: 'POST', body: JSON.stringify({ bot: v.bot, id: v.id ? +v.id : undefined, name: v.name, chat_id: v.chat_id, perms: fd.getAll('pm'), staff_id: v.staff_id ? +v.staff_id : null }) }); toast('تم حفظ المعرّف'); }
       loadTg();
     } catch (x) { toast(x.message || 'تعذر الحفظ'); }
   }, true);
+  A.tgrp = async k => { try { const j = await J('/adm/tg/report', { method: 'POST', body: JSON.stringify({ kind: k }) }); toast('✅ أُرسل إلى ' + j.sent + ' معرّف'); } catch (e) { toast(e.message); } loadTg(); };
   A.tgcn = async b => { try { const j = await J('/adm/tg/connect', { method: 'POST', body: JSON.stringify({ bot: b }) }); toast('✅ متصل: @' + j.username); } catch (e) { toast(e.message); } loadTg(); };
   A.tget = async id => { try { await J('/adm/tg/rec/test', { method: 'POST', body: JSON.stringify({ id: +id }) }); toast('✅ وصلت رسالة الاختبار'); } catch (e) { toast(e.message); } loadTg(); };
   A.tgdl = async id => { if (!confirm('حذف هذا المعرّف؟ لن يستلم إشعارات ولن ينفّذ أي إجراء.')) return; try { await J('/adm/tg/rec?id=' + id, { method: 'DELETE' }); toast('تم الحذف'); } catch (e) { toast(e.message); } loadTg(); };

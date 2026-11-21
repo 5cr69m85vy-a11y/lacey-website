@@ -195,6 +195,7 @@ const assert = require('assert');
   await adm.fill('.tgc[data-bot=orders] [data-f=tgb] [name=token]', '111111111:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'); await adm.check('.tgc[data-bot=orders] [data-f=tgb] [name=enabled]'); await adm.click('.tgc[data-bot=orders] [data-f=tgb] button.btn:not(.g)'); await adm.waitForFunction(() => document.querySelector('.tgc[data-bot=orders] [name=token]').placeholder.includes('••••AAAA'), null, { timeout: 8000 });
   for (const [id, nm] of [['50001', 'مدير'], ['50002', 'موظف']]) { await adm.fill('.tgc[data-bot=orders] [data-f=tgr] [name=chat_id]', id); await adm.fill('.tgc[data-bot=orders] [data-f=tgr] [name=name]', nm); await adm.click('.tgc[data-bot=orders] [data-f=tgr] button'); await adm.waitForFunction(i => document.querySelector('.tgc[data-bot=orders]').textContent.includes(i), id, { timeout: 8000 }); }
   assert.strictEqual(await adm.$$eval('.tgc[data-bot=orders] table.tbd tr', e => e.length), 3); assert.strictEqual(await adm.$$eval('.tgc[data-bot=support] table.tbd', e => e.length), 0, 'support list is separate');
+  assert.strictEqual(await adm.$$eval('.tgc[data-bot=reports] [data-f=tga] [name^=on_]', e => e.length), 4, 'reports card has 4 automatic schedules');
   assert(!(await adm.content()).includes('AAAAAAAAAAAAAAAA'), 'token not in the page'); ok('Telegram bots page: 3 cards, token saved and hidden, multiple IDs per bot, lists independent');
   console.log(`\n${n} e2e checks passed`); await browser.close(); srv.close();
 })().catch(e => { console.error('FAIL', e); process.exit(1); });

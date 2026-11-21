@@ -3,6 +3,7 @@
    التوكن يُحفظ في D1 ولا يُرجَع للواجهة ولا يُكتب في أي رسالة أو سجل. */
 import { J, now, jp, randHex } from './lib.js';
 import { audit, hit } from './guard.js';
+import { buildReport, summary, baghdad } from './reports.js';
 
 export const BOTS = ['orders', 'support', 'reports'];
 export const BOT_LABEL = { orders: 'بوت الطلبات', support: 'بوت الدعم', reports: 'بوت التقارير' };
@@ -199,6 +200,35 @@ async function supportCallback(env, b, cq) {
   if (others.length) await tgSend(env, 'support', `ℹ️ ${esc(who)}: ${esc(note)} — محادثة #${id}`, { only: others, kind: 'support_action' });
 }
 
+
+/* ================= بوت التقارير ================= */
+const RK = ['daily', 'weekly', 'monthly', 'yearly'], SUM = ['sales', 'orders', 'customers', 'invoices'];
+const CMD = { daily: 'daily', weekly: 'weekly', monthly: 'monthly', yearly: 'yearly', sales: 'sales', orders: 'orders', customers: 'customers', invoices: 'invoices' };
+export const cleanAuto = a => { const o = {}; for (const k of RK) { const c = (a && a[k]) || {}; o[k] = { on: !!c.on, time: /^([01]\d|2[0-3]):[0-5]\d$/.test(c.time || '') ? c.time : ({ daily: '21:00' })[k] || '09:00', to: (Array.isArray(c.to) ? c.to : []).map(String).filter(x => /^-?\d{5,16}$/.test(x)).slice(0, 50), ...(k === 'weekly' ? { dow: Number.isInteger(+c.dow) && +c.dow >= 0 && +c.dow <= 6 ? +c.dow : 6 } : {}) }; } return o; };
+async function reportCommand(env, b, m) {
+  const txt = m.text.trim(), cmd = (/^\/(\w+)(?:@\w+)?(?:\s+(.*))?$/.exec(txt) || []), name = (cmd[1] || '').toLowerCase(), arg = cmd[2] || '';
+  if (!CMD[name]) return;
+  const cid = String(m.chat.id), uid = String((m.from || {}).id || cid), send = text => tgApi(b.token, 'sendMessage', { chat_id: cid, parse_mode: 'HTML', text: text.slice(0, 4000), disable_web_page_preview: true });
+  const rec = await env.DB.prepare('SELECT * FROM tg_recipients WHERE bot=? AND chat_id=? AND active=1').bind('reports', uid).first();
+  if (!rec || !jp(rec.perms, []).includes('view')) { await log(env, 'reports', uid, 'denied', false, '/' + name); await audit(env, null, 'tg:' + uid, 'tg_denied', name); return send('⛔ غير مصرّح لك بعرض التقارير.'); }
+  if (!(await hit(env, 'tgr:' + uid, 20, 60e3))) return send('⏳ محاولات كثيرة، انتظر قليلاً.');
+  const text = RK.includes(name) ? await buildReport(env, name, { arg }) : await summary(env, name);
+  const r = await send(text); await log(env, 'reports', uid, 'command', r.ok, r.ok ? '/' + name : r.error);
+}
+export async function tgReportsTick(env, t = now()) {
+  const b = await getBot(env, 'reports'); if (!b.enabled || !b.token) return 0;
+  const auto = cleanAuto(jp(b.cfg, {}).auto), p = baghdad(t); let n = 0;
+  for (const [i, k] of RK.entries()) {
+    const c = auto[k]; if (!c.on) continue;
+    const [hh, mm] = c.time.split(':').map(Number); if (p.hh * 60 + p.mm < hh * 60 + mm) continue;
+    if (k === 'weekly' && p.dow !== c.dow) continue; if (k === 'monthly' && p.d !== 1) continue; if (k === 'yearly' && !(p.m === 0 && p.d === 1)) continue;
+    const claim = await env.DB.prepare('INSERT OR IGNORE INTO tg_updates(bot,update_id,at) VALUES(?,?,?)').bind('reports', -((i + 1) * 1e8 + p.y * 1e4 + (p.m + 1) * 100 + p.d), now()).run();
+    if (!claim.meta.changes) continue;                         // أُرسل اليوم مسبقاً
+    n += (await tgSend(env, 'reports', await buildReport(env, k, { auto: true, t }), { only: c.to.length ? c.to : undefined, kind: 'report_' + k, perm: 'view' })).length;
+  }
+  return n;
+}
+
 /* ================= webhook ================= */
 export async function tgHook(env, bot, request, deps) {
   const b = await getBot(env, bot); if (!b || !b.token || !b.enabled) return J({ ok: true });
@@ -213,6 +243,7 @@ export async function tgHook(env, bot, request, deps) {
     else if (u.message && u.message.text) {
       const m = u.message, txt = m.text.trim(), cid = String(m.chat.id), uid = String((m.from || {}).id || cid);
       if (/^\/start|^\/id\b/.test(txt)) await tgApi(b.token, 'sendMessage', { chat_id: cid, parse_mode: 'HTML', text: `أهلاً 🌸 هذا ${esc(b.name || BOT_LABEL[bot])}.\nمعرّفك: <code>${esc(uid)}</code>${cid !== uid ? `\nمعرّف هذه المحادثة: <code>${esc(cid)}</code>` : ''}\nأعطِ هذا الرقم للمدير ليضيفك وتبدأ باستلام الإشعارات.` });
+      else if (bot === 'reports') await reportCommand(env, b, m);
       else if (deps.onCommand) await deps.onCommand(env, bot, b, m);
     }
   } catch (e) { await log(env, bot, '', 'error', false, String(e.message || e)); }
@@ -222,7 +253,7 @@ export async function tgHook(env, bot, request, deps) {
 /* ================= واجهة المدير ================= */
 const pubBot = async (env, b) => {
   const rs = await recipients(env, b.bot, false), last = (await env.DB.prepare('SELECT at,detail FROM tg_log WHERE bot=? AND ok=0 ORDER BY id DESC LIMIT 1').bind(b.bot).first()) || null;
-  return { bot: b.bot, label: BOT_LABEL[b.bot], enabled: !!b.enabled, name: b.name, hasToken: !!b.token, tokenHint: b.token ? '••••' + b.token.slice(-4) : '', username: b.username, connected: !!b.webhook, last_ok: b.last_ok, last_err: b.last_err, last_err_at: b.last_err_at, cfg: jp(b.cfg, {}), perms: PERMS[b.bot], count: rs.filter(r => r.active).length, total: rs.length,
+  return { bot: b.bot, label: BOT_LABEL[b.bot], enabled: !!b.enabled, name: b.name, hasToken: !!b.token, tokenHint: b.token ? '••••' + b.token.slice(-4) : '', username: b.username, connected: !!b.webhook, last_ok: b.last_ok, last_err: b.last_err, last_err_at: b.last_err_at, cfg: b.bot === 'reports' ? { ...jp(b.cfg, {}), auto: cleanAuto(jp(b.cfg, {}).auto) } : jp(b.cfg, {}), perms: PERMS[b.bot], count: rs.filter(r => r.active).length, total: rs.length,
     recipients: rs.map(r => ({ id: r.id, staff_id: r.staff_id || null, chat_id: r.chat_id, name: r.name, active: !!r.active, perms: jp(r.perms, []), last_ok: r.last_ok, last_err: r.last_err, last_err_at: r.last_err_at })), lastFail: last };
 };
 export async function tgRoutes(c) {
@@ -237,7 +268,8 @@ export async function tgRoutes(c) {
     if (b.token !== undefined && String(b.token).trim()) { token = String(b.token).trim(); if (!/^\d{6,12}:[\w-]{30,60}$/.test(token)) return J({ error: 'صيغة التوكن غير صحيحة' }, 400); }
     // لا يمكن استخدام نفس التوكن في بوتين (فصل كامل)
     if (token && (await env.DB.prepare('SELECT 1 x FROM tg_bots WHERE token=? AND bot<>?').bind(token, bot).first())) return J({ error: 'هذا التوكن مستخدم في بوت آخر — لكل بوت توكن مستقل' }, 400);
-    const secret = cur.secret || randHex(24), cfg = JSON.stringify({ ...jp(cur.cfg, {}), ...(b.cfg && typeof b.cfg === 'object' ? b.cfg : {}) });
+    const nc = { ...jp(cur.cfg, {}), ...(b.cfg && typeof b.cfg === 'object' ? b.cfg : {}) }; if (bot === 'reports') nc.auto = cleanAuto(nc.auto); else delete nc.auto;
+    const secret = cur.secret || randHex(24), cfg = JSON.stringify(nc);
     await env.DB.prepare('INSERT INTO tg_bots(bot,enabled,name,token,secret,cfg,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(bot) DO UPDATE SET enabled=excluded.enabled,name=excluded.name,token=excluded.token,secret=excluded.secret,cfg=excluded.cfg,updated_at=excluded.updated_at')
       .bind(bot, b.enabled ? 1 : 0, String(b.name ?? cur.name ?? '').slice(0, 60), token, secret, cfg, now()).run();
     if (token !== cur.token) await env.DB.prepare("UPDATE tg_bots SET webhook='',username='' WHERE bot=?").bind(bot).run();
@@ -281,6 +313,12 @@ export async function tgRoutes(c) {
     const res = await tgApi(bt.token, 'sendMessage', { chat_id: r.chat_id, parse_mode: 'HTML', text: `✅ رسالة اختبار من <b>${esc(bt.name || BOT_LABEL[r.bot])}</b> — Lacey Skincare` });
     await mark(env, bt, r, res, 'test');
     return res.ok ? J({ ok: true }) : J({ error: res.error.includes('chat not found') || res.error.includes('blocked') ? 'تعذر الإرسال: يجب أن يضغط المستلم Start على البوت أولاً (' + res.error + ')' : res.error }, 400);
+  }
+  if (p === '/adm/tg/report' && M === 'POST') {            // إرسال تقرير الآن (اختبار)
+    const b = await body(); if (!RK.includes(b.kind)) return J({ error: 'نوع تقرير غير معروف' }, 400);
+    const cur = await getBot(env, 'reports'); if (!cur.token || !cur.enabled) return J({ error: 'فعّل بوت التقارير واحفظ توكنه أولاً' }, 400);
+    const to = cleanAuto(jp(cur.cfg, {}).auto)[b.kind].to, sent = await tgSend(env, 'reports', await buildReport(env, b.kind, { auto: false }), { only: to.length ? to : undefined, kind: 'report_' + b.kind, perm: 'view' });
+    await audit(env, request, 'admin', 'tg_report_now', b.kind); return sent.length ? J({ ok: true, sent: sent.length }) : J({ error: 'لم يصل لأي معرّف — أضف معرّفاً فعّالاً بصلاحية العرض' }, 400);
   }
   if (p === '/adm/tg/log' && M === 'GET') {
     const bot = url.searchParams.get('bot'); const rows = (await env.DB.prepare(`SELECT at,bot,chat_id,kind,ok,detail FROM tg_log ${BOTS.includes(bot) ? 'WHERE bot=?' : ''} ORDER BY id DESC LIMIT 60`).bind(...(BOTS.includes(bot) ? [bot] : [])).all()).results;
