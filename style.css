@@ -476,3 +476,6 @@ body.pgan>section:not([hidden]):not(.hid),body.pgan #cv.on{animation:pgin .28s v
 .btn:active,.card:active,#bn a:active,button:active{transform:scale(.97)}
 
 #stf .wf{font-size:10px;padding:1px 7px;border-radius:99px;background:#eef3f4;color:#4a6b73}#stf .wf.new{background:#fde8e8;color:#b03a3a}#stf .wf.progress{background:#e7f1fb;color:#2f6aa3}#stf .wf.waiting{background:#fff4dc;color:#946a00}#stf .wf.resolved{background:#e6f5ea;color:#2f7a45}
+
+#stf .m.note{background:#fff7dc;border:1px dashed #e0c66a;color:#6b5a1a;align-self:center;max-width:90%}
+#stf .m.note::before{content:'📝 ملاحظة داخلية — ';font-size:10px}

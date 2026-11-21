@@ -32,16 +32,17 @@
   async function open(id, quiet) {
     cur = id; let j; try { j = await api('/adm/chat?id=' + id + (quiet && document.hidden ? '&quiet=1' : '')); } catch (e) { return; }
     const el = document.getElementById('stm'); if (!el) return;
-    const typed = el.querySelector('input[name=text]'), keep = typed ? typed.value : '', focus = typed && document.activeElement === typed;
+    const typed = el.querySelector('#str input[name=text]'), keep = typed ? typed.value : '', focus = typed && document.activeElement === typed;
     const c = j.chat, mine = c.staff == name, inf = c.info || {};
     el.innerHTML = `<div class="chhd"><b>${E(c.name || 'زائر')}</b> ${E(c.ph || '')} · <small class="dp ${c.dept}">${DN[c.dept] || ''}</small> · ${c.mode == 'human' ? '👤 ' + E(c.staff || 'بانتظار موظف') : '🤖 المساعد'} ${c.status == 'closed' ? '(منتهية)' : ''}</div>
       ${c.info ? `<div class="inf"><span>🛒 ${inf.orders || 0} طلب</span><span>💰 ${Number(inf.spent || 0).toLocaleString('en-US')} د.ع</span>${inf.city ? `<span>📍 ${E(inf.city)}</span>` : ''}${inf.age != null ? `<span>🎂 ${inf.age} سنة</span>` : ''}${inf.skin ? `<span>🧴 ${E(inf.skin)}</span>` : ''}</div>` : ''}
       ${inf.routine ? `<div class="inf" style="display:block"><b>🌸 روتين الزبونة المحفوظ</b> <small>(إرشادي وليس تشخيصاً طبياً — للاطلاع فقط)</small><br>🌅 ${E((inf.routine.am || []).join('، ') || '—')}<br>🌙 ${E((inf.routine.pm || []).join('، ') || '—')}</div>` : ''}
       <div class="msgs">${j.messages.map(m => `<div class="m ${m.sender}"><small class="au">${E(m.author || '')}</small>${pc(m)}${E(m.body)}<small>${dt(m.at)}</small></div>`).join('')}</div>
       ${c.status == 'open' && quick.length ? `<select id="stq" aria-label="ردود جاهزة"><option value="">⚡ ردود جاهزة</option>${quick.map((q, i) => `<option value="${i}">${E(q.slice(0, 60))}</option>`).join('')}</select> <button type="button" class="btn g" data-s="tr" data-d="${c.dept == 'routine' ? 'service' : 'routine'}">تحويل إلى ${DN[c.dept == 'routine' ? 'service' : 'routine']}</button>` : ''}
+      ${c.status == 'open' ? `<form id="stn" class="fm" style="grid-template-columns:1fr auto"><input name="text" placeholder="📝 ملاحظة داخلية (لا يراها الزبون)" autocomplete="off"><button class="btn g">حفظ الملاحظة</button></form>` : ''}
       ${c.status == 'open' ? `<form id="str" class="fm" style="grid-template-columns:1fr auto auto auto"><input name="text" placeholder="${mine || !c.staff ? 'اكتب رداً باسمك…' : 'المحادثة بيد ' + E(c.staff)}" autocomplete="off"><button class="btn">إرسال</button>${mine ? '' : '<button type="button" class="btn g" data-s="claim">استلام</button> <button type="button" class="btn g" data-s="wf" data-w="progress">قيد المعالجة</button> <button type="button" class="btn g" data-s="wf" data-w="waiting">بانتظار الزبون</button>'}<button type="button" class="btn g" data-s="close">إنهاء</button></form>` : ''}`;
     const ms = el.querySelector('.msgs'); ms.scrollTop = ms.scrollHeight;
-    const i = el.querySelector('input[name=text]'); if (i && keep) { i.value = keep; if (focus) i.focus(); }
+    const i = el.querySelector('#str input[name=text]'); if (i && keep) { i.value = keep; if (focus) i.focus(); }
   }
   ov.addEventListener('click', async e => {
     const b = e.target.closest('[data-s]'); if (!b) return; const s = b.dataset.s;
@@ -59,6 +60,7 @@
     e.preventDefault(); e.stopPropagation();
     if (e.target.id == 'stl') { const v = Object.fromEntries(new FormData(e.target)); try { const j = await api('/staff/login', v); tok = j.token; name = j.name; mc = !!j.must_change; allow = j.depts || allow; team = j.team || ''; try { sessionStorage.setItem('lc_sd', JSON.stringify(allow)); sessionStorage.setItem('lc_stm', team); } catch (x) {}  try { sessionStorage.setItem('lc_st', tok); sessionStorage.setItem('lc_sn', name); } catch (x) {} draw(); } catch (x) { const el = document.getElementById('ster'); if (el) el.textContent = x.message; } }
     else if (e.target.id == 'stp') { const v = Object.fromEntries(new FormData(e.target)); try { await api('/staff/password', v); mc = false; toast('تم تغيير كلمة السر'); draw(); } catch (x) { toast(x.message); } }
+    else if (e.target.id == 'stn') { const i = e.target.querySelector('input'), t = i.value.trim(); if (!t) return; i.value = ''; try { await api('/adm/chat/note', { id: cur, text: t }); open(cur); } catch (x) { toast(x.message); } }
     else if (e.target.id == 'str') { const i = e.target.querySelector('input'), t = i.value.trim(); if (!t) return; i.value = ''; try { await api('/adm/chat/reply', { id: cur, text: t }); } catch (x) { toast(x.message); i.value = t; } open(cur); load(); }
   });
   ov.addEventListener('change', e => { if (e.target.id == 'stq') { const i = document.querySelector('#str input'); if (i && e.target.value !== '') { i.value = quick[+e.target.value] || ''; i.focus(); } e.target.value = ''; } });

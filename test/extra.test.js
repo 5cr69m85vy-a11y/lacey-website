@@ -227,5 +227,12 @@ const { makeDB } = require('./d1shim');
     await post('/adm/staff', { id: fid, name: 'فرح', username: 'farah', pw: 'reset1234' }, H);
     assert.strictEqual((await post('/staff/login', { username: 'farah', pw: 'reset1234' })).json ? (await (await post('/staff/login', { username: 'farah', pw: 'reset1234' })).json()).must_change : null, true, 'admin reset forces a change again');
   });
+  await ok('internal notes are visible to staff only; /staff redirects to the portal', async () => {
+    const c = await (await post('/chat/send', { text: 'مرحبا', dept: 'service', token: 'note-1', name: 'N', intent: 'human' })).json();
+    assert.strictEqual((await post('/adm/chat/note', { id: c.chat, text: 'العميلة تحتاج متابعة' }, H)).status, 200);
+    const staffView = await get('/adm/chat?id=' + c.chat, H); assert(staffView.messages.some(m => m.sender === 'note' && m.body.includes('متابعة')));
+    const cust = await get('/chat/poll?token=' + c.token, {}); assert(cust.messages.length && !JSON.stringify(cust).includes('متابعة'), 'customer never sees internal notes');
+    const r = await call('/staff', { redirect: 'manual' }); assert.strictEqual(r.status, 302); assert.strictEqual(r.headers.get('Location'), '/support');
+  });
   console.log(n + ' extra tests passed');
 })().catch(e => { console.error('FAIL', e); process.exit(1); });

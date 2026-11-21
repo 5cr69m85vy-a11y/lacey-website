@@ -452,6 +452,7 @@ async function handle(request, rawEnv, ctx) {
       if (p === '/robots.txt') return robots(env, request);
     }
     /* صفحات المتجر الفرعية: كلها تخدم نفس index.html والمتصفح يعرض الصفحة المطلوبة */
+    if (M === 'GET' && (p === '/staff' || p === '/staff/')) return new Response(null, { status: 302, headers: { Location: '/support' } });   // رابط بوابة الموظفين المختصر
     if (env.ASSETS && M === 'GET' && PAGE_ROUTES.test(p)) return env.ASSETS.fetch(new Request(new URL('/', request.url), { headers: request.headers }));
     if (env.ASSETS) return env.ASSETS.fetch(request);
     return J({ error: 'not found' }, 404);

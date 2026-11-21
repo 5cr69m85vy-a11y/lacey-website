@@ -157,7 +157,7 @@ export async function tgSupportWaiting(env) {
   const b = await getBot(env, 'support'); if (!b.enabled || !b.token) return 0;
   const lim = now() - Math.max(2, +jp(b.cfg, {}).wait_min || 10) * 60e3;
   const rows = (await env.DB.prepare(`SELECT c.id, c.tg_wait_at,
-      (SELECT body FROM chat_messages m WHERE m.chat_id=c.id AND m.sender<>'bot' ORDER BY m.id DESC LIMIT 1) body, (SELECT sender FROM chat_messages m WHERE m.chat_id=c.id AND m.sender<>'bot' ORDER BY m.id DESC LIMIT 1) sender, (SELECT at FROM chat_messages m WHERE m.chat_id=c.id AND m.sender<>'bot' ORDER BY m.id DESC LIMIT 1) lastat
+      (SELECT body FROM chat_messages m WHERE m.chat_id=c.id AND m.sender NOT IN ('bot','note') ORDER BY m.id DESC LIMIT 1) body, (SELECT sender FROM chat_messages m WHERE m.chat_id=c.id AND m.sender NOT IN ('bot','note') ORDER BY m.id DESC LIMIT 1) sender, (SELECT at FROM chat_messages m WHERE m.chat_id=c.id AND m.sender NOT IN ('bot','note') ORDER BY m.id DESC LIMIT 1) lastat
     FROM chats c WHERE c.channel='support' AND c.status='open' AND c.mode='human' AND c.tg_wait_at < ? LIMIT 20`).bind(lim).all()).results;
   let n = 0;
   for (const r of rows) { if (r.sender !== 'customer' || r.lastat > lim || r.tg_wait_at >= r.lastat) continue; await env.DB.prepare('UPDATE chats SET tg_wait_at=? WHERE id=?').bind(now(), r.id).run(); if (await tgSupportEvent(env, r.id, 'waiting', r.body)) n++; }
