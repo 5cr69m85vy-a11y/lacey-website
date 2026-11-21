@@ -36,5 +36,7 @@ export async function gc(env) {
     env.DB.prepare('DELETE FROM staff_sessions WHERE expires_at<?').bind(t),
     env.DB.prepare('DELETE FROM otp_codes WHERE expires_at<?').bind(t),
     env.DB.prepare('DELETE FROM audit_log WHERE at<?').bind(t - 180 * 864e5),
+    env.DB.prepare('DELETE FROM tg_log WHERE at<?').bind(t - 60 * 864e5),
+    env.DB.prepare('DELETE FROM tg_updates WHERE at<?').bind(t - 7 * 864e5),
   ]);
 }

@@ -21,6 +21,7 @@ import { runReminders } from './remind.js';
 import { opsRoutes, restock, takeStock, stockMap, refreshDeliveries, productPage, sitemap, robots } from './ops.js';
 import { ensureSchema, withIntegrations } from './lib.js';
 import { limit, hit, tooMany, audit, gc, ipOf } from './guard.js';
+import { tgRoutes, tgOrderNew, tgOrderRefresh, botReady, tgSend } from './tg.js';
 
 const CANCEL_WINDOW_MS = 10 * 60 * 1000;
 
@@ -85,18 +86,24 @@ async function queueNote(env, phone, template, payload, customerId = null) {
 
 /* ---------- حالة الطلب ---------- */
 const COL = { 2: 'confirmed_at', 3: 'shipped_at', 4: 'delivering_at', 5: 'delivered_at', 0: 'cancelled_at' };
-async function setStatus(env, o, s, actor, note = '') {
+async function setStatus(env, o, s, actor, note = '', from = null) {
   const t = now();
   const sets = ['status=?'], vals = [s];
   if (COL[s]) { sets.push(COL[s] + '=?'); vals.push(t); }
   if (s === 0) { sets.push('cancel_reason=?'); vals.push(note || actor); }
-  await env.DB.batch([
+  if (from !== null) {                       // تحويل ذرّي مشروط (تلغرام): ينجح مرة واحدة فقط حتى لو ضُغط الزر مرتين
+    const r = await env.DB.prepare(`UPDATE orders SET ${sets.join(',')} WHERE code=? AND status=?`).bind(...vals, o.code, from).run();
+    if (!r.meta.changes) return false;
+    await env.DB.prepare('INSERT INTO order_events(order_code,status,at,actor,note) VALUES(?,?,?,?,?)').bind(o.code, s, t, actor, note).run();
+  } else await env.DB.batch([
     env.DB.prepare(`UPDATE orders SET ${sets.join(',')} WHERE code=?`).bind(...vals, o.code),
     env.DB.prepare('INSERT INTO order_events(order_code,status,at,actor,note) VALUES(?,?,?,?,?)').bind(o.code, s, t, actor, note),
   ]);
   await queueNote(env, o.phone, 'order_status', { code: o.code, status: s, text: STATUS_TEXT[s] || '' }, o.customer_id);
   if (s === 2) await issueReceipt(env, o);
   if (s === 0) await restock(env, o.code);     // إرجاع الكميات للمخزون عند الإلغاء
+  if (!/^tg:/.test(actor)) await tgOrderRefresh(env, o.code);   // مزامنة رسائل تلغرام عند التغيير من الموقع
+  return true;
 }
 
 /* إيصال يُصدر عند تأكيد الطلب */
@@ -217,7 +224,8 @@ async function createOrder(env, b, sess) {
   await queueNote(env, phone, 'order_received', { code: b.code, total }, customerId);
 
   const lines = items.map(i => `• ${i.q}× ${escH(i.n)} (${escH(i.c)})${i.cc ? ' 🎨 ' + escH(i.cc) : ''} — ${money(i.p * i.q)}`).join('\n');
-  await tgNotify(env, `🛍 <b>طلب جديد #${id}</b>\nكود الطلب: <code>${escH(b.code)}</code>\n\n👤 ${escH(name)}\n📞 ${escH(phone)}\n📍 ${escH(city)} — ${escH(area)}\n🧭 ${escH(lm)}\n\n${lines}\n\n` +
+  let viaBot = false; try { viaBot = await tgOrderNew(env, await env.DB.prepare('SELECT * FROM orders WHERE code=?').bind(b.code).first()); } catch (e) {}
+  if (!viaBot) await tgNotify(env, `🛍 <b>طلب جديد #${id}</b>\nكود الطلب: <code>${escH(b.code)}</code>\n\n👤 ${escH(name)}\n📞 ${escH(phone)}\n📍 ${escH(city)} — ${escH(area)}\n🧭 ${escH(lm)}\n\n${lines}\n\n` +
     (usedCodes.length ? `🏷 أكواد: ${escH(usedCodes.join(', '))} −${money(discount)}\n` : '') + (qt.freeShip ? '🚚 توصيل مجاني\n' : shipping ? `🚚 التوصيل: ${money(shipping)}\n` : '') + `💳 ${escH(payM)}\n` + `💰 <b>المجموع: ${money(total)}</b>`);
   return J({ ok: true, id, code: b.code, subtotal, discount, shipping, total, applied: qt.applied, rejected: qt.rejected, welcome: welcome || undefined, cancelUntil: t + CANCEL_WINDOW_MS });
 }
@@ -262,6 +270,7 @@ async function handle(request, rawEnv, ctx) {
 
     try {
       { const er = await extraRoutes({ env, request, url, p, M, body, authed, ctx, tg: t => tgNotify(env, t), sess: (p.startsWith('/chat/') ? await sessionCustomer(env, request) : null) }); if (er) return er; }
+      { const tr = await tgRoutes({ env, request, url, p, M, body, authed, deps: { setStatus } }); if (tr) return tr; }
       { const orr = await opsRoutes({ env, request, url, p, M, body, authed, setStatus, tg: t => tgNotify(env, t) }); if (orr) return orr; }
       { const sr = await shopRoutes({ env, request, p, M, body, url }, authed); if (sr) return sr; }
       { const ar = await authRoutes({ env, request, url, p, M, body, ctx }); if (ar) return ar; }
@@ -345,6 +354,7 @@ async function handle(request, rawEnv, ctx) {
         if (o.status !== 1 || now() - o.created_at >= CANCEL_WINDOW_MS) return J({ error: 'انتهت مهلة الإلغاء (10 دقائق)' }, 409);
         await setStatus(env, o, 0, 'customer', 'ألغاه الزبون');
         await tgNotify(env, `❌ <b>ألغى الزبون الطلب</b> <code>${escH(o.code)}</code>\n${escH(o.name)} — ${escH(o.phone)}`);
+        try { if (await botReady(env, 'orders')) await tgSend(env, 'orders', `❌ ألغى الزبون الطلب <code>${escH(o.code)}</code>\n${escH(o.name)} — ${escH(o.phone)}`, { kind: 'order_cancel' }); } catch (e) {}
         return J({ ok: true, s: 0 });
       }
 

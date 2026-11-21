@@ -190,5 +190,11 @@ const assert = require('assert');
   ok('all new admin tabs render (stats, codes, boxes, hero, WhatsApp, support, payment)');
 
   for (const [i, p] of [adm, vis, cu, v3, sp, st].entries()) assert.deepStrictEqual(p.errs, [], 'page ' + i + ' errors: ' + p.errs);
+  /* --- Telegram bots admin: three independent cards, multiple IDs per bot --- */
+  await adm.evaluate(() => { at = 'tg'; ra(); }); await adm.waitForSelector('.tgc'); assert.strictEqual(await adm.$$eval('.tgc', e => e.length), 3);
+  await adm.fill('.tgc[data-bot=orders] [data-f=tgb] [name=token]', '111111111:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'); await adm.check('.tgc[data-bot=orders] [data-f=tgb] [name=enabled]'); await adm.click('.tgc[data-bot=orders] [data-f=tgb] button.btn:not(.g)'); await adm.waitForFunction(() => document.querySelector('.tgc[data-bot=orders] [name=token]').placeholder.includes('••••AAAA'), null, { timeout: 8000 });
+  for (const [id, nm] of [['50001', 'مدير'], ['50002', 'موظف']]) { await adm.fill('.tgc[data-bot=orders] [data-f=tgr] [name=chat_id]', id); await adm.fill('.tgc[data-bot=orders] [data-f=tgr] [name=name]', nm); await adm.click('.tgc[data-bot=orders] [data-f=tgr] button'); await adm.waitForFunction(i => document.querySelector('.tgc[data-bot=orders]').textContent.includes(i), id, { timeout: 8000 }); }
+  assert.strictEqual(await adm.$$eval('.tgc[data-bot=orders] table.tbd tr', e => e.length), 3); assert.strictEqual(await adm.$$eval('.tgc[data-bot=support] table.tbd', e => e.length), 0, 'support list is separate');
+  assert(!(await adm.content()).includes('AAAAAAAAAAAAAAAA'), 'token not in the page'); ok('Telegram bots page: 3 cards, token saved and hidden, multiple IDs per bot, lists independent');
   console.log(`\n${n} e2e checks passed`); await browser.close(); srv.close();
 })().catch(e => { console.error('FAIL', e); process.exit(1); });

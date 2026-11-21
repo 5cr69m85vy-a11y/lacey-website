@@ -1,0 +1,216 @@
+/* tg.js — بوتات تلغرام المستقلة: orders / support / reports
+   لكل بوت: توكن خاص، webhook بسرّ خاص، وقائمة معرّفات (مستلمين) مستقلة بصلاحيات منفصلة.
+   التوكن يُحفظ في D1 ولا يُرجَع للواجهة ولا يُكتب في أي رسالة أو سجل. */
+import { J, now, jp, randHex } from './lib.js';
+import { audit, hit } from './guard.js';
+
+export const BOTS = ['orders', 'support', 'reports'];
+export const BOT_LABEL = { orders: 'بوت الطلبات', support: 'بوت الدعم', reports: 'بوت التقارير' };
+export const PERMS = {
+  orders: ['view', 'confirm', 'reject', 'processing', 'ship', 'deliver'],
+  support: ['view', 'assign', 'status', 'resolve'],
+  reports: ['view'],
+};
+const DEFAULT_PERMS = { orders: ['view', 'confirm', 'reject', 'processing', 'ship'], support: ['view', 'assign', 'status', 'resolve'], reports: ['view'] };
+const esc = s => String(s ?? '').replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+const money = n => Number(n || 0).toLocaleString('en-US');
+const fmt = t => t ? new Date(t + 3 * 3600e3).toISOString().replace('T', ' ').slice(0, 16) : '—';
+const ST = { 0: '❌ ملغي', 1: '🆕 مستلم — بانتظار التأكيد', 2: '✅ مؤكد', 3: '🚚 مشحون', 4: '🛵 في الطريق', 5: '📦 تم التوصيل' };
+
+/* ---------- نداء Telegram مع إعادة محاولة واحدة عند 429/5xx ---------- */
+export async function tgApi(token, method, payload) {
+  for (let a = 0; a < 2; a++) {
+    try {
+      const r = await fetch(`https://api.telegram.org/bot${token}/${method}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload || {}) });
+      const j = await r.json().catch(() => ({}));
+      if (j.ok) return { ok: true, result: j.result };
+      if ((r.status === 429 || r.status >= 500) && a === 0) { await new Promise(s => setTimeout(s, Math.min(1500, ((j.parameters && j.parameters.retry_after) || 1) * 1000))); continue; }
+      return { ok: false, error: String(j.description || ('HTTP ' + r.status)).slice(0, 200), code: j.error_code || r.status };
+    } catch (e) { if (a === 1) return { ok: false, error: 'تعذر الاتصال بتلغرام' }; }
+  }
+  return { ok: false, error: 'تعذر الاتصال بتلغرام' };
+}
+
+export const getBot = async (env, bot) => BOTS.includes(bot) ? ((await env.DB.prepare('SELECT * FROM tg_bots WHERE bot=?').bind(bot).first()) || { bot, enabled: 0, name: '', token: '', secret: '', cfg: '{}' }) : null;
+const recipients = async (env, bot, onlyActive = true) => (await env.DB.prepare(`SELECT * FROM tg_recipients WHERE bot=? ${onlyActive ? 'AND active=1' : ''} ORDER BY id`).bind(bot).all()).results;
+const log = (env, bot, chat, kind, ok, detail = '') => env.DB.prepare('INSERT INTO tg_log(at,bot,chat_id,kind,ok,detail) VALUES(?,?,?,?,?,?)').bind(now(), bot, String(chat || ''), kind, ok ? 1 : 0, String(detail).slice(0, 300)).run().catch(() => {});
+const mark = async (env, b, rec, res, kind) => {
+  const t = now();
+  await log(env, b.bot, rec.chat_id, kind, res.ok, res.ok ? '' : res.error);
+  if (res.ok) { await env.DB.batch([env.DB.prepare('UPDATE tg_recipients SET last_ok=?,last_err=\'\' WHERE id=?').bind(t, rec.id), env.DB.prepare('UPDATE tg_bots SET last_ok=? WHERE bot=?').bind(t, b.bot)]); }
+  else await env.DB.batch([env.DB.prepare('UPDATE tg_recipients SET last_err=?,last_err_at=? WHERE id=?').bind(res.error, t, rec.id), env.DB.prepare('UPDATE tg_bots SET last_err=?,last_err_at=? WHERE bot=?').bind(res.error, t, b.bot)]);
+};
+export const botReady = async (env, bot) => { const b = await getBot(env, bot); return !!(b && b.enabled && b.token) && (await recipients(env, bot)).length > 0; };
+
+/* إرسال لكل المستلمين الفعّالين في هذا البوت فقط (قوائم البوتات مستقلة) */
+export async function tgSend(env, bot, text, { keyboard, kind = 'notify', only, perm } = {}) {
+  const b = await getBot(env, bot); if (!b || !b.enabled || !b.token) return [];
+  let rs = await recipients(env, bot); if (only) rs = rs.filter(r => only.includes(r.chat_id));
+  if (perm) rs = rs.filter(r => jp(r.perms, []).includes(perm));
+  return (await Promise.all(rs.map(async r => {
+    const res = await tgApi(b.token, 'sendMessage', { chat_id: r.chat_id, text: text.slice(0, 4000), parse_mode: 'HTML', disable_web_page_preview: true, ...(keyboard ? { reply_markup: { inline_keyboard: keyboard } } : {}) });
+    await mark(env, b, r, res, kind);
+    return res.ok ? { chat_id: r.chat_id, message_id: res.result.message_id } : null;
+  }))).filter(Boolean);
+}
+
+/* ================= بوت الطلبات ================= */
+const itemsOf = o => { try { return JSON.parse(o.items) || []; } catch (e) { return []; } };
+export function orderText(o, last = '') {
+  const lines = itemsOf(o).map(i => `• ${i.q}× ${esc(i.n)} (${esc(i.c)})${i.cc ? ' 🎨 ' + esc(i.cc) : ''} — ${money(i.p)} = ${money(i.p * i.q)}`).join('\n');
+  return `🛍 <b>طلب #${o.id}</b> — <code>${esc(o.code)}</code>\n🕐 ${fmt(o.created_at)}\n\n👤 ${esc(o.name)}\n📞 ${esc(o.phone)}\n📍 ${esc([o.city, o.area, o.landmark].filter(Boolean).join(' — '))}\n\n${lines}\n\n` +
+    `المجموع الفرعي: ${money(o.subtotal)}\n` + (o.discount ? `🏷 الخصم: −${money(o.discount)}\n` : '') + `🚚 التوصيل: ${o.free_shipping ? 'مجاني' : money(o.shipping)}\n💰 <b>الإجمالي: ${money(o.total)}</b>\n💳 الدفع: ${esc(o.pay_method)}\n\n📌 الحالة: <b>${ST[o.status] || o.status}</b>` + (last ? `\n\n📝 ${last}` : '');
+}
+export function orderKeyboard(o, ask) {
+  const c = o.code;
+  if (o.status === 0 || o.status === 5) return [[{ text: '📋 تفاصيل الطلب', callback_data: 'o:vw:' + c }]];
+  if (ask) return [[{ text: ask === 'rj' ? '✔️ نعم، ارفض الطلب' : '✔️ نعم، تم التوصيل فعلاً', callback_data: `o:${ask}y:${c}` }, { text: '↩️ رجوع', callback_data: 'o:bk:' + c }]];
+  return [[{ text: '✅ تأكيد الطلب', callback_data: 'o:cf:' + c }, { text: '❌ رفض الطلب', callback_data: 'o:rj:' + c }],
+    [{ text: '🔧 قيد التجهيز', callback_data: 'o:pr:' + c }, { text: '🚚 تم الشحن', callback_data: 'o:sh:' + c }],
+    [{ text: '📦 تم التوصيل', callback_data: 'o:dl:' + c }, { text: '📋 تفاصيل الطلب', callback_data: 'o:vw:' + c }]];
+}
+const lastNote = async (env, code) => { const e = await env.DB.prepare('SELECT at,actor,status,note FROM order_events WHERE order_code=? ORDER BY id DESC LIMIT 1').bind(code).first(); return e && /^tg:/.test(e.actor) ? `${esc(e.actor.slice(3))} — ${esc(e.note || ST[e.status])} (${fmt(e.at)})` : ''; };
+
+export async function tgOrderNew(env, o) {
+  if (!(await botReady(env, 'orders'))) return false;
+  const sent = await tgSend(env, 'orders', orderText(o), { keyboard: orderKeyboard(o), kind: 'order_new' });
+  if (sent.length) await env.DB.batch(sent.map(s => env.DB.prepare('INSERT OR REPLACE INTO tg_order_msgs(order_code,chat_id,message_id) VALUES(?,?,?)').bind(o.code, s.chat_id, s.message_id)));
+  return sent.length > 0;
+}
+/* تحديث رسائل الطلب عند أي تغيير (من تلغرام أو من لوحة المتجر) */
+export async function tgOrderRefresh(env, code, ask) {
+  try {
+    const b = await getBot(env, 'orders'); if (!b || !b.token) return;
+    const msgs = (await env.DB.prepare('SELECT * FROM tg_order_msgs WHERE order_code=?').bind(code).all()).results; if (!msgs.length) return;
+    const o = await env.DB.prepare('SELECT * FROM orders WHERE code=?').bind(code).first(); if (!o) return;
+    const text = orderText(o, await lastNote(env, code));
+    await Promise.all(msgs.map(m => tgApi(b.token, 'editMessageText', { chat_id: m.chat_id, message_id: m.message_id, text, parse_mode: 'HTML', reply_markup: { inline_keyboard: orderKeyboard(o, ask) } })));
+  } catch (e) { /* التحديث لا يكسر الطلب */ }
+}
+
+const NEED = { cf: 'confirm', rj: 'reject', rjy: 'reject', pr: 'processing', sh: 'ship', dl: 'deliver', dly: 'deliver', vw: 'view', bk: 'view' };
+async function orderCallback(env, b, cq, deps) {
+  const [, act, code] = String(cq.data || '').split(':'); const from = String((cq.from || {}).id || ''), chat = String(cq.message && cq.message.chat ? cq.message.chat.id : from);
+  const ans = (text, alert = true) => tgApi(b.token, 'answerCallbackQuery', { callback_query_id: cq.id, text: text.slice(0, 190), show_alert: alert });
+  const rec = await env.DB.prepare('SELECT * FROM tg_recipients WHERE bot=? AND chat_id=? AND active=1').bind('orders', from).first();
+  if (!rec || !NEED[act] || !jp(rec.perms, []).includes(NEED[act])) { await log(env, 'orders', from, 'denied', false, `${act} ${code}`); await audit(env, null, 'tg:' + from, 'tg_denied', code, null, { act }); return ans('⛔ غير مصرّح لك بهذا الإجراء'); }
+  if (!(await hit(env, 'tg:' + from, 40, 60e3))) return ans('⏳ محاولات كثيرة، انتظر قليلاً');
+  const o = await env.DB.prepare('SELECT * FROM orders WHERE code=?').bind(code).first(); if (!o) return ans('الطلب غير موجود');
+  const who = rec.name || ('ID ' + from), actor = 'tg:' + who;
+  if (act === 'vw') {
+    const ev = (await env.DB.prepare('SELECT at,actor,status,note FROM order_events WHERE order_code=? ORDER BY id').bind(code).all()).results;
+    await tgApi(b.token, 'sendMessage', { chat_id: chat, parse_mode: 'HTML', text: orderText(o) + '\n\n<b>سجل الطلب</b>\n' + ev.map(e => `${fmt(e.at)} — ${esc(ST[e.status] || e.status)} — ${esc(String(e.actor).replace(/^tg:/, '👤 '))}${e.note ? ' — ' + esc(e.note) : ''}`).join('\n') });
+    return ans('تم', false);
+  }
+  if (act === 'bk') { await ans('', false); return tgOrderRefresh(env, code); }
+  const bad = m => ans(m);
+  if (o.status === 0) return bad('الطلب ملغي');
+  if (act === 'rj') { if (![1, 2].includes(o.status)) return bad('لا يمكن رفض طلب تم شحنه'); await ans('', false); return tgOrderRefresh(env, code, 'rj'); }
+  if (act === 'dl') { if (o.status === 5) return bad('تم تسجيل التوصيل مسبقاً'); if (o.status !== 4) return bad('لا يمكن تأكيد التسليم قبل أن يكون الطلب «في الطريق». حدّث حالة التوصيل أولاً.'); await ans('', false); return tgOrderRefresh(env, code, 'dl'); }
+  let done = false, note = '';
+  if (act === 'cf') { if (o.status === 2) return bad('الطلب مؤكد مسبقاً'); if (o.status !== 1) return bad('الطلب ليس بانتظار التأكيد'); done = await deps.setStatus(env, o, 2, actor, 'تأكيد من تلغرام', 1); note = 'تم التأكيد'; }
+  else if (act === 'rjy') { if (![1, 2].includes(o.status)) return bad('لا يمكن رفض هذا الطلب'); done = await deps.setStatus(env, o, 0, actor, 'رفض من تلغرام', o.status); note = 'تم الرفض'; }
+  else if (act === 'sh') { if (o.status === 3) return bad('الطلب مشحون مسبقاً'); if (o.status !== 2) return bad('يجب تأكيد الطلب قبل الشحن'); done = await deps.setStatus(env, o, 3, actor, 'شحن من تلغرام', 2); note = 'تم الشحن'; }
+  else if (act === 'dly') { if (o.status !== 4) return bad('لا يمكن تأكيد التسليم قبل أن يكون الطلب «في الطريق»'); done = await deps.setStatus(env, o, 5, actor, 'تسليم من تلغرام', 4); note = 'تم التوصيل'; }
+  else if (act === 'pr') {
+    if (o.status !== 2) return bad('يجب تأكيد الطلب أولاً');
+    const ex = await env.DB.prepare("SELECT 1 x FROM order_events WHERE order_code=? AND note='قيد التجهيز' LIMIT 1").bind(code).first(); if (ex) return bad('الطلب قيد التجهيز مسبقاً');
+    await env.DB.prepare('INSERT INTO order_events(order_code,status,at,actor,note) VALUES(?,?,?,?,?)').bind(code, 2, now(), actor, 'قيد التجهيز').run(); done = true; note = 'قيد التجهيز';   // لا يغيّر حالة الدفع ولا مراحل التتبع
+  }
+  if (!done) return bad('تم تغيير حالة الطلب من جهة أخرى — حُدّثت الرسالة');
+  await audit(env, null, actor, 'tg_order_' + act.replace(/y$/, ''), code, null, { status: (await env.DB.prepare('SELECT status FROM orders WHERE code=?').bind(code).first()).status });
+  await log(env, 'orders', from, 'action', true, `${act} ${code}`);
+  await ans('✔️ ' + note, false);
+  await tgOrderRefresh(env, code);
+  const others = (await recipients(env, 'orders')).map(r => r.chat_id).filter(c => c !== from);
+  if (others.length) await tgSend(env, 'orders', `ℹ️ ${esc(who)}: ${esc(note)} — الطلب <code>${esc(code)}</code>`, { only: others, kind: 'order_action' });
+}
+
+/* ================= webhook ================= */
+export async function tgHook(env, bot, request, deps) {
+  const b = await getBot(env, bot); if (!b || !b.token || !b.enabled) return J({ ok: true });
+  if (request.headers.get('X-Telegram-Bot-Api-Secret-Token') !== b.secret || !b.secret) return J({ error: 'forbidden' }, 403);
+  const u = await request.json().catch(() => null); if (!u || !u.update_id) return J({ ok: true });
+  const ins = await env.DB.prepare('INSERT OR IGNORE INTO tg_updates(bot,update_id,at) VALUES(?,?,?)').bind(bot, u.update_id, now()).run();
+  if (!ins.meta.changes) return J({ ok: true, dup: true });                       // حماية من التكرار
+  try {
+    if (u.callback_query && bot === 'orders' && String(u.callback_query.data || '').startsWith('o:')) await orderCallback(env, b, u.callback_query, deps);
+    else if (u.callback_query && deps.onCallback) await deps.onCallback(env, bot, b, u.callback_query);
+    else if (u.message && u.message.text) {
+      const m = u.message, txt = m.text.trim(), cid = String(m.chat.id), uid = String((m.from || {}).id || cid);
+      if (/^\/start|^\/id\b/.test(txt)) await tgApi(b.token, 'sendMessage', { chat_id: cid, parse_mode: 'HTML', text: `أهلاً 🌸 هذا ${esc(b.name || BOT_LABEL[bot])}.\nمعرّفك: <code>${esc(uid)}</code>${cid !== uid ? `\nمعرّف هذه المحادثة: <code>${esc(cid)}</code>` : ''}\nأعطِ هذا الرقم للمدير ليضيفك وتبدأ باستلام الإشعارات.` });
+      else if (deps.onCommand) await deps.onCommand(env, bot, b, m);
+    }
+  } catch (e) { await log(env, bot, '', 'error', false, String(e.message || e)); }
+  return J({ ok: true });
+}
+
+/* ================= واجهة المدير ================= */
+const pubBot = async (env, b) => {
+  const rs = await recipients(env, b.bot, false), last = (await env.DB.prepare('SELECT at,detail FROM tg_log WHERE bot=? AND ok=0 ORDER BY id DESC LIMIT 1').bind(b.bot).first()) || null;
+  return { bot: b.bot, label: BOT_LABEL[b.bot], enabled: !!b.enabled, name: b.name, hasToken: !!b.token, tokenHint: b.token ? '••••' + b.token.slice(-4) : '', username: b.username, connected: !!b.webhook, last_ok: b.last_ok, last_err: b.last_err, last_err_at: b.last_err_at, cfg: jp(b.cfg, {}), perms: PERMS[b.bot], count: rs.filter(r => r.active).length, total: rs.length,
+    recipients: rs.map(r => ({ id: r.id, chat_id: r.chat_id, name: r.name, active: !!r.active, perms: jp(r.perms, []), last_ok: r.last_ok, last_err: r.last_err, last_err_at: r.last_err_at })), lastFail: last };
+};
+export async function tgRoutes(c) {
+  const { env, request, url, p, M, body, authed, deps } = c;
+  if (p.startsWith('/tg/hook/') && M === 'POST') return tgHook(env, p.slice(9), request, deps);
+  if (!p.startsWith('/adm/tg')) return null;
+  if (!authed) return J({ error: 'unauthorized' }, 401);
+  if (p === '/adm/tg' && M === 'GET') return J({ bots: await Promise.all(BOTS.map(async k => pubBot(env, await getBot(env, k)))) });
+  if (p === '/adm/tg/bot' && M === 'POST') {
+    const b = await body(); const bot = b.bot; if (!BOTS.includes(bot)) return J({ error: 'بوت غير معروف' }, 400);
+    const cur = await getBot(env, bot); let token = cur.token;
+    if (b.token !== undefined && String(b.token).trim()) { token = String(b.token).trim(); if (!/^\d{6,12}:[\w-]{30,60}$/.test(token)) return J({ error: 'صيغة التوكن غير صحيحة' }, 400); }
+    // لا يمكن استخدام نفس التوكن في بوتين (فصل كامل)
+    if (token && (await env.DB.prepare('SELECT 1 x FROM tg_bots WHERE token=? AND bot<>?').bind(token, bot).first())) return J({ error: 'هذا التوكن مستخدم في بوت آخر — لكل بوت توكن مستقل' }, 400);
+    const secret = cur.secret || randHex(24), cfg = JSON.stringify({ ...jp(cur.cfg, {}), ...(b.cfg && typeof b.cfg === 'object' ? b.cfg : {}) });
+    await env.DB.prepare('INSERT INTO tg_bots(bot,enabled,name,token,secret,cfg,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(bot) DO UPDATE SET enabled=excluded.enabled,name=excluded.name,token=excluded.token,secret=excluded.secret,cfg=excluded.cfg,updated_at=excluded.updated_at')
+      .bind(bot, b.enabled ? 1 : 0, String(b.name ?? cur.name ?? '').slice(0, 60), token, secret, cfg, now()).run();
+    if (token !== cur.token) await env.DB.prepare("UPDATE tg_bots SET webhook='',username='' WHERE bot=?").bind(bot).run();
+    await audit(env, request, 'admin', 'tg_bot_save', bot, null, { enabled: !!b.enabled, tokenChanged: token !== cur.token });
+    return J({ ok: true });
+  }
+  if (p === '/adm/tg/connect' && M === 'POST') {          // اختبار الاتصال + تسجيل الـ webhook
+    const b = await body(), cur = await getBot(env, b.bot); if (!cur || !cur.token) return J({ error: 'احفظ التوكن أولاً' }, 400);
+    const me = await tgApi(cur.token, 'getMe'); if (!me.ok) { await env.DB.prepare('UPDATE tg_bots SET last_err=?,last_err_at=? WHERE bot=?').bind('اتصال: ' + me.error, now(), cur.bot).run(); return J({ error: 'فشل الاتصال: ' + me.error }, 400); }
+    const hook = url.origin + '/tg/hook/' + cur.bot;
+    const wh = await tgApi(cur.token, 'setWebhook', { url: hook, secret_token: cur.secret, allowed_updates: ['message', 'callback_query'], drop_pending_updates: false });
+    if (!wh.ok) return J({ error: 'فشل ربط الـ webhook: ' + wh.error }, 400);
+    await env.DB.prepare('UPDATE tg_bots SET username=?,webhook=?,last_err=\'\' WHERE bot=?').bind(me.result.username || '', hook, cur.bot).run();
+    await log(env, cur.bot, '', 'connect', true, '@' + me.result.username); await audit(env, request, 'admin', 'tg_connect', cur.bot);
+    return J({ ok: true, username: me.result.username });
+  }
+  if (p === '/adm/tg/rec' && M === 'POST') {
+    const b = await body(); if (!BOTS.includes(b.bot)) return J({ error: 'بوت غير معروف' }, 400);
+    const chat = String(b.chat_id || '').trim(); if (!/^-?\d{5,16}$/.test(chat)) return J({ error: 'المعرّف رقم فقط (Telegram ID أو Chat ID)' }, 400);
+    const perms = JSON.stringify((Array.isArray(b.perms) ? b.perms : DEFAULT_PERMS[b.bot]).filter(x => PERMS[b.bot].includes(x)));
+    if (b.id) {
+      const r = await env.DB.prepare('SELECT * FROM tg_recipients WHERE id=?').bind(+b.id).first(); if (!r) return J({ error: 'not found' }, 404);
+      if (await env.DB.prepare('SELECT 1 x FROM tg_recipients WHERE bot=? AND chat_id=? AND id<>?').bind(r.bot, chat, r.id).first()) return J({ error: 'المعرّف موجود مسبقاً في هذا البوت' }, 409);
+      await env.DB.prepare('UPDATE tg_recipients SET chat_id=?,name=?,active=?,perms=? WHERE id=?').bind(chat, String(b.name || '').slice(0, 60), b.active === false ? 0 : 1, perms, r.id).run();
+      await audit(env, request, 'admin', 'tg_rec_edit', r.bot + ':' + chat, null, { active: b.active !== false, perms });
+    } else {
+      if ((await env.DB.prepare('SELECT COUNT(*) n FROM tg_recipients WHERE bot=?').bind(b.bot).first()).n >= 50) return J({ error: 'الحد الأقصى 50 معرّفاً لكل بوت' }, 400);
+      if (await env.DB.prepare('SELECT 1 x FROM tg_recipients WHERE bot=? AND chat_id=?').bind(b.bot, chat).first()) return J({ error: 'المعرّف موجود مسبقاً في هذا البوت' }, 409);
+      await env.DB.prepare('INSERT INTO tg_recipients(bot,chat_id,name,active,perms,created_at) VALUES(?,?,?,?,?,?)').bind(b.bot, chat, String(b.name || '').slice(0, 60), b.active === false ? 0 : 1, perms, now()).run();
+      await audit(env, request, 'admin', 'tg_rec_add', b.bot + ':' + chat);
+    }
+    return J({ ok: true });
+  }
+  if (p === '/adm/tg/rec' && M === 'DELETE') {
+    const r = await env.DB.prepare('SELECT * FROM tg_recipients WHERE id=?').bind(+url.searchParams.get('id')).first(); if (!r) return J({ error: 'not found' }, 404);
+    await env.DB.prepare('DELETE FROM tg_recipients WHERE id=?').bind(r.id).run(); await audit(env, request, 'admin', 'tg_rec_del', r.bot + ':' + r.chat_id); return J({ ok: true });
+  }
+  if (p === '/adm/tg/rec/test' && M === 'POST') {
+    const b = await body(), r = await env.DB.prepare('SELECT * FROM tg_recipients WHERE id=?').bind(+b.id).first(); if (!r) return J({ error: 'not found' }, 404);
+    const bt = await getBot(env, r.bot); if (!bt.token) return J({ error: 'احفظ التوكن أولاً' }, 400);
+    const res = await tgApi(bt.token, 'sendMessage', { chat_id: r.chat_id, parse_mode: 'HTML', text: `✅ رسالة اختبار من <b>${esc(bt.name || BOT_LABEL[r.bot])}</b> — Lacey Skincare` });
+    await mark(env, bt, r, res, 'test');
+    return res.ok ? J({ ok: true }) : J({ error: res.error.includes('chat not found') || res.error.includes('blocked') ? 'تعذر الإرسال: يجب أن يضغط المستلم Start على البوت أولاً (' + res.error + ')' : res.error }, 400);
+  }
+  if (p === '/adm/tg/log' && M === 'GET') {
+    const bot = url.searchParams.get('bot'); const rows = (await env.DB.prepare(`SELECT at,bot,chat_id,kind,ok,detail FROM tg_log ${BOTS.includes(bot) ? 'WHERE bot=?' : ''} ORDER BY id DESC LIMIT 60`).bind(...(BOTS.includes(bot) ? [bot] : [])).all()).results;
+    return J({ log: rows });
+  }
+  return null;
+}

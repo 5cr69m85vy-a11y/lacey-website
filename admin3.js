@@ -104,7 +104,7 @@
   }
   let dirty = false;
   document.addEventListener('submit', async e => {
-    const f = e.target; if (!f || !f.closest || !f.closest('#ab') || f.id === 'lf') return;
+    const f = e.target; if (!f || !f.closest || !f.closest('#ab') || f.id === 'lf' || /^tg/.test(f.dataset.f || '')) return;
     dirty = false;
     if (f.dataset.cf) { delete f.dataset.cf; return; }
     if (!CONFIRM_GROUPS.includes(curGroup())) return;
