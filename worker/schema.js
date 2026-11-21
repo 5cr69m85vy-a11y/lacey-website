@@ -59,5 +59,9 @@ export const MIGRATIONS = [
  [
   "0015_staff_teams.sql",
   "-- 0015: فريقان منفصلان للموظفين (دعم / روتين) مع دور وصلاحيات إضافية يحددها المدير\nALTER TABLE staff ADD COLUMN team TEXT NOT NULL DEFAULT 'support';\nALTER TABLE staff ADD COLUMN role TEXT NOT NULL DEFAULT '';\nALTER TABLE staff ADD COLUMN perms TEXT NOT NULL DEFAULT '[]';\n"
+ ],
+ [
+  "0016_staff_portal.sql",
+  "-- 0016: بوابة الموظفين: تغيير كلمة السر أول دخول، آخر دخول، حالة سير المحادثة\nALTER TABLE staff ADD COLUMN must_change INTEGER NOT NULL DEFAULT 0;\nALTER TABLE staff ADD COLUMN last_login INTEGER NOT NULL DEFAULT 0;\nALTER TABLE chats ADD COLUMN wf TEXT NOT NULL DEFAULT '';\n"
  ]
 ];
