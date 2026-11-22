@@ -2,34 +2,40 @@
 (function () {
   'use strict';
   if (typeof TB === 'undefined' || !TB.s) return;
-  const orig = TB.s, ICON = { 'الهوية': '🏷️', 'الشريط العلوي والواجهة': '🖼️', 'العروض والإعلانات': '🏷', 'عناوين الأقسام': '🗂️', 'المحتوى': '📝', 'التواصل مع المتجر': '💬', 'تلجرام والأمان': '🔐', 'الإظهار': '👁️' };
-  const SECRET = ['tk', 'pw'];
+  const orig = TB.s, DROP = ['tk', 'tid', 'tp'];
+  const META = { 'الهوية': ['🏷️', 'اسم المتجر والعملة واللغة', 'المعلومات الأساسية التي تظهر للزائر في كل صفحة.'], 'الشريط العلوي والواجهة': ['🖼️', 'الإعلان وواجهة الصفحة الرئيسية', 'شريط الإعلان وعنوان ونص وزر الواجهة.'], 'العروض والإعلانات': ['🏷', 'شريط العرض والتخفيضات', 'نص العرض وكود المنتج ومدة عرض الإعلانات.'], 'عناوين الأقسام': ['🗂️', 'أسماء الأقسام والعناوين', 'تغيير أسماء الأقسام وعناوين فقرات الصفحة.'], 'المحتوى': ['📝', 'التوصيل والآراء', 'نصوص معلومات التوصيل وآراء الزبائن.'], 'التواصل مع المتجر': ['💬', 'حسابات وأرقام التواصل', 'تظهر للزبون في صفحة التواصل.'], 'تلجرام والأمان': ['🔐', 'كلمة مرور اللوحة', 'إعدادات بوت تلجرام في «الأمان والنظام ← تلجرام».'], 'الإظهار': ['👁️', 'إظهار وإخفاء عناصر الصفحة', 'اختر ما يظهر للزائر.'], 'النسخ الاحتياطي والمزامنة': ['💾', 'نسخ احتياطي ومزامنة', 'تصدير واستيراد البيانات ورفعها للخادم.'] };
+  let cur = 0;
   TB.s = () => {
     const html = orig(), bi = html.indexOf('<button class="btn">حفظ الإعدادات');
     if (bi < 0) return html;
-    const head = html.slice(0, html.indexOf('<h3 class="full"')), body = html.slice(html.indexOf('<h3 class="full"'), bi), tail = html.slice(bi, html.lastIndexOf('</form>'));
-    const parts = body.split('<h3 class="full"').filter(Boolean).map(p => {
-      const m = /^[^>]*>([^<]*)<\/h3>([\s\S]*)$/.exec(p); return m ? [m[1], m[2]] : null;
-    }).filter(Boolean);
-    const cards = parts.map(([t, inner], i) => `<details class="stg" data-t="${t}" ${i < 2 ? 'open' : ''}><summary><span>${ICON[t] || '⚙️'}</span>${t}<em class="stg-n"></em></summary><div class="stg-b fm">${inner}</div></details>`).join('');
-    const tools = `<details class="stg" data-t="النسخ الاحتياطي والمزامنة"><summary><span>💾</span>النسخ الاحتياطي والمزامنة</summary><div class="stg-b stg-tools">${tail.replace('<button class="btn">حفظ الإعدادات</button>', '')}</div></details>`;
-    return head + `<div class="stg-top"><input type="search" id="stgq" placeholder="ابحث في الإعدادات…" autocomplete="off"><button type="button" class="stg-all" data-stg="all">فتح/طي الكل</button></div>` + cards + `<div class="stg-bar"><span id="stgd">لا توجد تغييرات</span><button class="btn">حفظ الإعدادات</button></div>` + tools + `</form>`;
+    const k = html.indexOf('<h3 class="full"'), head = html.slice(0, k), body = html.slice(k, bi), tail = html.slice(bi, html.lastIndexOf('</form>'));
+    const clean = x => x.split('</label>').filter(c => !DROP.some(n => c.includes('name="' + n + '"'))).join('</label>');
+    const parts = body.split('<h3 class="full"').filter(Boolean).map(p => { const m = /^[^>]*>([^<]*)<\/h3>([\s\S]*)$/.exec(p); return m ? [m[1], clean(m[2])] : null; }).filter(Boolean);
+    const tools = tail.replace('<button class="btn">حفظ الإعدادات</button>', '').replace(/<button[^>]*data-a="tt"[^>]*>[^<]*<\/button>/, '');
+    const all = parts.map(([t, h]) => [t, `<div class="stg-b fm">${h}</div>`]).concat([['النسخ الاحتياطي والمزامنة', `<div class="stg-b stg-tools">${tools}</div>`]]);
+    if (cur >= all.length) cur = 0;
+    const nav = all.map(([t], i) => { const m = META[t] || ['⚙️', t, '']; return `<button type="button" class="sxn${i == cur ? ' on' : ''}" data-sx="${i}"><span>${m[0]}</span><b>${t == 'تلجرام والأمان' ? 'الأمان' : t}</b><small>${m[1]}</small><em class="stg-n"></em></button>`; }).join('');
+    const panes = all.map(([t, h], i) => { const m = META[t] || ['⚙️', t, '']; return `<section class="sxp${i == cur ? ' on' : ''}" data-t="${t}"><header><h2>${t == 'تلجرام والأمان' ? 'الأمان' : t}</h2><p>${m[2]}</p></header>${h}</section>`; }).join('');
+    return head + `<div class="sx-top"><span id="stgd">لا توجد تغييرات</span><button type="button" class="btn g" data-sx="discard">تجاهل</button><button class="btn">حفظ</button></div><div class="sx"><aside class="sx-nav"><input type="search" id="stgq" placeholder="ابحث في الإعدادات…" autocomplete="off">${nav}</aside><div class="sx-main">${panes}</div></div></form>`;
   };
   const enhance = () => {
-    const f = document.getElementById('sf'); if (!f || f.dataset.eh || !f.querySelector('.stg')) return; f.dataset.eh = '1';
-    const d = document.getElementById('stgd'), mark = () => { f.classList.add('dirty'); d.textContent = 'توجد تغييرات غير محفوظة'; };
+    const f = document.getElementById('sf'); if (!f || f.dataset.eh || !f.querySelector('.sx')) return; f.dataset.eh = '1';
+    const d = f.querySelector('#stgd'), mark = () => { f.classList.add('dirty'); d.textContent = 'توجد تغييرات غير محفوظة'; };
     f.addEventListener('input', e => { if (e.target.id !== 'stgq') mark(); }); f.addEventListener('change', e => { if (e.target.id !== 'stgq') mark(); });
-    SECRET.forEach(k => { const i = f.querySelector(`[name=${k}]`); if (i) { i.type = 'password'; i.autocomplete = 'new-password'; const b = document.createElement('button'); b.type = 'button'; b.className = 'stg-eye'; b.textContent = '👁'; b.onclick = () => { i.type = i.type == 'password' ? 'text' : 'password'; }; i.parentNode.appendChild(b); } });
     const hint = (k, fn, msg) => { const i = f.querySelector(`[name=${k}]`); if (!i) return; const chk = () => { const bad = i.value && i.value !== i.defaultValue && !fn(i.value.trim()); i.classList.toggle('bad', !!bad); i.title = bad ? msg : ''; }; i.addEventListener('input', chk); chk(); };
     hint('kWa', v => /^(\+?964|0)?7\d{9}$/.test(v.replace(/\s|-/g, '')), 'رقم عراقي مثل 07701234567');
-    hint('tid', v => /^-?\d+$/.test(v), 'Chat ID أرقام فقط');
     hint('pw', v => v.length >= 8, 'يفضّل 8 أحرف أو أكثر');
-    hint('tp', v => /^https:\/\//.test(v), 'يبدأ بـ https://');
-    f.addEventListener('submit', e => { if (f.querySelector('.bad')) { const b = f.querySelector('.bad'); if (!confirm('بعض القيم تبدو غير صحيحة. حفظ على أي حال؟')) { e.preventDefault(); e.stopImmediatePropagation(); b.scrollIntoView({ block: 'center' }); } } }, true);
+    const pw = f.querySelector('[name=pw]'); if (pw) { pw.type = 'password'; pw.autocomplete = 'new-password'; const b = document.createElement('button'); b.type = 'button'; b.className = 'stg-eye'; b.textContent = '👁'; b.onclick = () => { pw.type = pw.type == 'password' ? 'text' : 'password'; }; pw.parentNode.appendChild(b); }
+    f.addEventListener('submit', e => { const b = f.querySelector('.bad'); if (b && !confirm('بعض القيم تبدو غير صحيحة. حفظ على أي حال؟')) { e.preventDefault(); e.stopImmediatePropagation(); const p = b.closest('.sxp'); if (p) go(+[...f.querySelectorAll('.sxp')].indexOf(p)); b.scrollIntoView({ block: 'center' }); } }, true);
+    const go = i => { cur = i; f.querySelectorAll('.sxn').forEach((x, j) => x.classList.toggle('on', j == i)); f.querySelectorAll('.sxp').forEach((x, j) => x.classList.toggle('on', j == i)); };
     const q = f.querySelector('#stgq');
-    q.addEventListener('input', () => { const t = q.value.trim().toLowerCase(); f.querySelectorAll('details.stg').forEach(s => { let any = !t; s.querySelectorAll('.stg-b > label, .stg-b > .ck, .stg-b > button').forEach(l => { const hit = !t || l.textContent.toLowerCase().includes(t) || (l.querySelector('input,textarea') || {}).name == t; l.style.display = hit ? '' : 'none'; if (hit && t) any = true; }); s.style.display = any || (s.dataset.t || '').includes(t) ? '' : 'none'; if (t && any) s.open = true; }); });
-    f.addEventListener('click', e => { if (e.target.dataset.stg == 'all') { const ds = [...f.querySelectorAll('details.stg')], o = ds.some(x => !x.open); ds.forEach(x => x.open = o); } });
-    f.querySelectorAll('details.stg').forEach(s => { const n = s.querySelectorAll('.stg-b input:not([type=checkbox]),.stg-b textarea').length, fl = [...s.querySelectorAll('.stg-b input:not([type=checkbox]),.stg-b textarea')].filter(x => x.value).length, em = s.querySelector('.stg-n'); if (em && n) em.textContent = fl + '/' + n; });
+    q.addEventListener('input', () => { const t = q.value.trim().toLowerCase(); f.classList.toggle('sx-search', !!t); f.querySelectorAll('.sxp').forEach(s => { let any = !t; s.querySelectorAll('.stg-b > label, .stg-b > .ck, .stg-b > button').forEach(l => { const hit = !t || l.textContent.toLowerCase().includes(t); l.style.display = hit ? '' : 'none'; if (hit && t) any = true; }); s.style.display = t && !any ? 'none' : ''; }); });
+    f.addEventListener('click', e => {
+      const b = e.target.closest('[data-sx]'); if (!b) return;
+      if (b.dataset.sx == 'discard') { if (f.classList.contains('dirty') && !confirm('تجاهل كل التغييرات غير المحفوظة؟')) return; f.reset(); f.classList.remove('dirty'); d.textContent = 'لا توجد تغييرات'; f.querySelectorAll('input.bad').forEach(x => x.classList.remove('bad')); }
+      else go(+b.dataset.sx);
+    });
+    f.querySelectorAll('.sxp').forEach((s, i) => { const n = s.querySelectorAll('.stg-b input:not([type=checkbox]),.stg-b textarea'), fl = [...n].filter(x => x.value).length, em = f.querySelectorAll('.sxn .stg-n')[i]; if (em && n.length) em.textContent = fl + '/' + n.length; });
   };
   if (typeof window.ra == 'function') { const _ra = window.ra; window.ra = function () { const r = _ra.apply(this, arguments); try { enhance(); } catch (e) {} return r; }; ra = window.ra; }
   window.addEventListener('beforeunload', e => { const f = document.getElementById('sf'); if (f && f.classList.contains('dirty')) { e.preventDefault(); e.returnValue = ''; } });

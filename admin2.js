@@ -188,8 +188,7 @@
   /* ---------- الربط والمفاتيح ---------- */
   const IGF = [['واتساب (Meta Cloud API)', [['WA_TOKEN', 'التوكن الدائم (Access Token)', 1], ['WA_PHONE_ID', 'معرّف رقم الهاتف (Phone Number ID)'], ['WA_LANG', 'لغة القوالب (مثل ar)'], ['WA_TPL_OTP', 'اسم قالب رمز التحقق'], ['WA_TPL_WELCOME', 'اسم قالب الترحيب'], ['WA_TPL_ORDER', 'اسم قالب حالة الطلب'], ['WA_TPL_PROMO', 'اسم قالب الرسائل التسويقية']]],
     ['المتجر و Google', [['STORE_URL', 'رابط المتجر الذي يُلحق برسائل واتساب'], ['GOOGLE_CLIENT_ID', 'Google Client ID (لتسجيل الدخول بجوجل)']]],
-    ['الذكاء الاصطناعي للدعم (اختياري)', [['ANTHROPIC_API_KEY', 'مفتاح Anthropic (Claude API)', 1], ['AI_MODEL', 'اسم النموذج (اتركه فارغاً للافتراضي)'], ['AI_ON', 'تشغيل الرد الآلي (اكتب 0 لإيقافه، وأي قيمة أخرى للتشغيل)'], ['AI_PROMPT', 'تعليمات إضافية للمساعد (نبرة الكلام، سياسات المتجر، ما لا يجيب عنه)']]],
-    ['تلجرام (إشعار طلباتك)', [['BOT_TOKEN', 'توكن البوت', 1], ['CHAT_ID', 'معرّف المحادثة (Chat ID)']]]];
+    ['الذكاء الاصطناعي للدعم (اختياري)', [['ANTHROPIC_API_KEY', 'مفتاح Anthropic (Claude API)', 1], ['AI_MODEL', 'اسم النموذج (اتركه فارغاً للافتراضي)'], ['AI_ON', 'تشغيل الرد الآلي (اكتب 0 لإيقافه، وأي قيمة أخرى للتشغيل)'], ['AI_PROMPT', 'تعليمات إضافية للمساعد (نبرة الكلام، سياسات المتجر، ما لا يجيب عنه)']]]];
   TB.ig = () => { setTimeout(loadIg, 0); return `<div id="igb"><p class="em">جارٍ التحميل…</p></div>`; };
   async function loadIg() {
     const el = $('#igb'); if (!el) return; let v;
@@ -198,7 +197,7 @@
     el.innerHTML = `<p class="em">القيم تُحفظ مباشرة في قاعدة البيانات ولا تحتاج Cloudflare. اترك الحقل فارغاً للإبقاء على القيمة الحالية، واكتب <b>__clear__</b> لحذفها.<br>الحالة: واتساب ${act.wa ? '✅ مفعّل' : '⛔ غير مفعّل'} · Google ${act.google ? '✅' : '⛔'} · تلجرام ${act.telegram ? '✅' : '⛔'}</p>
     <form id="igf" class="fm">${IGF.map(([t, fs]) => `<h3 class="full" style="margin:10px 0 0">${t}</h3>${fs.map(([k, l, sec]) => `<label>${l} <small dir="ltr">${k}</small><input name="${k}" ${sec ? 'type="password" autocomplete="off"' : ''} dir="ltr" placeholder="${sec ? (v[k].set ? 'محفوظ ' + v[k].hint + ' — اتركه للإبقاء' : 'غير مضبوط') : ''}" value="${sec ? '' : esc(v[k].value || '')}"></label>`).join('')}`).join('')}
     <button class="btn">حفظ</button></form>
-    <div class="cd"><h3>اختبار الربط</h3><form id="igt" class="fm"><input name="ph" dir="ltr" placeholder="رقم لإرسال رسالة اختبار 07XXXXXXXXX"><button class="btn">اختبار واتساب</button><button type="button" class="btn g" data-a="igtg">اختبار تلجرام</button></form></div>`;
+    <div class="cd"><h3>اختبار الربط</h3><form id="igt" class="fm"><input name="ph" dir="ltr" placeholder="رقم لإرسال رسالة اختبار 07XXXXXXXXX"><button class="btn">اختبار واتساب</button></form></div>`;
   }
   H.igf = async (v) => { try { await J('/adm/integrations', { method: 'POST', body: JSON.stringify(v) }); toast('تم الحفظ'); loadIg(); } catch (e) { toast(e.message || 'تعذر الحفظ'); } };
   H.igt = async (v) => { try { await J('/adm/integrations/test', { method: 'POST', body: JSON.stringify({ kind: 'wa', ph: v.ph.trim() }) }); toast('✅ أُرسلت رسالة الاختبار'); } catch (e) { toast(e.message || 'فشل الاختبار'); } };
