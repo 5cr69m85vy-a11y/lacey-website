@@ -14,9 +14,9 @@
     const tools = tail.replace('<button class="btn">حفظ الإعدادات</button>', '').replace(/<button[^>]*data-a="tt"[^>]*>[^<]*<\/button>/, '');
     const all = parts.map(([t, h]) => [t, `<div class="stg-b fm">${h}</div>`]).concat([['النسخ الاحتياطي والمزامنة', `<div class="stg-b stg-tools">${tools}</div>`]]);
     if (cur >= all.length) cur = 0;
-    const nav = all.map(([t], i) => { const m = META[t] || ['⚙️', t, '']; return `<button type="button" class="sxn${i == cur ? ' on' : ''}" data-sx="${i}"><span>${m[0]}</span><b>${t == 'تلجرام والأمان' ? 'الأمان' : t}</b><small>${m[1]}</small><em class="stg-n"></em></button>`; }).join('');
-    const panes = all.map(([t, h], i) => { const m = META[t] || ['⚙️', t, '']; return `<section class="sxp${i == cur ? ' on' : ''}" data-t="${t}"><header><h2>${t == 'تلجرام والأمان' ? 'الأمان' : t}</h2><p>${m[2]}</p></header>${h}</section>`; }).join('');
-    return head + `<div class="sx-top"><span id="stgd">لا توجد تغييرات</span><button type="button" class="btn g" data-sx="discard">تجاهل</button><button class="btn">حفظ</button></div><div class="sx"><aside class="sx-nav"><input type="search" id="stgq" placeholder="ابحث في الإعدادات…" autocomplete="off">${nav}</aside><div class="sx-main">${panes}</div></div></form>`;
+    const nav = all.map(([t], i) => { const m = META[t] || ['⚙️', t, '']; return `<button type="button" class="sxn${i == cur ? ' on' : ''}" data-sx="${i}"><b>${t == 'تلجرام والأمان' ? 'الأمان' : t}</b><em class="stg-n"></em><i class="sxc">‹</i></button>`; }).join('');
+    const panes = all.map(([t, h], i) => { const m = META[t] || ['⚙️', t, '']; return `<section class="sxp${i == cur ? ' on' : ''}" data-t="${t}"><header><button type="button" class="sxb" data-sx="back">› الإعدادات</button><h2>${t == 'تلجرام والأمان' ? 'الأمان' : t}</h2><p>${m[2]}</p></header>${h}</section>`; }).join('');
+    return head + `<div class="sx-top"><span id="stgd">لا توجد تغييرات</span><button type="button" class="btn g" data-sx="discard">تجاهل</button><button class="btn">حفظ</button></div><div class="sx"><aside class="sx-nav"><div class="sxl">⚙ الإعدادات</div><input type="search" id="stgq" placeholder="ابحث في الإعدادات…" autocomplete="off">${nav}</aside><div class="sx-main">${panes}</div></div></form>`;
   };
   const enhance = () => {
     const f = document.getElementById('sf'); if (!f || f.dataset.eh || !f.querySelector('.sx')) return; f.dataset.eh = '1';
@@ -33,7 +33,7 @@
     f.addEventListener('click', e => {
       const b = e.target.closest('[data-sx]'); if (!b) return;
       if (b.dataset.sx == 'discard') { if (f.classList.contains('dirty') && !confirm('تجاهل كل التغييرات غير المحفوظة؟')) return; f.reset(); f.classList.remove('dirty'); d.textContent = 'لا توجد تغييرات'; f.querySelectorAll('input.bad').forEach(x => x.classList.remove('bad')); }
-      else go(+b.dataset.sx);
+      else if (b.dataset.sx == 'back') f.classList.remove('sx-open'); else { go(+b.dataset.sx); f.classList.add('sx-open'); }
     });
     f.querySelectorAll('.sxp').forEach((s, i) => { const n = s.querySelectorAll('.stg-b input:not([type=checkbox]),.stg-b textarea'), fl = [...n].filter(x => x.value).length, em = f.querySelectorAll('.sxn .stg-n')[i]; if (em && n.length) em.textContent = fl + '/' + n.length; });
   };

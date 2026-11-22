@@ -481,14 +481,21 @@ body.pgan>section:not([hidden]):not(.hid),body.pgan #cv.on{animation:pgin .28s v
 #stf .m.note::before{content:'📝 ملاحظة داخلية — ';font-size:10px}
 
 /* settings v2: side list + one section at a time + top action bar */
-.sx-top{grid-column:1/-1;position:sticky;top:0;z-index:6;display:flex;align-items:center;gap:8px;justify-content:flex-end;padding:10px 14px;background:#fff;border:1px solid var(--mist,#dde8ea);border-radius:16px}
-.sx-top #stgd{margin-inline-end:auto;font-size:13px;opacity:.65}form.dirty .sx-top #stgd{color:#c0392b;font-weight:700;opacity:1}
-.sx{grid-column:1/-1;display:grid;grid-template-columns:260px 1fr;gap:14px;align-items:start}
-.sx-nav{display:grid;gap:6px;position:sticky;top:70px}.sx-nav input{width:100%;margin-bottom:4px}
-.sxn{display:grid;grid-template-columns:auto 1fr auto;column-gap:10px;align-items:center;text-align:start;padding:10px 12px;border:1px solid transparent;border-radius:14px;background:none;cursor:pointer;font:inherit}
-.sxn span{grid-row:1/3;font-size:18px}.sxn b{font-size:14px}.sxn small{grid-column:2;font-size:11.5px;opacity:.6}.sxn .stg-n{grid-row:1/3;grid-column:3}
-.sxn:hover{background:rgba(0,0,0,.03)}.sxn.on{background:#fff;border-color:var(--mist,#dde8ea);box-shadow:0 2px 8px rgba(0,0,0,.05)}
-.sxp{display:none;border:1px solid var(--mist,#dde8ea);border-radius:18px;background:#fff;padding:18px}.sxp.on,form.sx-search .sxp{display:block}
-.sxp header{margin-bottom:12px}.sxp h2{margin:0 0 4px;font-size:18px}.sxp header p{margin:0;font-size:13px;opacity:.65}
-.sxp .stg-b{padding:0}
-@media(max-width:800px){.sx{grid-template-columns:1fr}.sx-nav{position:static;grid-auto-flow:column;grid-auto-columns:max-content;overflow-x:auto}.sx-nav input{display:none}.sxn small{display:none}.sxn span{grid-row:auto}}
+.sx-top{grid-column:1/-1;position:sticky;top:0;z-index:6;display:flex;align-items:center;gap:8px;justify-content:center;padding:8px 10px;background:#fff;border-bottom:1px solid var(--mist,#dde8ea)}
+.sx-top #stgd{font-size:13px;opacity:.65;padding:7px 12px;border:1px solid var(--mist,#dde8ea);border-radius:10px;background:#fafafa}form.dirty .sx-top #stgd{color:#c0392b;font-weight:700;opacity:1}
+.sx-top .btn{padding:7px 14px;font-size:13px;border-radius:10px;min-height:0}
+.sx{grid-column:1/-1;display:grid;grid-template-columns:230px 1fr;gap:0;align-items:start;background:#fff;border:1px solid var(--mist,#dde8ea);border-radius:18px;overflow:hidden}
+.sx-nav{display:grid;gap:2px;align-content:start;padding:14px 10px;border-inline-end:1px solid var(--mist,#dde8ea);min-height:420px}
+.sxl{font-size:11px;letter-spacing:.08em;opacity:.55;padding:2px 10px 8px}.sx-nav input{width:100%;margin-bottom:6px}
+.sxn{display:flex;align-items:center;gap:8px;text-align:start;padding:9px 10px;border:0;border-radius:8px;background:none;cursor:pointer;font:inherit;font-size:14px}
+.sxn b{font-weight:500;flex:1}.sxn .stg-n{font-size:11px}.sxc{font-style:normal;opacity:0}.sxn.on{background:rgba(0,0,0,.06);font-weight:700}.sxn.on .sxc{opacity:.6}.sxn:hover{background:rgba(0,0,0,.04)}
+.sxp{display:none;padding:18px 22px}.sxp.on,form.sx-search .sxp{display:block}
+.sxp header{margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--mist,#dde8ea)}.sxp h2{margin:0 0 4px;font-size:17px}.sxp header p{margin:0;font-size:13px;opacity:.6}.sxb{display:none}
+.sxp .stg-b{padding:0;grid-template-columns:1fr 1fr;gap:14px}.sxp .stg-b label.full,.sxp .stg-b textarea,.sxp .stg-b>label:has(textarea),.sxp .stg-b>.ck{grid-column:1/-1}
+.sx-main{min-width:0}
+@media(max-width:800px){.sx{grid-template-columns:1fr;border:0;background:none;border-radius:0}
+.sx-nav{border:0;min-height:0;padding:6px 0}.sxn{background:#fff;border:1px solid var(--mist,#dde8ea);border-radius:12px;padding:14px;margin-bottom:6px}.sxn.on{background:#fff;font-weight:500}.sxc{opacity:.5!important;font-size:18px}
+.sx-main{display:none}form.sx-open .sx-main{display:block}form.sx-open .sx-nav{display:none}
+.sxp{padding:14px;border:1px solid var(--mist,#dde8ea);border-radius:16px;background:#fff}.sxb{display:block;background:none;border:0;padding:0 0 10px;font:inherit;font-size:13px;color:inherit;opacity:.7;cursor:pointer}
+.sxp .stg-b{grid-template-columns:1fr}}
+.sxp header,.sxp h2{background:none!important}.sxp h2{border:0!important;padding:0!important;display:block}.sxp h2:before,.sxp h2:after{display:none!important}
