@@ -219,6 +219,7 @@ async function createOrder(env, b, sess) {
       .bind(b.code, id, customerId, name, phone, city, area, lm, JSON.stringify(items), subtotal, discount, total, JSON.stringify(usedCodes), payM, t),
     env.DB.prepare('INSERT INTO order_events(order_code,status,at,actor,note) VALUES(?,?,?,?,?)').bind(b.code, 1, t, 'customer', ''),
     ...usedCodes.map(c => env.DB.prepare('UPDATE discount_codes SET used=used+1 WHERE code=?').bind(c)),
+    ...qt.applied.map(a => env.DB.prepare('INSERT INTO discount_uses(code,phone,order_code,amount,at) VALUES(?,?,?,?,?)').bind(a.code, phone, b.code, a.amount || 0, t)),
     env.DB.prepare('UPDATE orders SET shipping=?,free_shipping=?,stock_taken=? WHERE code=?').bind(shipping, qt.freeShip ? 1 : 0, tk.taken ? 1 : 0, b.code),
   ]);
   await queueNote(env, phone, 'order_received', { code: b.code, total }, customerId);

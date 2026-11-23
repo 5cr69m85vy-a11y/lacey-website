@@ -71,5 +71,9 @@ export const MIGRATIONS = [
  [
   "0018_tg_support.sql",
   "-- 0018: بوت الدعم: ربط معرّف تلغرام بحساب موظف + تذكير «زبون ينتظر»\nALTER TABLE tg_recipients ADD COLUMN staff_id INTEGER;\nALTER TABLE chats ADD COLUMN tg_wait_at INTEGER NOT NULL DEFAULT 0;\n"
+ ],
+ [
+  "0019_discounts_v2.sql",
+  "-- Discounts v2: name, start date, cap, per-customer limit, brand/category targeting, first-order, automatic discounts, usage log\nALTER TABLE discount_codes ADD COLUMN name TEXT;\nALTER TABLE discount_codes ADD COLUMN starts_at INTEGER;\nALTER TABLE discount_codes ADD COLUMN max_disc INTEGER;\nALTER TABLE discount_codes ADD COLUMN per_cust INTEGER;\nALTER TABLE discount_codes ADD COLUMN brands TEXT;\nALTER TABLE discount_codes ADD COLUMN cats TEXT;\nALTER TABLE discount_codes ADD COLUMN first_only INTEGER NOT NULL DEFAULT 0;\nALTER TABLE discount_codes ADD COLUMN autoapply INTEGER NOT NULL DEFAULT 0;\nCREATE TABLE IF NOT EXISTS discount_uses (\n  id INTEGER PRIMARY KEY AUTOINCREMENT, code TEXT NOT NULL, phone TEXT NOT NULL, order_code TEXT NOT NULL, amount INTEGER NOT NULL DEFAULT 0, at INTEGER NOT NULL\n);\nCREATE INDEX IF NOT EXISTS ix_discount_uses ON discount_uses(code, phone);\n"
  ]
 ];

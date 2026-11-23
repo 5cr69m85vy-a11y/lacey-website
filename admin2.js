@@ -13,7 +13,7 @@
     return `<div class="chw"><svg viewBox="0 0 ${rows.length * w + 10} ${h + 30}" role="img" style="min-width:${rows.length * 22}px;height:160px">${rows.map((r, i) => { const v = r[key] || 0, bh = Math.round(v / max * h); return `<g><rect x="${i * w + 6}" y="${h - bh + 4}" width="${w - 6}" height="${bh}" rx="3" fill="${color}"><title>${esc(r.k)}: ${N(v)}</title></rect><text x="${i * w + 6 + (w - 6) / 2}" y="${h - bh}" font-size="9" text-anchor="middle" fill="currentColor">${v || ''}</text><text x="${i * w + 6 + (w - 6) / 2}" y="${h + 18}" font-size="8" text-anchor="middle" fill="currentColor" transform="rotate(-40 ${i * w + 6 + (w - 6) / 2} ${h + 18})">${esc(String(r.k).slice(-5))}</text></g>`; }).join('')}</svg></div>`;
   };
   const add = (id, name) => { if (!TABS.find(t => t[0] === id)) TABS.push([id, name]); };
-  ['cp:أكواد الخصم', 'bx:البوكسات', 'hr:الواجهة والوصف', 'st:الإحصائيات', 'wm:رسائل واتساب', 'ch:الدعم والتقييم', 'pm:الدفع والتوصيل', 'ig:الربط والمفاتيح', 'sf:الموظفون'].forEach(s => { const [a, b] = s.split(':'); add(a, b); });
+  ['cp:الخصومات', 'bx:البوكسات', 'hr:الواجهة والوصف', 'st:الإحصائيات', 'wm:رسائل واتساب', 'ch:الدعم والتقييم', 'pm:الدفع والتوصيل', 'ig:الربط والمفاتيح', 'sf:الموظفون'].forEach(s => { const [a, b] = s.split(':'); add(a, b); });
   TABS.unshift(...TABS.splice(TABS.findIndex(t => t[0] === 'st'), 1));      // الإحصائيات أولاً
 
   /* ---------- تنظيم الأقسام في مجموعات (صفحة مستقلة لكل مجموعة) ---------- */
@@ -22,7 +22,7 @@
     ['home', 'الرئيسية', ['db', 'st']],
     ['orders', 'الطلبات', ['or']],
     ['catalog', 'الكتالوج', ['p', 'g', 'sb', 'br', 'bx']],
-    ['customers', 'العملاء', ['cu', 'dc']],
+    ['customers', 'العملاء', ['cu']],
     ['marketing', 'التسويق', ['a', 'cp', 'wm']],
     ['support', 'الدعم والموظفون', ['ch', 'sf']],
     ['settings', 'إعدادات المتجر', ['s', 'l', 'hr', 'pm', 'lg', 'gd']],
@@ -62,29 +62,44 @@
 
   /* ---------- أكواد الخصم ---------- */
   let codes = [];
-  TB.cp = () => { setTimeout(loadCodes, 0); return `<div id="cpl"><p class="em">جارٍ التحميل…</p></div>` + up('إنشاء / تعديل كود', `<form id="cpf" class="fm">
-    <input name="code" placeholder="الكود (حروف إنجليزية/أرقام)" required style="text-transform:uppercase">
-    <select name="kind"><option value="percent">نسبة %</option><option value="amount">مبلغ ثابت</option><option value="free_shipping">توصيل مجاني</option></select>
-    <input name="value" type="number" min="0" placeholder="القيمة (نسبة أو مبلغ — اتركها للتوصيل المجاني)">
-    <input name="min" type="number" min="0" placeholder="حد أدنى للسلة (اختياري)">
-    <label>تاريخ الانتهاء<input name="exp" type="date"></label>
-    <input name="max" type="number" min="1" placeholder="أقصى عدد استخدامات (اختياري)">
-    <input name="ph" placeholder="مخصص لرقم هاتف (اختياري)">
-    <label><input type="checkbox" name="stack"> يمكن جمعه مع أكواد أخرى</label>
-    <details class="full"><summary>تحديد منتجات معينة (بدون تحديد = كل المنتجات)</summary>${prodChecks('prods')}</details>
-    <button class="btn">حفظ الكود</button></form><p class="em">القاعدة: كود واحد غير قابل للجمع، أو عدة أكواد قابلة للجمع. كود التوصيل المجاني يجتمع مع أي كود. الخصم الجزئي بحسب المنتجات المحددة فقط.</p>`); };
+  let ecp = null;
+  const dateV = t => t ? new Date(t).toISOString().slice(0, 10) : '';
+  const KN = { percent: 'نسبة %', amount: 'مبلغ ثابت', bogo: 'اشترِ 1 واحصل على 1', bundle: 'خصم مجموعة منتجات', free_shipping: 'توصيل مجاني' };
+  TB.cp = () => { setTimeout(loadCodes, 0); const e = (codes || []).find(x => x.code == ecp) || { brands: [], cats: [], prods: [] };
+    const ks = [...new Set(S.P.map(p => p.k).filter(Boolean))], ck = (n, v, sel) => `<label><input type="checkbox" name="${n}" value="${esc(v)}" ${sel.includes(v) ? 'checked' : ''}> ${esc(v)}</label>`;
+    return `<div id="cpl"><p class="em">جارٍ التحميل…</p></div>` + up(ecp ? 'تعديل الخصم ' + ecp : 'إنشاء خصم جديد', `<form id="cpf" class="fm">
+    <input name="name" placeholder="اسم الخصم (مثل: عرض نوفمبر)" value="${esc(e.name)}">
+    <input name="code" placeholder="الكود (حروف إنجليزية/أرقام)" required style="text-transform:uppercase" value="${esc(e.code)}" ${ecp ? 'readonly' : ''}>
+    <select name="kind">${Object.entries(KN).map(([k, l]) => `<option value="${k}" ${e.kind == k ? 'selected' : ''}>${l}</option>`).join('')}</select>
+    <input name="value" type="number" min="0" placeholder="القيمة (نسبة أو مبلغ — لا تلزم للتوصيل المجاني وBuy1Get1)" value="${e.value || ''}">
+    <input name="min" type="number" min="0" placeholder="حد أدنى للسلة" value="${e.min || ''}">
+    <input name="maxd" type="number" min="0" placeholder="أعلى مبلغ خصم (اختياري)" value="${e.maxd || ''}">
+    <label>تاريخ البداية<input name="start" type="date" value="${dateV(e.start)}"></label>
+    <label>تاريخ الانتهاء<input name="exp" type="date" value="${dateV(e.exp)}"></label>
+    <input name="max" type="number" min="1" placeholder="أقصى عدد استخدامات" value="${e.max || ''}">
+    <input name="pc" type="number" min="1" placeholder="أقصى استخدام لكل عميل" value="${e.pc || ''}">
+    <input name="ph" placeholder="مخصص لرقم هاتف (اختياري)" value="${esc(e.ph)}">
+    <label><input type="checkbox" name="auto" ${e.auto ? 'checked' : ''}> تلقائي (يُطبَّق بدون كود)</label>
+    <label><input type="checkbox" name="first" ${e.first ? 'checked' : ''}> لأول طلب فقط</label>
+    <label><input type="checkbox" name="stack" ${e.stack ? 'checked' : ''}> يمكن جمعه مع خصومات أخرى</label>
+    <details class="full" ${e.brands.length ? 'open' : ''}><summary>براندات معينة</summary><div class="pck">${(S.br || []).map(b => `<label><input type="checkbox" name="brands" value="${esc(String(b.id))}" ${e.brands.map(String).includes(String(b.id)) ? 'checked' : ''}> ${esc(b.n)}</label>`).join('') || '<small>لا توجد براندات</small>'}</div></details>
+    <details class="full" ${e.cats.length ? 'open' : ''}><summary>فئات معينة</summary><div class="pck">${ks.map(k => ck('cats', k, e.cats)).join('') || '<small>لا توجد فئات</small>'}</div></details>
+    <details class="full" ${e.prods.length ? 'open' : ''}><summary>منتجات معينة (لخصم المجموعة: كلها مطلوبة في السلة)</summary>${prodChecks('prods', e.prods)}</details>
+    <button class="btn">${ecp ? 'حفظ التعديل' : 'حفظ الخصم'}</button>${ecp ? '<button type="button" class="btn g" data-a="cpe" data-c="">إلغاء التعديل</button>' : ''}</form><p class="em">بدون تحديد براند أو فئة أو منتج = يشمل كل المنتجات. القاعدة: لا يُجمع خصمان إلا إذا سمحت بذلك في الاثنين. التوصيل المجاني يجتمع مع أي خصم. الخصم التلقائي يُطبَّق بعد أكواد الزبون. الكوبون الترحيبي للزبون الجديد يُنشأ تلقائياً ويظهر في القائمة.</p>`); };
   async function loadCodes() {
     const el = $('#cpl'); if (!el) return;
     try { codes = (await J('/codes')).codes; } catch (e) { el.innerHTML = '<p class="em">تعذر التحميل</p>'; return; }
-    const kn = { percent: 'نسبة', amount: 'مبلغ', free_shipping: 'توصيل مجاني' };
-    el.innerHTML = codes.length ? `<table class="tb"><tr><th>الكود</th><th>النوع</th><th>القيمة</th><th>شروط</th><th>استخدام</th><th></th></tr>${codes.map(c => `<tr><td dir="ltr"><b>${esc(c.code)}</b></td><td>${kn[c.kind]}</td><td>${c.kind == 'percent' ? c.value + '%' : c.kind == 'amount' ? N(c.value) : '—'}</td><td><small>${c.min ? 'حد أدنى ' + N(c.min) + ' · ' : ''}${c.prods.length ? c.prods.length + ' منتج · ' : ''}${c.exp ? 'حتى ' + new Date(c.exp).toLocaleDateString('ar-IQ') + ' · ' : ''}${c.stack ? 'يُجمع' : ''}${c.ph ? ' · ' + esc(c.ph) : ''}</small></td><td>${c.used}${c.max ? '/' + c.max : ''}</td><td><button class="btn g" data-a="cpt" data-c="${esc(c.code)}">${c.active ? 'تعطيل' : 'تفعيل'}</button> <button class="btn g" data-a="cpd" data-c="${esc(c.code)}">حذف</button></td></tr>`).join('')}</table>` : '<p class="em">لا توجد أكواد بعد</p>';
+    const d = t => new Date(t).toLocaleDateString('ar-IQ'), st = c => c.start && c.start > Date.now() ? 'مجدول' : c.exp && c.exp < Date.now() ? 'منتهٍ' : c.max && c.used >= c.max ? 'استُنفد' : c.active ? 'فعّال' : 'معطّل';
+    el.innerHTML = codes.length ? `<table class="tb"><tr><th>الخصم</th><th>النوع</th><th>القيمة</th><th>شروط</th><th>استخدام</th><th>الحالة</th><th></th></tr>${codes.map(c => `<tr><td dir="ltr"><b>${esc(c.name || c.code)}</b>${c.name ? `<br><small>${esc(c.code)}</small>` : ''}${c.auto ? ' <small>⚡تلقائي</small>' : ''}${c.welcome ? ' <small>ترحيبي</small>' : ''}</td><td>${KN[c.kind]}</td><td>${c.kind == 'percent' || c.kind == 'bundle' ? c.value + '%' : c.kind == 'amount' ? N(c.value) : '—'}</td><td><small>${[c.min ? 'حد أدنى ' + N(c.min) : '', c.maxd ? 'سقف ' + N(c.maxd) : '', c.first ? 'أول طلب' : '', c.pc ? c.pc + '/عميل' : '', c.prods.length ? c.prods.length + ' منتج' : '', c.brands.length ? c.brands.length + ' براند' : '', c.cats.length ? c.cats.length + ' فئة' : '', c.start ? 'من ' + d(c.start) : '', c.exp ? 'حتى ' + d(c.exp) : '', c.stack ? 'يُجمع' : '', c.ph ? esc(c.ph) : ''].filter(Boolean).join(' · ')}</small></td><td>${c.used}${c.max ? '/' + c.max : ''}</td><td>${st(c)}</td><td><button class="btn g" data-a="cpe" data-c="${esc(c.code)}">تعديل</button> <button class="btn g" data-a="cpt" data-c="${esc(c.code)}">${c.active ? 'تعطيل' : 'تفعيل'}</button> <button class="btn g" data-a="cpd" data-c="${esc(c.code)}">حذف</button></td></tr>`).join('')}</table>` : '<p class="em">لا توجد خصومات بعد.</p>';
   }
+  const D0 = s => s ? Date.parse(s + 'T00:00:00') : null;
   H.cpf = async (v, f) => {
-    const prods = [...f.querySelectorAll('[name=prods]:checked')].map(x => x.value);
-    try { await J('/codes', { method: 'POST', body: JSON.stringify({ code: v.code, kind: v.kind, value: +v.value || 0, min: +v.min || 0, exp: v.exp ? Date.parse(v.exp + 'T23:59:59') : null, max: +v.max || null, ph: v.ph.trim(), stack: !!v.stack, prods }) }); toast('تم حفظ الكود'); f.reset(); loadCodes(); }
+    const g = n => [...f.querySelectorAll(`[name=${n}]:checked`)].map(x => x.value);
+    try { await J('/codes', { method: 'POST', body: JSON.stringify({ name: v.name, code: v.code, kind: v.kind, value: +v.value || 0, min: +v.min || 0, maxd: +v.maxd || null, start: D0(v.start), exp: v.exp ? Date.parse(v.exp + 'T23:59:59') : null, max: +v.max || null, pc: +v.pc || null, ph: v.ph.trim(), stack: !!v.stack, first: !!v.first, auto: !!v.auto, prods: g('prods'), brands: g('brands'), cats: g('cats') }) }); toast('تم حفظ الخصم'); ecp = null; ra(); }
     catch (e) { toast(e.message || 'تعذر الحفظ'); }
   };
-  A.cpt = async c => { const x = codes.find(k => k.code == c); if (!x) return; await J('/codes', { method: 'POST', body: JSON.stringify({ ...x, exp: x.exp, active: !x.active }) }); loadCodes(); };
+  A.cpe = c => { ecp = c || null; ra(); };
+  A.cpt = async c => { const x = codes.find(k => k.code == c); if (!x) return; await J('/codes', { method: 'POST', body: JSON.stringify({ ...x, active: !x.active }) }); loadCodes(); };
   A.cpd = async c => { if (!ask('cp' + c)) return; await J('/codes?code=' + encodeURIComponent(c), { method: 'DELETE' }); loadCodes(); };
 
   /* ---------- البوكسات ---------- */
