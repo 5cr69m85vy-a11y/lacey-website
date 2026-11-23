@@ -13,7 +13,7 @@
     return `<div class="chw"><svg viewBox="0 0 ${rows.length * w + 10} ${h + 30}" role="img" style="min-width:${rows.length * 22}px;height:160px">${rows.map((r, i) => { const v = r[key] || 0, bh = Math.round(v / max * h); return `<g><rect x="${i * w + 6}" y="${h - bh + 4}" width="${w - 6}" height="${bh}" rx="3" fill="${color}"><title>${esc(r.k)}: ${N(v)}</title></rect><text x="${i * w + 6 + (w - 6) / 2}" y="${h - bh}" font-size="9" text-anchor="middle" fill="currentColor">${v || ''}</text><text x="${i * w + 6 + (w - 6) / 2}" y="${h + 18}" font-size="8" text-anchor="middle" fill="currentColor" transform="rotate(-40 ${i * w + 6 + (w - 6) / 2} ${h + 18})">${esc(String(r.k).slice(-5))}</text></g>`; }).join('')}</svg></div>`;
   };
   const add = (id, name) => { if (!TABS.find(t => t[0] === id)) TABS.push([id, name]); };
-  ['cp:الخصومات', 'bx:البوكسات', 'hr:الواجهة والوصف', 'st:الإحصائيات', 'wm:رسائل واتساب', 'ch:الدعم والتقييم', 'pm:الدفع والتوصيل', 'ig:الربط والمفاتيح', 'sf:الموظفون'].forEach(s => { const [a, b] = s.split(':'); add(a, b); });
+  ['cp:الخصومات', 'lo:برنامج الوفاء', 'bx:البوكسات', 'hr:الواجهة والوصف', 'st:الإحصائيات', 'wm:رسائل واتساب', 'ch:الدعم والتقييم', 'pm:الدفع والتوصيل', 'ig:الربط والمفاتيح', 'sf:الموظفون'].forEach(s => { const [a, b] = s.split(':'); add(a, b); });
   TABS.unshift(...TABS.splice(TABS.findIndex(t => t[0] === 'st'), 1));      // الإحصائيات أولاً
 
   /* ---------- تنظيم الأقسام في مجموعات (صفحة مستقلة لكل مجموعة) ---------- */
@@ -23,7 +23,7 @@
     ['orders', 'الطلبات', ['or']],
     ['catalog', 'الكتالوج', ['p', 'g', 'sb', 'br', 'bx']],
     ['customers', 'العملاء', ['cu']],
-    ['marketing', 'التسويق', ['a', 'cp', 'wm']],
+    ['marketing', 'التسويق', ['a', 'cp', 'lo', 'wm']],
     ['support', 'الدعم والموظفون', ['ch', 'sf']],
     ['settings', 'إعدادات المتجر', ['s', 'l', 'hr', 'pm', 'lg', 'gd']],
     ['system', 'الأمان والنظام', ['tg', 'ig', 'au', 'u']],
@@ -101,6 +101,34 @@
   A.cpe = c => { ecp = c || null; ra(); };
   A.cpt = async c => { const x = codes.find(k => k.code == c); if (!x) return; await J('/codes', { method: 'POST', body: JSON.stringify({ ...x, active: !x.active }) }); loadCodes(); };
   A.cpd = async c => { if (!ask('cp' + c)) return; await J('/codes?code=' + encodeURIComponent(c), { method: 'DELETE' }); loadCodes(); };
+
+  /* ---------- برنامج الوفاء (نقاط) ---------- */
+  let LO = null, LOC = null;
+  const KLO = { earn: 'منح', redeem: 'استبدال', restore: 'إرجاع', reverse: 'عكس', expire: 'انتهاء', adjust: 'تعديل إداري' };
+  TB.lo = () => { setTimeout(loadLo, 0); return '<div id="lol"><p class="em">جارٍ التحميل…</p></div>'; };
+  async function loadLo() {
+    const el = $('#lol'); if (!el) return;
+    try { LO = await J('/adm/loy'); } catch (e) { el.innerHTML = '<p class="em">تعذر التحميل</p>'; return; }
+    const c = LO.cfg, st = LO.stats, N0 = x => Number(x || 0).toLocaleString('en');
+    el.innerHTML = up('LACEY SKIN BEAUTY REWARDS — ' + (c.live ? 'يعمل' : 'متوقف'), `<div class="kp"><div><b>${N0(st.m)}</b><small>أعضاء لديهم حركات</small></div><div><b>${N0(st.outstanding)}</b><small>رصيد قائم</small></div><div><b>${N0(st.earned)}</b><small>نقاط ممنوحة</small></div><div><b>${N0(st.redeemed)}</b><small>مستبدلة</small></div><div><b>${N0(st.expired)}</b><small>منتهية</small></div></div>`)
+      + up('الإعدادات (كل الأرقام من اعتمادك؛ لا قيم افتراضية مالية)', `<form id="lof" class="fm">
+        <label><input type="checkbox" name="on" ${c.on ? 'checked' : ''}> تشغيل البرنامج</label>
+        <label>كل كم دينار مشتريات<input name="unit" type="number" min="1" value="${c.unit}"></label>
+        <label>نقاط تُمنح لكل وحدة<input name="per" type="number" min="0" value="${c.per}"></label>
+        <label>نقاط إضافية لأول طلب مكتمل<input name="first" type="number" min="0" value="${c.first}"></label>
+        <label>قيمة النقطة الواحدة (دينار)<input name="val" type="number" min="0" value="${c.val}"></label>
+        <label>أقل نقاط للاستبدال<input name="min" type="number" min="0" value="${c.min}"></label>
+        <label>أعلى نسبة % من الطلب تُدفع بالنقاط<input name="maxpct" type="number" min="1" max="100" value="${c.maxpct}"></label>
+        <label>صلاحية النقاط بالأشهر (0 = لا تنتهي)<input name="exp" type="number" min="0" max="60" value="${c.exp}"></label>
+        <button class="btn">حفظ</button></form><p class="em">تُمنح النقاط مرة واحدة عند تسليم الطلب (على قيمة المنتجات بعد الخصم، دون التوصيل). عند إلغاء الطلب تُرجع النقاط المستبدلة وتُعكس الممنوحة. لا يصير الرصيد سالباً، وكل حركة تُسجَّل ولا تُعدَّل.</p>`)
+      + up('رصيد عميل وتعديل', `<form id="loq" class="fm"><input name="q" placeholder="رقم الهاتف أو معرف العضو LS-000001" required><button class="btn">بحث</button></form><div id="loc">${LOC ? loCust() : ''}</div>`);
+  }
+  const loCust = () => { const j = LOC; return `<h4>${esc(j.customer.name || '')} · ${esc(j.customer.phone || '')} · LS-${String(j.customer.id).padStart(6, '0')}</h4><p><b>${Number(j.balance).toLocaleString('en')}</b> نقطة</p>
+    <form id="loa" class="fm"><input name="points" type="number" placeholder="± نقاط (سالب للخصم)" required><input name="note" placeholder="سبب التعديل (إلزامي)" required><button class="btn">تعديل</button></form>
+    <table class="tb"><tr><th>الحركة</th><th>النقاط</th><th>الطلب</th><th>ملاحظة</th><th>التاريخ</th></tr>${j.history.map(h => `<tr><td>${KLO[h.kind] || h.kind}</td><td dir="ltr">${h.points > 0 ? '+' : ''}${h.points}</td><td>${esc(h.order_code || '')}</td><td>${esc(h.note || '')}</td><td>${new Date(h.at).toLocaleString('ar-IQ')}</td></tr>`).join('')}</table>`; };
+  H.lof = async (v) => { try { await J('/adm/loy', { method: 'POST', body: JSON.stringify({ on: !!v.on, unit: +v.unit, per: +v.per, first: +v.first, val: +v.val, min: +v.min, maxpct: +v.maxpct, exp: +v.exp }) }); toast('تم الحفظ'); loadLo(); } catch (e) { toast(e.message || 'تعذر الحفظ'); } };
+  H.loq = async (v) => { try { LOC = await J('/adm/loy/c?q=' + encodeURIComponent(v.q.trim())); $('#loc').innerHTML = loCust(); } catch (e) { LOC = null; $('#loc').innerHTML = ''; toast(e.message || 'غير موجود'); } };
+  H.loa = async (v) => { try { await J('/adm/loy/adjust', { method: 'POST', body: JSON.stringify({ customer_id: LOC.customer.id, points: +v.points, note: v.note }) }); toast('تم التعديل'); LOC = await J('/adm/loy/c?q=' + LOC.customer.id.toString().padStart(6, '0').replace(/^/, 'LS-')); loadLo(); } catch (e) { toast(e.message || 'تعذر التعديل'); } };
 
   /* ---------- البوكسات ---------- */
   let ebx = null;

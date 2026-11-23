@@ -13,6 +13,7 @@
      ADMIN_PASS (إلزامي)  ADMIN_KEY (اختياري)  BOT_TOKEN / CHAT_ID (اختياري: إشعار تلجرام لك)
    ============================================================ */
 
+import { loyaltyRoutes, earnForOrder, reverseForOrder, expirePoints, redeem, settleRedeem, undoRedeem } from './loyalty.js';
 import { authRoutes, sessionCustomer, ageOf, MIN_AGE } from './auth.js';
 import { processQueue } from './wa.js';
 import { quote, shopRoutes } from './shop.js';
@@ -102,6 +103,7 @@ async function setStatus(env, o, s, actor, note = '', from = null) {
   await queueNote(env, o.phone, 'order_status', { code: o.code, status: s, text: STATUS_TEXT[s] || '' }, o.customer_id);
   if (s === 2) await issueReceipt(env, o);
   if (s === 0) await restock(env, o.code);     // إرجاع الكميات للمخزون عند الإلغاء
+  try { if (s === 5) await earnForOrder(env, o.code); if (s === 0) await reverseForOrder(env, o.code); } catch (e) {}   // نقاط الوفاء (مرة واحدة لكل طلب)
   if (!/^tg:/.test(actor)) await tgOrderRefresh(env, o.code);   // مزامنة رسائل تلغرام عند التغيير من الموقع
   return true;
 }
@@ -118,6 +120,7 @@ async function issueReceipt(env, o) {
 
 /* تأكيد تلقائي لكل طلب مضى على إنشائه 10 دقائق ولم يُلغَ */
 async function sweep(env) {
+  try { await expirePoints(env); } catch (e) {}
   const due = await env.DB.prepare('SELECT code,phone,customer_id FROM orders WHERE status=1 AND created_at<=?')
     .bind(now() - CANCEL_WINDOW_MS).all();
   for (const o of due.results || []) await setStatus(env, o, 2, 'auto', 'تأكيد تلقائي بعد 10 دقائق');
@@ -195,18 +198,19 @@ async function createOrder(env, b, sess) {
   if (existing) return J({ ok: true, code: b.code, duplicate: true });
 
   /* الأسعار والخصومات والتوصيل تُحسب على الخادم لا من المتصفح */
-  const qt = await quote(env, { items: raw, codes: [].concat(b.codes || [], b.dc || []), ph: phone, pay: b.pay, city });
+  const qt = await quote(env, { items: raw, codes: [].concat(b.codes || [], b.dc || []), ph: phone, pay: b.pay, city, cid: sess.id, redeem: b.redeem });
   if (qt.error) return J({ error: qt.error }, 400);
   const items = qt.lines, subtotal = qt.subtotal, discount = qt.discount, shipping = qt.shipping, total = qt.total;
   const usedCodes = qt.applied.map(a => a.code), payM = qt.pay;
 
-  const tk = await takeStock(env, items, t => tgNotify(env, t), b.code); if (tk.error) return J({ error: tk.error }, 409);
+  if (qt.pts > 0 && !(await redeem(env, sess.id, qt.pts, b.code))) return J({ error: 'رصيد النقاط غير كافٍ' }, 409);
+  const tk = await takeStock(env, items, t => tgNotify(env, t), b.code); if (tk.error) { if (qt.pts > 0) await undoRedeem(env, sess.id, b.code); return J({ error: tk.error }, 409); }
   const seq = await env.DB.prepare("UPDATE counters SET value=value+1 WHERE name='order_seq' RETURNING value").first();
   const id = seq.value, t = now();
 
   /* العميل = صاحب الجلسة دائماً (لا طلب بلا حساب). الهاتف يُربط بالحساب إن كان حراً */
   const other = await env.DB.prepare('SELECT * FROM customers WHERE phone=? AND id<>?').bind(phone, sess.id).first();
-  if (other) return J({ error: 'هذا الرقم مرتبط بحساب آخر. سجّل الدخول عبر الهاتف (واتساب) بهذا الرقم' }, 409);
+  if (other) { if (qt.pts > 0) await undoRedeem(env, sess.id, b.code); return J({ error: 'هذا الرقم مرتبط بحساب آخر. سجّل الدخول عبر الهاتف (واتساب) بهذا الرقم' }, 409); }
   const firstOrder = !sess.orders_count;
   const customerId = sess.id; let welcome = '';
   await env.DB.prepare('UPDATE customers SET phone=COALESCE(NULLIF(phone,\'\'),?),name=?,city=?,area=?,landmark=?,orders_count=orders_count+1,spent=spent+?,last_order_at=?,last_seen_at=?,first_order_at=COALESCE(first_order_at,?) WHERE id=?')
@@ -220,8 +224,9 @@ async function createOrder(env, b, sess) {
     env.DB.prepare('INSERT INTO order_events(order_code,status,at,actor,note) VALUES(?,?,?,?,?)').bind(b.code, 1, t, 'customer', ''),
     ...usedCodes.map(c => env.DB.prepare('UPDATE discount_codes SET used=used+1 WHERE code=?').bind(c)),
     ...qt.applied.map(a => env.DB.prepare('INSERT INTO discount_uses(code,phone,order_code,amount,at) VALUES(?,?,?,?,?)').bind(a.code, phone, b.code, a.amount || 0, t)),
-    env.DB.prepare('UPDATE orders SET shipping=?,free_shipping=?,stock_taken=? WHERE code=?').bind(shipping, qt.freeShip ? 1 : 0, tk.taken ? 1 : 0, b.code),
+    env.DB.prepare('UPDATE orders SET shipping=?,free_shipping=?,stock_taken=?,pts_used=?,pts_value=? WHERE code=?').bind(shipping, qt.freeShip ? 1 : 0, tk.taken ? 1 : 0, qt.pts || 0, qt.ptsValue || 0, b.code),
   ]);
+  if (qt.pts > 0) await settleRedeem(env, sess.id, qt.pts);
   await queueNote(env, phone, 'order_received', { code: b.code, total }, customerId);
 
   const lines = items.map(i => `• ${i.q}× ${escH(i.n)} (${escH(i.c)})${i.cc ? ' 🎨 ' + escH(i.cc) : ''} — ${money(i.p * i.q)}`).join('\n');
@@ -273,6 +278,7 @@ async function handle(request, rawEnv, ctx) {
       { const er = await extraRoutes({ env, request, url, p, M, body, authed, ctx, tg: t => tgNotify(env, t), sess: (p.startsWith('/chat/') ? await sessionCustomer(env, request) : null) }); if (er) return er; }
       { const tr = await tgRoutes({ env, request, url, p, M, body, authed, deps: { setStatus } }); if (tr) return tr; }
       { const orr = await opsRoutes({ env, request, url, p, M, body, authed, setStatus, tg: t => tgNotify(env, t) }); if (orr) return orr; }
+      { const lr = await loyaltyRoutes({ env, request, p, M, body, authed }); if (lr) return lr; }
       { const sr = await shopRoutes({ env, request, p, M, body, url }, authed); if (sr) return sr; }
       { const ar = await authRoutes({ env, request, url, p, M, body, ctx }); if (ar) return ar; }
 

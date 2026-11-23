@@ -104,7 +104,7 @@
   }
   let dirty = false;
   document.addEventListener('submit', async e => {
-    const f = e.target; if (!f || !f.closest || !f.closest('#ab') || f.id === 'lf' || /^(tg|cpf)/.test(f.dataset.f || f.id || '')) return;
+    const f = e.target; if (!f || !f.closest || !f.closest('#ab') || f.id === 'lf' || /^(tg|cpf|lo)/.test(f.dataset.f || f.id || '')) return;
     dirty = false;
     if (f.dataset.cf) { delete f.dataset.cf; return; }
     if (!CONFIRM_GROUPS.includes(curGroup())) return;

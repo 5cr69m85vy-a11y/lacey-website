@@ -166,3 +166,9 @@ npm test      # يتطلب Node 22
 - بوت الطلبات: إشعار كامل لكل المعرّفات الفعّالة وأزرار (تأكيد، رفض، قيد التجهيز، شحن، تسليم، تفاصيل). كل إجراء يُتحقق منه في الخادم (المعرّف + الصلاحية + انتقال حالة ذرّي)، ويُسجَّل مَن نفّذ ومتى، ولا يمس حالة الدفع. التسليم لا يُقبل إلا بعد «في الطريق».
 - بوت الدعم: إشعار لكل المعرّفات الفعّالة عند طلب دعم جديد / رد الزبون / تصعيد (تحويل بين الأقسام) / «زبون ينتظر» (تذكير بعد N دقيقة عبر الـ cron). الأزرار: فتح المحادثة (`/support#chat=ID`)، استلمها، قيد المعالجة، تم الحل. «استلمها» تتطلب ربط المعرّف بحساب موظف فعّال ضمن قسم المحادثة. صلاحيات `dept_service` / `dept_routine` تقيّد المعرّف بقسم معيّن. المحادثات تبقى في نفس قاعدة بيانات الموقع.
 - بوت التقارير (`worker/reports.js`): يومي/أسبوعي (الأسبوع الماضي السبت–الجمعة)/شهري/سنوي + `/sales /orders /customers /invoices`. توقيت بغداد. المبيعات = قيمة المنتجات قبل الخصم دون الملغاة؛ صافي المبيعات = المبيعات − الخصومات. الإرسال التلقائي بوقت ومستلمين مستقلين لكل تقرير، مع حماية من التكرار (cron كل دقيقة). الأوامر لمعرّفات «عرض» فقط.
+
+## Loyalty points (نقاط الوفاء)
+- `worker/loyalty.js`; ledger `points_ledger` (append-only, signed), unique `(order_code, kind)` ⇒ earn/redeem/restore/reverse happen once per order.
+- Inert until admin enables it **and** sets per-unit points + point value (no assumed financial values). Earn on delivery (status 5) on goods after discounts; cancel restores redeemed and reverses earned (clamped ≥ 0); expiry via cron (FIFO lots, default 12 months).
+- Redemption is validated server-side in `/quote` and `/order` (balance guard inside the INSERT; cap % of order; minimum).
+- Admin: Marketing → Loyalty (settings, stats, customer lookup, ± adjustment with mandatory reason, audited). Customer: Account → Points, cart "Use points".

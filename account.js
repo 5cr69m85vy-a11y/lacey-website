@@ -61,7 +61,8 @@
   const close = silent => { ov.classList.remove('on', 'pgv'); if (silent !== true && window.lcBack) lcBack('account'); };
   window.accountShow = t => { ov.classList.add('pgv'); open(t); };
   window.accountHide = () => close(true);
-  const SLUG = { p: '', o: 'orders', r: 'receipts', n: 'alerts' };
+  const SLUG = { p: '', o: 'orders', r: 'receipts', n: 'alerts', w: 'points' };
+  let LPd = 0; const lpLoad = () => { if (LPd || !me) return; LPd = 1; call('/me/points').then(j => { window.LP = j; if (document.getElementById('acl') || document.getElementById('ab') === null) draw(); }).catch(() => {}); };
   window.openAccount = open;
   ov.addEventListener('click', async e => {
     if (e.target === ov) return close();
@@ -122,8 +123,8 @@
       if (mode == 'gg') gsi();
       return;
     }
-    const tabs = [['p', T('حسابي', 'Profile')], ['o', T('طلباتي', 'Orders')], ['r', T('الإيصالات', 'Receipts')], ['n', T('الإشعارات', 'Alerts')]].map(([k, n]) => `<button data-x="tab" data-v="${k}" class="${tab == k ? 'on' : ''}">${n}</button>`).join('');
-    let c = '';
+    const tabs = [['p', T('حسابي', 'Profile')], ['o', T('طلباتي', 'Orders')], ['r', T('الإيصالات', 'Receipts')], ['n', T('الإشعارات', 'Alerts')]].concat(window.LP && LP.live ? [['w', T('نقاطي', 'Points')]] : []).map(([k, n]) => `<button data-x="tab" data-v="${k}" class="${tab == k ? 'on' : ''}">${n}</button>`).join('');
+    lpLoad(); let c = '';
     if (tab == 'p') c = `<form id="af-prof"><input name="name" value="${E(me.name)}" placeholder="${T('الاسم', 'Name')}" required><input name="city" value="${E(me.city)}" placeholder="${T('المحافظة', 'City')}"><input name="area" value="${E(me.area)}" placeholder="${T('المنطقة', 'Area')}"><input name="lm" value="${E(me.lm)}" placeholder="${T('أقرب نقطة دالة', 'Landmark')}">${me.birth ? `<small>${T('تاريخ الميلاد', 'Birth date')}: ${E(me.birth)} · ${me.age} ${T('سنة', 'y')}</small>` : `<div class="dob" style="background:#fff4d6;padding:10px;border-radius:12px"><b>${T('أضف تاريخ ميلادك لتتمكن من الطلب', 'Add your birth date to place orders')}</b>${dobField(true, true)}</div>`}<label class="dob">${T('نوع بشرتك (يساعد في صفحة روتين)', 'Skin type (used by Routine)')}<select name="skin"><option value="">—</option>${SK.map(([k, n, en]) => `<option value="${k}" ${me.skin == k ? 'selected' : ''}>${T(n, en)}</option>`).join('')}</select></label><small>${E(me.ph || '')} ${E(me.email || '')}${me.ph ? '' : ' — ' + T('لم يُربط رقم واتساب بعد', 'no WhatsApp number linked')}</small><button class="btn">${T('حفظ', 'Save')}</button>${err}</form>${me.ph ? '' : phoneForm()}<button class="ln" data-x="out">${T('تسجيل الخروج', 'Sign out')}</button>`;
     else c = `${tab == 'o' ? `<a class="ln" href="/tracking">${lcIco('box')} ${T('تتبع طلب برمز الطلب', 'Track an order by code')}</a>` : ''}<div id="acl"><p class="em">…</p></div>`;
     const tiles = `<div class="tiles2"><a href="/help"><b>${lcIco('headset')} ${T('خدمة الزبائن', 'Customer service')}</b><small>${T('محادثة وأسئلة شائعة', 'Chat & FAQ')}</small></a><a href="/routine/support"><b>${lcIco('flower')} ${T('دعم روتين', 'Routine support')}</b><small>${T('استشارة بشرة', 'Skin advice')}</small></a><a href="/tracking"><b>${lcIco('box')} ${T('تتبع الطلب', 'Track order')}</b><small>${T('برمز الطلب', 'By order code')}</small></a><a href="/preferences"><b>${lcIco('gear')} ${T('الإعدادات', 'Settings')}</b><small>${T('اللغة والخصوصية', 'Language & privacy')}</small></a></div>`;
@@ -195,6 +196,11 @@
           ${r.discount ? `<div class="rcp-r"><span>${T('الخصم', 'Discount')}</span><b>− ${num(r.discount)}</b></div>` : ''}${r.shipping ? `<div class="rcp-r"><span>${T('التوصيل', 'Delivery')}</span><b>${num(r.shipping)}</b></div>` : ''}
           <div class="rcp-t"><span>${T('المجموع', 'Total')}</span><b>${num(r.total)} ${T('د.ع', 'IQD')}</b></div>${r.name || r.addr ? `<small class="rcp-a">${E(r.name || '')}${r.addr ? ' — ' + E(r.addr) : ''}</small>` : ''}
           <div class="rcp-b"><button type="button" class="ln" data-x="rcopy" data-v="${E(r.number)}">${T('نسخ رقم الإيصال', 'Copy receipt no.')}</button><button type="button" class="ln" data-x="rprint" data-v="${E(r.number)}">${T('طباعة', 'Print')}</button></div></div>`).join('') : `<p class="em nt-empty">${lcIco('receipt')}<br>${T('تصدر الإيصالات بعد تأكيد الطلب', 'Receipts are issued once an order is confirmed')}</p>`;
+      } else if (tab == 'w') {
+        const j = await call('/me/points'); window.LP = j; const KL = { earn: T('نقاط طلب', 'Earned'), redeem: T('استبدال', 'Redeemed'), restore: T('إرجاع', 'Restored'), reverse: T('عكس', 'Reversed'), expire: T('انتهاء', 'Expired'), adjust: T('تعديل', 'Adjustment') };
+        el.innerHTML = `<div class="pcard" style="display:block"><small>LACEY SKIN · BEAUTY REWARDS</small><h3 style="margin:6px 0">${num(j.balance)} ${T('نقطة', 'points')}</h3><small>${T('قيمتها', 'Worth')} ${num(j.balance * j.val)} ${T('د.ع', 'IQD')} · ${T('رقم العضو', 'Member ID')}: ${E(j.id)}</small>${j.expiring ? `<p><small>⏳ ${num(j.expiring)} ${T('نقطة تنتهي خلال 60 يوماً', 'points expire within 60 days')}</small></p>` : ''}</div>
+          <p><small>${T('تكسب', 'Earn')} ${num(j.per)} ${T('نقطة لكل', 'points per')} ${num(j.unit)} ${T('د.ع بعد استلام الطلب. أقل استبدال', 'IQD after delivery. Minimum redemption')} ${num(j.min)}${j.exp ? ' · ' + T('الصلاحية', 'Validity') + ' ' + j.exp + ' ' + T('شهراً', 'months') : ''}</small></p>
+          ${j.history.length ? j.history.map(h => `<div class="rcp-r"><span>${KL[h.kind] || h.kind}${h.order_code ? ' · ' + E(h.order_code) : ''}<br><small>${dt(h.at)}${h.note ? ' · ' + E(h.note) : ''}</small></span><b>${h.points > 0 ? '+' : ''}${num(h.points)}</b></div>`).join('') : `<p class="em">${T('لا توجد حركات بعد', 'No activity yet')}</p>`}`;
       } else if (tab == 'n') {
         const j = await call('/me/notifications'); nItems = j.items; drawNotifs(el); bellDraw(nItems);
         if (nItems[0]) { lastN = Math.max(lastN, nItems[0].t); ls.set('lc_ln', lastN); }

@@ -1,6 +1,8 @@
 /* shop.js — تسعير السلة على الخادم: منتجات + بوكسات + أكواد خصم متعددة + توصيل مجاني */
 import { audit, limit } from './guard.js';
 import { J, now, jp, cfgOf } from './lib.js';
+import { pointsQuote } from './loyalty.js';
+import { sessionCustomer } from './auth.js';
 import { feeFor, checkStock } from './ops.js';
 
 export async function priceLines(env, raw) {
@@ -73,10 +75,11 @@ export async function quote(env, b) {
   /* خصومات تلقائية: تُطبَّق بلا كود، وتخضع لنفس قاعدة الجمع، ولا تُعرض كمرفوضة */
   const autos = (await env.DB.prepare('SELECT * FROM discount_codes WHERE autoapply=1 AND active=1 ORDER BY created_at').all()).results || [];
   for (const r of autos) { if (seen.has(r.code)) continue; seen.add(r.code); await apply(r.code, r, true); }
+  const ptsq = await pointsQuote(env, b.cid, +b.redeem || 0, subtotal - disc);
   const shipping = free ? 0 : fee;
   const pays = (cfg.pm && cfg.pm.length ? cfg.pm : [{ id: 'cod', on: 1 }]).filter(x => x.on !== 0).map(x => x.id);
   const pay = pays.includes(b.pay) ? b.pay : 'cod';
-  return { lines, subtotal, applied, rejected, discount: disc, shipping, freeShip: free, total: subtotal - disc + shipping, pay };
+  return { lines, subtotal, applied, rejected, discount: disc, shipping, freeShip: free, total: subtotal - disc - ptsq.value + shipping, pay, pts: ptsq.pts, ptsValue: ptsq.value, ptsError: ptsq.error };
 }
 
 /* مسارات: /quote (عام) و /codes (أدمن) */
@@ -85,9 +88,9 @@ export async function shopRoutes(c, authed) {
   const { env, p, M, body, url } = c;
   if (p === '/quote' && M === 'POST') {
     if (request) { const lim = await limit(c.env, request, 'quote', 120, 10 * 60e3); if (lim) return lim; }
-    const b = await body(); const q = await quote(env, b);
+    const b = await body(); const me = b.redeem ? await sessionCustomer(env, request) : null; const q = await quote(env, { ...b, cid: me ? me.id : 0 });
     if (q.error) return J({ error: q.error }, 400);
-    return J({ subtotal: q.subtotal, applied: q.applied, rejected: q.rejected, discount: q.discount, shipping: q.shipping, freeShip: q.freeShip, total: q.total });
+    return J({ subtotal: q.subtotal, applied: q.applied, rejected: q.rejected, discount: q.discount, shipping: q.shipping, freeShip: q.freeShip, total: q.total, pts: q.pts, ptsValue: q.ptsValue, ptsError: q.ptsError });
   }
   if (p === '/codes') {
     if (!authed) return J({ error: 'unauthorized' }, 401);
