@@ -5,9 +5,9 @@
   const E = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const $1 = s => document.querySelector(s);
   const ls = { get: k => { try { return localStorage.getItem(k) } catch (e) { return null } }, set: (k, v) => { try { localStorage.setItem(k, v) } catch (e) {} } };
-  const PAGES = { '': 'home', categories: 'categories', offers: 'offers', routine: 'routine', help: 'help', tracking: 'tracking', preferences: 'preferences', p: 'product', search: 'search', brands: 'brands', cart: 'cart', checkout: 'checkout', account: 'account', support: 'support' };
-  const TITLES = { home: 'Lacey Skincare', categories: 'الفئات | Lacey', offers: 'عروضنا | Lacey', routine: 'اكتشف روتينك | Lacey', cart: 'السلة | Lacey', checkout: 'إتمام الطلب | Lacey', account: 'حسابي | Lacey', support: 'الدعم | Lacey', product: 'Lacey', search: 'البحث | Lacey', brands: 'البراندات | Lacey', help: 'مركز المساعدة | Lacey', tracking: 'تتبع الطلب | Lacey', preferences: 'الإعدادات | Lacey' };
-  const OVERLAY = ['cart', 'checkout', 'account'];
+  const PAGES = { '': 'home', categories: 'categories', offers: 'offers', routine: 'routine', help: 'help', tracking: 'tracking', preferences: 'preferences', p: 'product', search: 'search', brands: 'brands', cart: 'cart', checkout: 'checkout', account: 'account', notifications: 'notifications', support: 'support' };
+  const TITLES = { home: 'Lacey Skincare', categories: 'الفئات | Lacey', offers: 'عروضنا | Lacey', routine: 'اكتشف روتينك | Lacey', cart: 'السلة | Lacey', checkout: 'إتمام الطلب | Lacey', account: 'حسابي | Lacey', notifications: 'الإشعارات | Lacey', support: 'الدعم | Lacey', product: 'Lacey', search: 'البحث | Lacey', brands: 'البراندات | Lacey', help: 'مركز المساعدة | Lacey', tracking: 'تتبع الطلب | Lacey', preferences: 'الإعدادات | Lacey' };
+  const OVERLAY = ['cart', 'checkout', 'account', 'notifications'];
   const hdr = document.getElementById('hlp'); if (hdr) hdr.addEventListener('click', e => { e.preventDefault(); lcNav('/help'); });
   let cur = '', prevPath = '/', bn = null, navDepth = 0; const scrolls = {};
 
@@ -35,7 +35,7 @@
     scrolls[location.pathname + location.search] = scrollY;
     if (push) navDepth++; else if (!replace && navDepth > 0) navDepth--;
     if ((was === 'routine' || was === 'help') && window.LCChat && page !== was) LCChat.unmount();
-    if (was === 'account' && page !== 'account' && window.accountHide) accountHide();
+    if ((was === 'account' || was === 'notifications') && page !== was && window.accountHide) accountHide();
     if (was && !OVERLAY.includes(was) && was !== 'support' && was !== page) prevPath = location.pathname + location.search;
     if ((was === 'cart' || was === 'checkout') && page !== 'cart' && page !== 'checkout') closeCart();
     const full = u.pathname + u.search + (u.hash || '');
@@ -48,6 +48,8 @@
     if (was !== page) { const b = document.body; b.classList.remove('pgan'); void b.offsetWidth; b.classList.add('pgan'); }
     if (bn) { bn.querySelectorAll('a[data-p]').forEach(a => { const on = a.dataset.p === 'orders' ? (page === 'tracking' || (page === 'account' && sub === 'orders')) : (a.dataset.p === page || (page === 'checkout' && a.dataset.p === 'cart')); a.classList.toggle('on', on); on ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'); }); const ac = document.getElementById('accb'); if (ac) ac.classList.toggle('cur', page === 'account' && sub !== 'orders'); }
     if (page === 'cart' || page === 'checkout') { try { view = page === 'cart' ? 'bag' : 'form'; rc(); const cv = $1('#cv'); cv.classList.add('on', 'pgv'); } catch (e) { console.error(e); } }
+    if (page === 'account' && sub === 'alerts') return show('/notifications', false, true);
+    if (page === 'notifications' && window.accountShow) accountShow('n', true);
     if (page === 'account' && window.accountShow) accountShow({ '': 'p', orders: 'o', receipts: 'r', alerts: 'n' }[sub] || 'p');
     if (page === 'routine') renderRoutine(sub, u);
     if (page === 'help') renderHelp(sub);

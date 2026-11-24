@@ -506,3 +506,5 @@ body.pgan>section:not([hidden]):not(.hid),body.pgan #cv.on{animation:pgin .28s v
 .pf-out{margin-top:12px;color:#b3402f}.sec{margin:22px 2px 0;font-size:13px;opacity:.6;letter-spacing:.04em}
 .acT{display:grid;grid-template-columns:repeat(2,1fr)}.acT button{flex:none;min-width:0}.acT button:last-child:nth-child(odd){grid-column:1/-1}
 @media(min-width:700px){.acT{grid-template-columns:repeat(auto-fit,minmax(110px,1fr))}.acT button:last-child:nth-child(odd){grid-column:auto}}
+
+.ntt{display:flex;align-items:center;gap:8px;margin:2px 0 14px}

@@ -52,14 +52,15 @@
   hb.addEventListener('click', () => window.lcNav ? lcNav('/account') : open());
   const bell = document.createElement('button'); bell.id = 'bellb'; bell.className = 'cb2'; bell.setAttribute('aria-label', 'Notifications'); bell.style.display = 'none';
   bell.innerHTML = '<svg class="ic" viewBox="0 0 24 24"><path d="M6 17V11a6 6 0 0112 0v6l2 2H4z"/><path d="M10 21h4"/></svg><i id="belln">0</i>'; hb.parentNode.insertBefore(bell, hb);
-  bell.addEventListener('click', () => { window.lcNav ? lcNav('/account/alerts') : open('n'); });
+  bell.addEventListener('click', () => { window.lcNav ? lcNav('/notifications') : open('n'); });
   let bellSeen = +ls.get('lc_bell') || 0;
   function bellDraw(items) { bell.style.display = me ? '' : 'none'; if (!me) return; const n = (items || []).filter(i => i.unread).length, b = document.getElementById('belln'); if (b) { b.textContent = n > 9 ? '9+' : n; b.style.display = n ? 'flex' : 'none'; } }
   window.bellDraw = bellDraw;
   const body = () => document.getElementById('acb');
-  const open = t => { if (t) tab = t; ov.classList.add('on'); draw(); if (me) refresh(); };
-  const close = silent => { ov.classList.remove('on', 'pgv'); if (silent !== true && window.lcBack) lcBack('account'); };
-  window.accountShow = t => { ov.classList.add('pgv'); open(t); };
+  let solo = false;
+  const open = (t, s) => { solo = !!s; if (t) tab = t; ov.classList.add('on'); draw(); if (me) refresh(); };
+  const close = silent => { ov.classList.remove('on', 'pgv'); if (silent !== true && window.lcBack) lcBack(solo ? 'notifications' : 'account'); };
+  window.accountShow = (t, s) => { ov.classList.add('pgv'); open(t, s); };
   window.accountHide = () => close(true);
   const SLUG = { p: '', o: 'orders', r: 'receipts', n: 'alerts', w: 'points' };
   let LPd = 0; const lpLoad = () => { if (LPd || !me) return; LPd = 1; call('/me/points').then(j => { window.LP = j; if (document.getElementById('acl') || document.getElementById('ab') === null) draw(); }).catch(() => {}); };
@@ -82,6 +83,7 @@
     if (x === 'nopen') { const id = +el.dataset.id, n = nItems.find(z => z.id === id), href = el.dataset.href; if (n && n.unread) { n.unread = false; bellDraw(nItems); nAct('/me/notifications/read', { id }); } if (href) { if (window.lcNav) lcNav(href); } else drawNotifs(); return; }
     if (x === 'mode') { mode = v; step = 0; return draw(); }
     if (x === 'sub') { sub = v; return draw(); }
+    if (x === 'tab' && v === 'n' && window.lcNav) return lcNav('/notifications');
     if (x === 'tab') { tab = v; draw(); if (window.lcUrl) lcUrl('/account' + (SLUG[v] ? '/' + SLUG[v] : '')); return load(); }
     if (x === 'out') { try { await call('/auth/logout', {}) } catch (_) {} setSession('', null); tab = 'p'; return draw(); }
     if (x === 'trk') { const box = document.getElementById('acT' + v); if (box && typeof trkMount == 'function') { box.innerHTML = ''; trkMount(v, (me && me.ph) || '', '#acT' + v); } return; }
@@ -123,6 +125,7 @@
       if (mode == 'gg') gsi();
       return;
     }
+    if (solo) { tab = 'n'; b.innerHTML = `${head.replace('class="acx"', 'class="acx"')}<h3 class="ntt">${lcIco('bell')} ${T('الإشعارات', 'Notifications')}</h3><div id="acl"><p class="em">…</p></div>`; return; }
     const tabs = [['p', T('حسابي', 'Profile')], ['o', T('طلباتي', 'Orders')], ['r', T('الإيصالات', 'Receipts')], ['n', T('الإشعارات', 'Alerts')]].concat(window.LP && LP.live ? [['w', T('نقاطي', 'Points')]] : []).map(([k, n]) => `<button data-x="tab" data-v="${k}" class="${tab == k ? 'on' : ''}">${n}</button>`).join('');
     lpLoad(); let c = '';
     if (tab == 'p') c = `<form id="af-prof" class="pf"><div class="pfs"><h4>${T('المعلومات الشخصية', 'Personal info')}</h4><input name="name" value="${E(me.name)}" placeholder="${T('الاسم', 'Name')}" required>${me.birth ? `<small>${T('تاريخ الميلاد', 'Birth date')}: ${E(me.birth)} · ${me.age} ${T('سنة', 'y')}</small>` : `<div class="dob" style="background:#fff4d6;padding:10px;border-radius:12px"><b>${T('أضف تاريخ ميلادك لتتمكن من الطلب', 'Add your birth date to place orders')}</b>${dobField(true, true)}</div>`}<small>${E(me.ph || '')} ${E(me.email || '')}${me.ph ? '' : ' — ' + T('لم يُربط رقم واتساب بعد', 'no WhatsApp number linked')}</small></div><div class="pfs"><h4>${T('عنوان التوصيل', 'Delivery address')}</h4><input name="city" value="${E(me.city)}" placeholder="${T('المحافظة', 'City')}"><input name="area" value="${E(me.area)}" placeholder="${T('المنطقة', 'Area')}"><input name="lm" value="${E(me.lm)}" placeholder="${T('أقرب نقطة دالة', 'Landmark')}"></div><div class="pfs"><h4>${T('البشرة', 'Skin')}</h4><label class="dob">${T('نوع بشرتك (يساعد في صفحة روتين)', 'Skin type (used by Routine)')}<select name="skin"><option value="">—</option>${SK.map(([k, n, en]) => `<option value="${k}" ${me.skin == k ? 'selected' : ''}>${T(n, en)}</option>`).join('')}</select></label></div><button class="btn">${T('حفظ', 'Save')}</button>${err}</form>${me.ph ? '' : phoneForm()}<button class="ln pf-out" data-x="out">${T('تسجيل الخروج', 'Sign out')}</button>`;
