@@ -499,3 +499,10 @@ body.pgan>section:not([hidden]):not(.hid),body.pgan #cv.on{animation:pgin .28s v
 .sxp{padding:14px;border:1px solid var(--mist,#dde8ea);border-radius:16px;background:#fff}.sxb{display:block;background:none;border:0;padding:0 0 10px;font:inherit;font-size:13px;color:inherit;opacity:.7;cursor:pointer}
 .sxp .stg-b{grid-template-columns:1fr}}
 .sxp header,.sxp h2{background:none!important}.sxp h2{border:0!important;padding:0!important;display:block}.sxp h2:before,.sxp h2:after{display:none!important}
+
+/* account layout: header → tab grid → content → quick services */
+.acT button{padding:10px 6px;border-radius:14px}
+.pf{display:grid;gap:12px}.pfs{display:grid;gap:8px;background:#fff;border:1px solid #e5eeee;border-radius:16px;padding:14px}.pfs h4{margin:0 0 2px;font-size:13px;letter-spacing:.02em;opacity:.7}
+.pf-out{margin-top:12px;color:#b3402f}.sec{margin:22px 2px 0;font-size:13px;opacity:.6;letter-spacing:.04em}
+.acT{display:grid;grid-template-columns:repeat(2,1fr)}.acT button{flex:none;min-width:0}.acT button:last-child:nth-child(odd){grid-column:1/-1}
+@media(min-width:700px){.acT{grid-template-columns:repeat(auto-fit,minmax(110px,1fr))}.acT button:last-child:nth-child(odd){grid-column:auto}}
