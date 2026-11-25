@@ -27,7 +27,7 @@ export function period(kind, t = now(), auto = false, arg = '') {
   return { a, b: auto ? b : Math.min(b, t + 1), label: `سنة ${y}${auto ? '' : ' (حتى الآن)'}`, prev: { a: monthStart(y - 1, 0), b: a } };
 }
 
-async function maps(env) {
+export async function maps(env) {
   const prods = (await env.DB.prepare('SELECT code,name,category,data FROM products').all()).results, cfg = await env.DB.prepare("SELECT value FROM settings WHERE key='config'").first();
   const brands = Object.fromEntries(((jp(cfg && cfg.value, {}).br) || []).map(b => [String(b.id), b.n || b.name || '']));
   const pm = {}; for (const r of prods) { const d = jp(r.data, {}); pm[r.code] = { n: r.name, k: r.category || d.k || '', br: brands[String(d.br)] || '' }; }

@@ -176,7 +176,7 @@
 
   /* ---------- الإحصائيات ---------- */
   let sr = 'day';
-  TB.st = () => { setTimeout(loadSt, 0); return `<div class="act2"><button class="btn g" data-a="srg" data-c="day">يومي</button><button class="btn g" data-a="srg" data-c="week">أسبوعي</button><button class="btn g" data-a="srg" data-c="month">شهري</button></div><div id="stb"><p class="em">جارٍ التحميل…</p></div>`; };
+  TB.st = () => { setTimeout(() => { loadSt(); loadRep(); }, 0); return `<div class="act2"><button class="btn g" data-a="srg" data-c="day">يومي</button><button class="btn g" data-a="srg" data-c="week">أسبوعي</button><button class="btn g" data-a="srg" data-c="month">شهري</button></div><div id="stb"><p class="em">جارٍ التحميل…</p></div>${repHtml()}`; };
   A.srg = c => { sr = c; loadSt(); };
   async function loadSt() {
     const el = $('#stb'); if (!el) return; let s;
@@ -186,6 +186,21 @@
       ${up('الحسابات الجديدة', barSvg(s.accounts, 'n', 'var(--ac)'))}${up('عدد الطلبات', barSvg(s.orders, 'n', 'var(--gold)'))}${up('الإيرادات', barSvg(s.orders, 'rev', 'var(--ink)'))}
       ${up('الأكثر مبيعاً', s.top.length ? `<table class="tb"><tr><th>المنتج</th><th>الكمية</th><th>المبيعات</th></tr>${s.top.map(t => `<tr><td>${esc(t.n)}</td><td>${t.q}</td><td>${N(t.rev)}</td></tr>`).join('')}</table>` : '<p class="em">لا مبيعات بعد</p>')}`;
   }
+
+  /* ---------- تقارير الأعمال (تحت الإحصائيات): فلتر تاريخ + جداول + CSV ---------- */
+  let RP = { from: '', to: '' };
+  const repHtml = () => `<div id="rpx">${up('تقارير الأعمال', `<form id="rpf" class="fm"><label>من<input type="date" name="from" value="${RP.from}"></label><label>إلى<input type="date" name="to" value="${RP.to}"></label><button class="btn">عرض</button></form><div class="act2"><button class="btn g" data-a="rpr" data-c="7">7 أيام</button><button class="btn g" data-a="rpr" data-c="30">30 يوماً</button><button class="btn g" data-a="rpr" data-c="90">90 يوماً</button><button class="btn g" data-a="rpr" data-c="365">سنة</button></div><div id="rpb"><p class="em">اختر الفترة…</p></div>`)}</div>`;
+  const rpDays = n => { const t = d => new Date(d).toISOString().slice(0, 10), now = Date.now() + 3 * 36e5; RP = { from: t(now - (n - 1) * 864e5), to: t(now) }; };
+  async function loadRep() {
+    const el = $('#rpb'); if (!el) return;
+    if (!RP.from) rpDays(30);
+    try { const j = await J(`/adm/report?from=${RP.from}&to=${RP.to}`); const N0 = x => typeof x == 'number' ? Number(x).toLocaleString('en') : esc(x);
+      el.innerHTML = `<p class="em">الفترة: ${j.from} → ${j.to}</p>` + Object.entries(j.reports).map(([k, r]) => `<h4 style="margin:16px 0 6px">${r.title} <button class="btn g" data-a="rpc" data-c="${k}">CSV</button></h4>${r.rows.length ? `<table class="tb"><tr>${r.cols.map(c => `<th>${c}</th>`).join('')}</tr>${r.rows.map(x => `<tr>${x.map((v, i) => `<td>${N0(v)}</td>`).join('')}</tr>`).join('')}</table>` : '<p class="em">لا بيانات في هذه الفترة</p>'}`).join('');
+    } catch (e) { el.innerHTML = '<p class="em">' + esc(e.message || 'تعذر التحميل') + '</p>'; }
+  }
+  H.rpf = v => { RP = { from: v.from, to: v.to }; loadRep(); };
+  A.rpr = c => { rpDays(+c); const f = $('#rpf'); if (f) { f.elements.from.value = RP.from; f.elements.to.value = RP.to; } loadRep(); };
+  A.rpc = async c => { try { const r = await fetch(API() + `/adm/report?from=${RP.from}&to=${RP.to}&csv=${c}`, { headers: authH() }); if (!r.ok) throw new Error('تعذر التصدير'); const b = await r.blob(), a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = `lacey-${c}-${RP.from}_${RP.to}.csv`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000); } catch (e) { toast(e.message); } };
 
   /* ---------- رسائل واتساب التسويقية ---------- */
   TB.wm = () => { setTimeout(loadCamps, 0); return `<p class="em">يُلحق رابط المتجر تلقائياً في نهاية كل رسالة. الرسائل خارج نافذة الـ24 ساعة تتطلب قالب promo معتمداً من Meta (راجع README).</p>

@@ -45,13 +45,13 @@ export const botReady = async (env, bot) => { const b = await getBot(env, bot); 
 
 /* إرسال لكل المستلمين الفعّالين في هذا البوت فقط (قوائم البوتات مستقلة) */
 const deptOk = (r, dept) => { const p = jp(r.perms, []), has = p.includes('dept_service') || p.includes('dept_routine'); return !has || p.includes('dept_' + dept); };   // بلا تحديد = كل الأقسام
-export async function tgSend(env, bot, text, { keyboard, kind = 'notify', only, perm, dept } = {}) {
+export async function tgSend(env, bot, text, { keyboard, kind = 'notify', only, perm, dept, preview } = {}) {
   const b = await getBot(env, bot); if (!b || !b.enabled || !b.token) return [];
   let rs = await recipients(env, bot); if (only) rs = rs.filter(r => only.includes(r.chat_id));
   if (perm) rs = rs.filter(r => jp(r.perms, []).includes(perm));
   if (dept) rs = rs.filter(r => deptOk(r, dept));
   return (await Promise.all(rs.map(async r => {
-    const res = await tgApi(b.token, 'sendMessage', { chat_id: r.chat_id, text: text.slice(0, 4000), parse_mode: 'HTML', disable_web_page_preview: true, ...(keyboard ? { reply_markup: { inline_keyboard: keyboard } } : {}) });
+    const res = await tgApi(b.token, 'sendMessage', { chat_id: r.chat_id, text: text.slice(0, 4000), parse_mode: 'HTML', ...(preview ? { link_preview_options: { url: preview, show_above_text: true, prefer_small_media: true } } : { disable_web_page_preview: true }), ...(keyboard ? { reply_markup: { inline_keyboard: keyboard } } : {}) });
     await mark(env, b, r, res, kind);
     return res.ok ? { chat_id: r.chat_id, message_id: res.result.message_id } : null;
   }))).filter(Boolean);
@@ -59,24 +59,28 @@ export async function tgSend(env, bot, text, { keyboard, kind = 'notify', only, 
 
 /* ================= بوت الطلبات ================= */
 const itemsOf = o => { try { return JSON.parse(o.items) || []; } catch (e) { return []; } };
+const PAYL = { cod: 'الدفع عند الاستلام' };
 export function orderText(o, last = '') {
-  const lines = itemsOf(o).map(i => `• ${i.q}× ${esc(i.n)} (${esc(i.c)})${i.cc ? ' 🎨 ' + esc(i.cc) : ''} — ${money(i.p)} = ${money(i.p * i.q)}`).join('\n');
-  return `🛍 <b>طلب #${o.id}</b> — <code>${esc(o.code)}</code>\n🕐 ${fmt(o.created_at)}\n\n👤 ${esc(o.name)}\n📞 ${esc(o.phone)}\n📍 ${esc([o.city, o.area, o.landmark].filter(Boolean).join(' — '))}\n\n${lines}\n\n` +
-    `المجموع الفرعي: ${money(o.subtotal)}\n` + (o.discount ? `🏷 الخصم: −${money(o.discount)}\n` : '') + `🚚 التوصيل: ${o.free_shipping ? 'مجاني' : money(o.shipping)}\n💰 <b>الإجمالي: ${money(o.total)}</b>\n💳 الدفع: ${esc(o.pay_method)}\n\n📌 الحالة: <b>${ST[o.status] || o.status}</b>` + (last ? `\n\n📝 ${last}` : '');
+  const its = itemsOf(o), shown = its.slice(0, 6).map(i => `<blockquote>🧴 <b>${esc(i.n)}</b>${i.cc ? ' 🎨 ' + esc(i.cc) : ''}\nالكمية: ${i.q} · السعر: ${money(i.p)} د.ع</blockquote>`).join('\n') + (its.length > 6 ? `\n… و${its.length - 6} منتجات أخرى` : '');
+  return `🌸 <b>LACEY SKINCARE</b> · <code>#${o.id}</code>\n🛍 <b>${o.status === 1 ? 'طلب جديد وصل' : 'طلب'}</b>\n<i>${o.status === 1 ? 'تم تقديم طلب جديد على المتجر' : 'تفاصيل الطلب'}</i>\n\n${shown}\n\n` +
+    `👤 <b>الزبون:</b> ${esc(o.name)}\n📞 <b>الهاتف:</b> ${esc(o.phone)}\n📍 <b>العنوان:</b> ${esc([o.city, o.area, o.landmark].filter(Boolean).join(' — '))}\n\n🧾 <b>رقم الطلب:</b> <code>${esc(o.code)}</code>\n🗓 <b>التاريخ:</b> ${fmt(o.created_at)}\n💳 <b>الدفع:</b> ${esc(PAYL[o.pay_method] || o.pay_method)}\n━━━━━━━━━━\n` +
+    `المجموع الفرعي: ${money(o.subtotal)}\n` + (o.discount ? `🏷 الخصم: −${money(o.discount)}\n` : '') + `🚚 التوصيل: ${o.free_shipping ? 'مجاني' : money(o.shipping)}\n💰 <b>الإجمالي: ${money(o.total)} د.ع</b>\n\n📌 الحالة: <b>${ST[o.status] || o.status}</b>` + (last ? `\n\n📝 ${last}` : '');
 }
+const siteOrigin = async env => { for (const k of BOTS) { try { const b = await getBot(env, k); if (b && b.webhook) return new URL(b.webhook).origin; } catch (e) {} } return env.STORE_URL || ''; };
+const photoOf = async (env, o) => { const it = itemsOf(o)[0], org = await siteOrigin(env); return it && org ? `${org}/pimg/${encodeURIComponent(it.c)}` : ''; };
 export function orderKeyboard(o, ask) {
   const c = o.code;
-  if (o.status === 0 || o.status === 5) return [[{ text: '📋 تفاصيل الطلب', callback_data: 'o:vw:' + c }]];
+  if (o.status === 0 || o.status === 5) return [[{ text: '📦 عرض الطلب', callback_data: 'o:vw:' + c }]];
   if (ask) return [[{ text: ask === 'rj' ? '✔️ نعم، ارفض الطلب' : '✔️ نعم، تم التوصيل فعلاً', callback_data: `o:${ask}y:${c}` }, { text: '↩️ رجوع', callback_data: 'o:bk:' + c }]];
   return [[{ text: '✅ تأكيد الطلب', callback_data: 'o:cf:' + c }, { text: '❌ رفض الطلب', callback_data: 'o:rj:' + c }],
     [{ text: '🔧 قيد التجهيز', callback_data: 'o:pr:' + c }, { text: '🚚 تم الشحن', callback_data: 'o:sh:' + c }],
-    [{ text: '📦 تم التوصيل', callback_data: 'o:dl:' + c }, { text: '📋 تفاصيل الطلب', callback_data: 'o:vw:' + c }]];
+    [{ text: '📦 تم التوصيل', callback_data: 'o:dl:' + c }, { text: '📦 عرض الطلب', callback_data: 'o:vw:' + c }]];
 }
 const lastNote = async (env, code) => { const e = await env.DB.prepare('SELECT at,actor,status,note FROM order_events WHERE order_code=? ORDER BY id DESC LIMIT 1').bind(code).first(); return e && /^tg:/.test(e.actor) ? `${esc(e.actor.slice(3))} — ${esc(e.note || ST[e.status])} (${fmt(e.at)})` : ''; };
 
 export async function tgOrderNew(env, o) {
   if (!(await botReady(env, 'orders'))) return false;
-  const sent = await tgSend(env, 'orders', orderText(o), { keyboard: orderKeyboard(o), kind: 'order_new' });
+  const sent = await tgSend(env, 'orders', orderText(o), { keyboard: orderKeyboard(o), kind: 'order_new', preview: await photoOf(env, o) });
   if (sent.length) await env.DB.batch(sent.map(s => env.DB.prepare('INSERT OR REPLACE INTO tg_order_msgs(order_code,chat_id,message_id) VALUES(?,?,?)').bind(o.code, s.chat_id, s.message_id)));
   return sent.length > 0;
 }
@@ -86,8 +90,8 @@ export async function tgOrderRefresh(env, code, ask) {
     const b = await getBot(env, 'orders'); if (!b || !b.token) return;
     const msgs = (await env.DB.prepare('SELECT * FROM tg_order_msgs WHERE order_code=?').bind(code).all()).results; if (!msgs.length) return;
     const o = await env.DB.prepare('SELECT * FROM orders WHERE code=?').bind(code).first(); if (!o) return;
-    const text = orderText(o, await lastNote(env, code));
-    await Promise.all(msgs.map(m => tgApi(b.token, 'editMessageText', { chat_id: m.chat_id, message_id: m.message_id, text, parse_mode: 'HTML', reply_markup: { inline_keyboard: orderKeyboard(o, ask) } })));
+    const text = orderText(o, await lastNote(env, code)), ph = await photoOf(env, o);
+    await Promise.all(msgs.map(m => tgApi(b.token, 'editMessageText', { chat_id: m.chat_id, message_id: m.message_id, text, parse_mode: 'HTML', ...(ph ? { link_preview_options: { url: ph, show_above_text: true, prefer_small_media: true } } : {}), reply_markup: { inline_keyboard: orderKeyboard(o, ask) } })));
   } catch (e) { /* التحديث لا يكسر الطلب */ }
 }
 
@@ -138,8 +142,9 @@ const staffRow = (env, id) => env.DB.prepare('SELECT id,name,active,team,perms F
 async function supportCard(env, ch, head, text) {
   const asg = ch.assigned_to ? ((await staffRow(env, ch.assigned_to)) || {}).name : '';
   const o = await originOf(env), id = ch.id;
-  const t = `${head}\n\n👤 ${esc(ch.name || 'زائر')}\n🆔 ${ch.customer_id ? esc(ch.phone || '') + ' (عميل #' + ch.customer_id + ')' : esc(ch.phone || 'زائر بلا حساب')}\n🔖 محادثة #${id} — ${esc(DN[ch.dept] || DN.service)}\n🕐 ${fmt(now())}\n📌 ${WFL[wfOf(ch)]}${asg ? '\n🧑‍💼 الموظف: ' + esc(asg) : ''}\n\n💬 ${esc(String(text || '').slice(0, 600))}`;
-  const kb = [[...(o ? [{ text: '🔗 فتح المحادثة', url: `${o}/support#chat=${id}` }] : [])], [{ text: '🙋 استلمها', callback_data: 's:as:' + id }, { text: '🔄 قيد المعالجة', callback_data: 's:pg:' + id }], [{ text: '✅ تم الحل', callback_data: 's:rs:' + id }]].filter(r => r.length);
+  const wait = wfOf(ch) !== 'resolved' && ch.status === 'open';
+  const t = `💙 <b>LACEY SUPPORT</b> · <code>#${id}</code>\n${head}\n${text ? '<i>' + esc(String(text).slice(0, 300)) + '</i>' : '<i>عميل يحتاج مساعدة</i>'}\n\n<blockquote>👤 <b>معلومات العميل</b>\nالاسم: ${esc(ch.name || 'زائر')}\nالهاتف: ${esc(ch.phone || '—')}\nرقم العميل: ${ch.customer_id ? '#' + ch.customer_id : 'زائر بلا حساب'}</blockquote>\n<blockquote>💬 <b>تفاصيل المحادثة</b>\nالمحادثة: #${id} — ${esc(DN[ch.dept] || DN.service)}\nالتاريخ: ${fmt(now())}\nالحالة: ${WFL[wfOf(ch)]}${asg ? '\nالموظف: ' + esc(asg) : ''}</blockquote>` + (wait ? '\n⏱ <b>العميل ينتظر الرد</b>' : '');
+  const kb = [[...(o ? [{ text: '💬 عرض المحادثة', url: `${o}/support#chat=${id}` }] : [])], [{ text: '🙋 استلمها', callback_data: 's:as:' + id }, { text: '🔄 قيد المعالجة', callback_data: 's:pg:' + id }], [{ text: '✅ تم الحل', callback_data: 's:rs:' + id }]].filter(r => r.length);
   return { text: t, kb };
 }
 /* kind: new | reply | escalate | waiting */

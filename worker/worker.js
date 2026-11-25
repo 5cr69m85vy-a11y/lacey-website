@@ -13,6 +13,7 @@
      ADMIN_PASS (إلزامي)  ADMIN_KEY (اختياري)  BOT_TOKEN / CHAT_ID (اختياري: إشعار تلجرام لك)
    ============================================================ */
 
+import { analyticsRoutes } from './analytics.js';
 import { loyaltyRoutes, earnForOrder, reverseForOrder, expirePoints, redeem, settleRedeem, undoRedeem } from './loyalty.js';
 import { authRoutes, sessionCustomer, ageOf, MIN_AGE } from './auth.js';
 import { processQueue } from './wa.js';
@@ -278,6 +279,7 @@ async function handle(request, rawEnv, ctx) {
       { const er = await extraRoutes({ env, request, url, p, M, body, authed, ctx, tg: t => tgNotify(env, t), sess: (p.startsWith('/chat/') ? await sessionCustomer(env, request) : null) }); if (er) return er; }
       { const tr = await tgRoutes({ env, request, url, p, M, body, authed, deps: { setStatus } }); if (tr) return tr; }
       { const orr = await opsRoutes({ env, request, url, p, M, body, authed, setStatus, tg: t => tgNotify(env, t) }); if (orr) return orr; }
+      { const ar = await analyticsRoutes({ env, request, p, M, authed }); if (ar) return ar; }
       { const lr = await loyaltyRoutes({ env, request, p, M, body, authed }); if (lr) return lr; }
       { const sr = await shopRoutes({ env, request, p, M, body, url }, authed); if (sr) return sr; }
       { const ar = await authRoutes({ env, request, url, p, M, body, ctx }); if (ar) return ar; }
