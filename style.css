@@ -508,3 +508,37 @@ body.pgan>section:not([hidden]):not(.hid),body.pgan #cv.on{animation:pgin .28s v
 @media(min-width:700px){.acT{grid-template-columns:repeat(auto-fit,minmax(110px,1fr))}.acT button:last-child:nth-child(odd){grid-column:auto}}
 
 .ntt{display:flex;align-items:center;gap:8px;margin:2px 0 14px}
+
+/* admin as its own page (/admin) */
+html.admpg body>*:not(#ad):not(script):not(#toast):not(.toast):not(.cfv):not(.pgv){display:none!important}
+html.admpg #ad{position:static!important;inset:auto!important;display:block!important;opacity:1!important;visibility:visible!important;transform:none!important;background:var(--bg,#faf7f6);min-height:100vh;overflow:visible!important;padding:0!important}
+html.admpg #ad>.ad{max-width:1240px;margin:0 auto;padding:18px 16px;box-shadow:none;max-height:none;overflow:visible;border-radius:0;background:transparent}
+
+/* admin shell (desktop): sidebar | tinted settings list | white content card — like the reference */
+@media(min-width:900px){
+html.admpg #ad>.ad{max-width:none;padding:0;display:grid;grid-template-columns:236px 1fr;grid-template-rows:auto 1fr;min-height:100vh}
+html.admpg #ad>.ad>div:first-child{grid-column:2;grid-row:1;padding:22px 32px 0;align-items:center}
+html.admpg #ad>.ad>div:first-child h2{font-size:26px!important;margin:0}
+html.admpg #ab{grid-column:1/-1;grid-row:1/3;display:grid;grid-template-columns:236px 210px 1fr;grid-template-rows:76px 1fr;column-gap:0;align-items:start}
+html.admpg #ab:not(:has(nav.sn)){grid-template-columns:236px 1fr}
+html.admpg #ab nav.gn{grid-column:1;grid-row:1/3;position:sticky;top:0;height:100vh;display:flex;flex-direction:column;flex-wrap:nowrap;gap:2px;margin:0;padding:22px 12px;background:var(--bg,#faf7f6);border-inline-end:1px solid var(--mist,#e6eeee);overflow:auto}
+html.admpg #ab nav.gn:before{content:"LACEY";font:700 20px/1 var(--fd,inherit);letter-spacing:.2em;color:var(--ac);padding:4px 12px 22px}
+html.admpg #ab nav.gn button{justify-content:flex-start;text-align:start;background:none;border-radius:10px;padding:11px 14px;min-height:0;font-weight:500;font-size:14px;color:var(--ink)}
+html.admpg #ab nav.gn button.on{background:var(--mist,#e9f1f1);color:var(--ac);font-weight:700}
+html.admpg #ab nav.gn button:nth-last-child(2){margin-top:auto}
+html.admpg #ab nav.sn{grid-column:2;grid-row:2;display:flex;flex-direction:column;flex-wrap:nowrap;gap:2px;margin:0 0 0 0;padding:10px;background:var(--mist,#e9f1f1);border-radius:16px;position:sticky;top:84px;margin-inline:0 0}
+html.admpg #ab nav.sn button{text-align:start;justify-content:flex-start;border-radius:10px;padding:10px 12px;font-size:14px;min-height:0;background:none}
+html.admpg #ab nav.sn button.on{background:#fff;color:var(--ink);font-weight:700}
+html.admpg #ab .cx{grid-column:3;grid-row:2;margin:0 28px 40px 0;padding:26px 28px;background:#fff;border:1px solid var(--mist,#e6eeee);border-radius:16px;min-width:0}
+html.admpg #ab:not(:has(nav.sn)) .cx{grid-column:2}
+html.admpg #ab nav.sn{margin-inline-start:8px;margin-inline-end:16px}
+html.admpg .cx input:not([type=checkbox]):not([type=radio]),html.admpg .cx select,html.admpg .cx textarea{background:var(--mist,#f1eef0);border:1px solid transparent;border-radius:10px}
+html.admpg .cx input:focus,html.admpg .cx select:focus,html.admpg .cx textarea:focus{background:#fff;border-color:var(--ac);outline:0}
+html.admpg .sx{border:0;display:block;border-radius:0;background:none}
+html.admpg .sx-nav{flex-direction:row;display:flex;flex-wrap:wrap;gap:6px;border:0;min-height:0;padding:0 0 14px}
+html.admpg .sx-nav .sxl{display:none}html.admpg .sx-nav input{flex:1 1 100%;margin-bottom:4px}
+html.admpg .sx-nav .sxn{background:var(--mist,#f1eef0);border-radius:999px;padding:7px 14px}html.admpg .sx-nav .sxn.on{background:var(--ink);color:#fff}html.admpg .sx-nav .sxc{display:none}
+html.admpg .sxp{padding:4px 0}
+html.admpg .sx-top{position:static;border:0;padding:0 0 14px;justify-content:flex-end}
+}
+@media(min-width:900px){html.admpg #ad>.ad:has(nav.sn)>div:first-child{margin-inline-start:218px}html.admpg #ad>.ad>div:first-child{position:relative;z-index:2}}

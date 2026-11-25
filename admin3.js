@@ -56,6 +56,7 @@
   TB.db = () => { setTimeout(loadLive, 0); clearInterval(liveT); liveT = setInterval(() => { if (!document.hidden) loadLive(); }, 15000); return '<div id="lvb"><p class="em">جارٍ التحميل…</p></div>'; };
 
   /* ---------- جاهزية المتجر ---------- */
+  if (!TABS.some(t => t[0] === 'hl')) TABS.push(['hl', 'حالة النظام']);
   TB.hl = () => { setTimeout(loadHl, 0); return '<div id="hlb"><p class="em">جارٍ الفحص…</p></div>'; };
   async function loadHl() {
     const el = document.getElementById('hlb'); if (!el) return;

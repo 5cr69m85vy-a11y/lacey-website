@@ -249,7 +249,7 @@ function corsFilter(request, env, res) {
   return new Response(res.body, { status: res.status, statusText: res.statusText, headers: h });
 }
 
-export const PAGE_ROUTES = /^\/(categories|offers|routine|search|brands|cart|checkout|account|notifications|support|help|tracking|preferences)(\/[\w-]*)?\/?$/;
+export const PAGE_ROUTES = /^\/(categories|offers|routine|search|brands|cart|checkout|account|notifications|admin|support|help|tracking|preferences)(\/[\w-]*)?\/?$/;
 
 export default {
   async fetch(request, rawEnv, ctx) {

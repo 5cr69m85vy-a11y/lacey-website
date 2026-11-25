@@ -171,12 +171,13 @@ export async function tgSupportWaiting(env) {
 async function supportCallback(env, b, cq) {
   const [, act, idS] = String(cq.data || '').split(':'), id = +idS, from = String((cq.from || {}).id || '');
   const ans = (t, alert = true) => tgApi(b.token, 'answerCallbackQuery', { callback_query_id: cq.id, text: t.slice(0, 190), show_alert: alert });
-  const NEEDS = { as: 'assign', pg: 'status', rs: 'resolve' };
+  const NEEDS = { as: 'assign', pg: 'status', rs: 'resolve', vw: 'view' };
   const rec = await env.DB.prepare('SELECT * FROM tg_recipients WHERE bot=? AND chat_id=? AND active=1').bind('support', from).first();
   if (!rec || !NEEDS[act] || !jp(rec.perms, []).includes(NEEDS[act])) { await log(env, 'support', from, 'denied', false, `${act} ${id}`); await audit(env, null, 'tg:' + from, 'tg_denied', String(id), null, { act }); return ans('⛔ غير مصرّح لك بهذا الإجراء'); }
   if (!(await hit(env, 'tg:' + from, 40, 60e3))) return ans('⏳ محاولات كثيرة، انتظر قليلاً');
   const ch = await env.DB.prepare("SELECT * FROM chats WHERE id=? AND channel='support'").bind(id).first(); if (!ch) return ans('المحادثة غير موجودة');
   if (!deptOk(rec, ch.dept || 'service')) return ans('⛔ هذه المحادثة تابعة لقسم غير مسموح لك به');
+  if (act === 'vw') { const c = await supportCard(env, ch, '💬 <b>عرض محادثة</b>', ''); await ans('', false); return tgApi(b.token, 'sendMessage', { chat_id: String(cq.message && cq.message.chat ? cq.message.chat.id : from), parse_mode: 'HTML', text: c.text, reply_markup: { inline_keyboard: c.kb }, disable_web_page_preview: true }); }
   if (ch.status !== 'open') return ans('المحادثة مغلقة (محلولة) مسبقاً');
   const who = rec.name || ('ID ' + from), actor = 'tg:' + who; let note = '';
   if (act === 'as') {                                       // استلام: يتطلب ربط المعرّف بحساب موظف فعّال ضمن قسمه
@@ -213,10 +214,10 @@ export const cleanAuto = a => { const o = {}; for (const k of RK) { const c = (a
 async function reportCommand(env, b, m) {
   const txt = m.text.trim(), cmd = (/^\/(\w+)(?:@\w+)?(?:\s+(.*))?$/.exec(txt) || []), name = (cmd[1] || '').toLowerCase(), arg = cmd[2] || '';
   if (!CMD[name]) return;
-  const cid = String(m.chat.id), uid = String((m.from || {}).id || cid), send = text => tgApi(b.token, 'sendMessage', { chat_id: cid, parse_mode: 'HTML', text: text.slice(0, 4000), disable_web_page_preview: true });
+  const cid = String(m.chat.id), uid = String((m.from || {}).id || cid), send = (text, kb = true) => tgApi(b.token, 'sendMessage', { chat_id: cid, parse_mode: 'HTML', text: text.slice(0, 4000), disable_web_page_preview: true, ...(kb ? { reply_markup: { inline_keyboard: reportKb() } } : {}) });
   const rec = await env.DB.prepare('SELECT * FROM tg_recipients WHERE bot=? AND chat_id=? AND active=1').bind('reports', uid).first();
-  if (!rec || !jp(rec.perms, []).includes('view')) { await log(env, 'reports', uid, 'denied', false, '/' + name); await audit(env, null, 'tg:' + uid, 'tg_denied', name); return send('⛔ غير مصرّح لك بعرض التقارير.'); }
-  if (!(await hit(env, 'tgr:' + uid, 20, 60e3))) return send('⏳ محاولات كثيرة، انتظر قليلاً.');
+  if (!rec || !jp(rec.perms, []).includes('view')) { await log(env, 'reports', uid, 'denied', false, '/' + name); await audit(env, null, 'tg:' + uid, 'tg_denied', name); return send('⛔ غير مصرّح لك بعرض التقارير.', false); }
+  if (!(await hit(env, 'tgr:' + uid, 20, 60e3))) return send('⏳ محاولات كثيرة، انتظر قليلاً.', false);
   const text = RK.includes(name) ? await buildReport(env, name, { arg }) : await summary(env, name);
   const r = await send(text); await log(env, 'reports', uid, 'command', r.ok, r.ok ? '/' + name : r.error);
 }
@@ -234,6 +235,59 @@ export async function tgReportsTick(env, t = now()) {
   return n;
 }
 
+
+/* ================= قوائم البوتات (أزرار مثل بطاقات الأوامر) ================= */
+const MENU = {
+  orders: { title: '🛒 <b>Order Bot</b> · إدارة الطلبات', sub: 'اختر ما تريد:', kb: () => [[{ text: '🆕 طلبات جديدة', callback_data: 'm:new' }, { text: '🚚 قيد التوصيل', callback_data: 'm:way' }], [{ text: '📋 كل الطلبات', callback_data: 'm:all' }, { text: '🔎 تتبع طلب', callback_data: 'm:trk' }]] },
+  support: { title: '💙 <b>Support Bot</b> · الدعم', sub: 'اختر ما تريد:', kb: () => [[{ text: '🆕 محادثات جديدة', callback_data: 'm:new' }, { text: '⏳ بانتظار الرد', callback_data: 'm:wait' }], [{ text: '📋 كل المفتوحة', callback_data: 'm:all' }]] },
+  reports: { title: '📊 <b>Report Bot</b> · التقارير', sub: 'احصل على تقريرك:', kb: () => reportKb() },
+};
+export const reportKb = () => [[{ text: '📊 تقرير اليوم', callback_data: 'r:daily' }, { text: '📅 أسبوعي', callback_data: 'r:weekly' }], [{ text: '🗓 شهري', callback_data: 'r:monthly' }, { text: '📆 سنوي', callback_data: 'r:yearly' }], [{ text: '💰 المبيعات', callback_data: 'r:sales' }, { text: '🧾 الفواتير', callback_data: 'r:invoices' }], [{ text: '📦 الطلبات', callback_data: 'r:orders' }, { text: '👥 العملاء', callback_data: 'r:customers' }]];
+const adminBtn = async env => { const o = await siteOrigin(env); return o ? [[{ text: '⚙️ فتح لوحة الإدارة', url: o + '/admin' }]] : []; };
+async function sendMenu(env, b, bot, cid) {
+  const m = MENU[bot]; if (!m) return;
+  const kb = [...m.kb(), ...(await adminBtn(env))];
+  return tgApi(b.token, 'sendMessage', { chat_id: cid, parse_mode: 'HTML', text: `🌸 <b>LACEY SKINCARE</b>\n${m.title}\n<i>${m.sub}</i>`, reply_markup: { inline_keyboard: kb } });
+}
+const recOf = (env, bot, uid) => env.DB.prepare('SELECT * FROM tg_recipients WHERE bot=? AND chat_id=? AND active=1').bind(bot, uid).first();
+async function listOrders(env, b, cid, kind) {
+  const q = { new: ['status=1', 'طلبات جديدة'], way: ['status IN (2,3,4)', 'طلبات قيد التجهيز والتوصيل'], all: ['1=1', 'آخر الطلبات'] }[kind];
+  const rows = (await env.DB.prepare(`SELECT code,id,name,total,status FROM orders WHERE ${q[0]} ORDER BY created_at DESC LIMIT 8`).all()).results;
+  if (!rows.length) return tgApi(b.token, 'sendMessage', { chat_id: cid, text: 'لا توجد طلبات في هذا القسم ✨' });
+  return tgApi(b.token, 'sendMessage', { chat_id: cid, parse_mode: 'HTML', text: `🌸 <b>${q[1]}</b>\nاضغط على طلب لعرضه وإدارته:`, reply_markup: { inline_keyboard: rows.map(o => [{ text: `${['❌', '🆕', '✅', '📮', '🚚', '📦'][o.status]} #${o.id} · ${o.name} · ${money(o.total)}`, callback_data: 'o:vw:' + o.code }]) } });
+}
+async function listChats(env, b, cid, kind, rec) {
+  const rows = (await env.DB.prepare("SELECT id,name,dept,wf,tg_wait_at,created_at FROM chats WHERE channel='support' AND status='open' ORDER BY id DESC LIMIT 40").all()).results.filter(c => deptOk(rec, c.dept || 'service') && (kind === 'all' || (kind === 'new' ? !c.wf : wfOf(c) === 'waiting' || c.tg_wait_at))).slice(0, 8);
+  if (!rows.length) return tgApi(b.token, 'sendMessage', { chat_id: cid, text: 'لا توجد محادثات في هذا القسم ✨' });
+  return tgApi(b.token, 'sendMessage', { chat_id: cid, parse_mode: 'HTML', text: `💙 <b>محادثات الدعم</b>\nاضغط على محادثة لعرضها:`, reply_markup: { inline_keyboard: rows.map(c => [{ text: `💬 #${c.id} · ${c.name || 'زائر'}${c.dept === 'routine' ? ' · روتين' : ''}`, callback_data: 's:vw:' + c.id }]) } });
+}
+/* m: قوائم · r: تقارير */
+async function menuCallback(env, bot, b, cq) {
+  const act = String(cq.data).split(':')[1], from = String((cq.from || {}).id || ''), cid = String(cq.message && cq.message.chat ? cq.message.chat.id : from);
+  const ans = (t, alert = true) => tgApi(b.token, 'answerCallbackQuery', { callback_query_id: cq.id, text: (t || '').slice(0, 190), show_alert: alert });
+  const rec = await recOf(env, bot, from);
+  if (!rec || !jp(rec.perms, []).includes('view')) { await log(env, bot, from, 'denied', false, 'm:' + act); return ans('⛔ غير مصرّح لك'); }
+  if (!(await hit(env, 'tgm:' + from, 40, 60e3))) return ans('⏳ محاولات كثيرة، انتظر قليلاً');
+  await ans('', false);
+  if (bot === 'orders') { if (act === 'trk') return tgApi(b.token, 'sendMessage', { chat_id: cid, parse_mode: 'HTML', text: '🔎 أرسل رقم الطلب هنا (مثال: <code>LC-ABC123</code> أو <code>#1007</code>) وسأعرضه لك.' }); return listOrders(env, b, cid, act); }
+  if (bot === 'support') return listChats(env, b, cid, act, rec);
+}
+async function reportCallback(env, b, cq) {
+  const name = String(cq.data).split(':')[1], from = String((cq.from || {}).id || ''), cid = String(cq.message && cq.message.chat ? cq.message.chat.id : from);
+  await tgApi(b.token, 'answerCallbackQuery', { callback_query_id: cq.id });
+  return reportCommand(env, b, { text: '/' + name, chat: { id: cid }, from: { id: from } });
+}
+/* كتابة رقم الطلب مباشرة = تتبع */
+async function trackByText(env, b, m) {
+  const t = m.text.trim(), cid = String(m.chat.id), uid = String((m.from || {}).id || cid);
+  const mm = /^(?:#\s*(\d{1,9})|(LC-[A-Za-z0-9]{4,12}))$/.exec(t); if (!mm) return false;
+  const rec = await recOf(env, 'orders', uid); if (!rec || !jp(rec.perms, []).includes('view')) return false;
+  const o = mm[1] ? await env.DB.prepare('SELECT * FROM orders WHERE id=?').bind(+mm[1]).first() : await env.DB.prepare('SELECT * FROM orders WHERE code=?').bind(mm[2].toUpperCase()).first();
+  if (!o) { await tgApi(b.token, 'sendMessage', { chat_id: cid, text: 'لم أجد هذا الطلب 🔍' }); return true; }
+  await tgApi(b.token, 'sendMessage', { chat_id: cid, parse_mode: 'HTML', text: orderText(o), reply_markup: { inline_keyboard: orderKeyboard(o) }, disable_web_page_preview: true }); return true;
+}
+export const TG_COMMANDS = { orders: [['menu', 'قائمة الطلبات'], ['id', 'معرّفك']], support: [['menu', 'قائمة الدعم'], ['id', 'معرّفك']], reports: [['menu', 'قائمة التقارير'], ['daily', 'تقرير اليوم'], ['weekly', 'أسبوعي'], ['monthly', 'شهري'], ['yearly', 'سنوي'], ['sales', 'المبيعات'], ['orders', 'الطلبات'], ['customers', 'العملاء'], ['invoices', 'الفواتير']] };
+
 /* ================= webhook ================= */
 export async function tgHook(env, bot, request, deps) {
   const b = await getBot(env, bot); if (!b || !b.token || !b.enabled) return J({ ok: true });
@@ -242,12 +296,16 @@ export async function tgHook(env, bot, request, deps) {
   const ins = await env.DB.prepare('INSERT OR IGNORE INTO tg_updates(bot,update_id,at) VALUES(?,?,?)').bind(bot, u.update_id, now()).run();
   if (!ins.meta.changes) return J({ ok: true, dup: true });                       // حماية من التكرار
   try {
-    if (u.callback_query && bot === 'orders' && String(u.callback_query.data || '').startsWith('o:')) await orderCallback(env, b, u.callback_query, deps);
+    if (u.callback_query && String(u.callback_query.data || '').startsWith('m:')) await menuCallback(env, bot, b, u.callback_query);
+    else if (u.callback_query && bot === 'reports' && String(u.callback_query.data || '').startsWith('r:')) await reportCallback(env, b, u.callback_query);
+    else if (u.callback_query && bot === 'orders' && String(u.callback_query.data || '').startsWith('o:')) await orderCallback(env, b, u.callback_query, deps);
     else if (u.callback_query && bot === 'support' && String(u.callback_query.data || '').startsWith('s:')) await supportCallback(env, b, u.callback_query);
     else if (u.callback_query && deps.onCallback) await deps.onCallback(env, bot, b, u.callback_query);
     else if (u.message && u.message.text) {
       const m = u.message, txt = m.text.trim(), cid = String(m.chat.id), uid = String((m.from || {}).id || cid);
-      if (/^\/start|^\/id\b/.test(txt)) await tgApi(b.token, 'sendMessage', { chat_id: cid, parse_mode: 'HTML', text: `أهلاً 🌸 هذا ${esc(b.name || BOT_LABEL[bot])}.\nمعرّفك: <code>${esc(uid)}</code>${cid !== uid ? `\nمعرّف هذه المحادثة: <code>${esc(cid)}</code>` : ''}\nأعطِ هذا الرقم للمدير ليضيفك وتبدأ باستلام الإشعارات.` });
+      if (/^\/start|^\/id\b/.test(txt)) { await tgApi(b.token, 'sendMessage', { chat_id: cid, parse_mode: 'HTML', text: `أهلاً 🌸 هذا ${esc(b.name || BOT_LABEL[bot])}.\nمعرّفك: <code>${esc(uid)}</code>${cid !== uid ? `\nمعرّف هذه المحادثة: <code>${esc(cid)}</code>` : ''}\nأعطِ هذا الرقم للمدير ليضيفك وتبدأ باستلام الإشعارات.` }); if (/^\/start/.test(txt)) { const rec = await recOf(env, bot, uid); if (rec && jp(rec.perms, []).includes('view')) await sendMenu(env, b, bot, cid); } }
+      else if (/^\/menu\b/.test(txt)) { const rec = await recOf(env, bot, uid); if (rec && jp(rec.perms, []).includes('view')) await sendMenu(env, b, bot, cid); else await tgApi(b.token, 'sendMessage', { chat_id: cid, text: '⛔ غير مصرّح لك. أرسل /id وأعطِ الرقم للمدير.' }); }
+      else if (bot === 'orders' && (await trackByText(env, b, m))) { /* تتبع */ }
       else if (bot === 'reports') await reportCommand(env, b, m);
       else if (deps.onCommand) await deps.onCommand(env, bot, b, m);
     }
@@ -287,6 +345,7 @@ export async function tgRoutes(c) {
     const hook = url.origin + '/tg/hook/' + cur.bot;
     const wh = await tgApi(cur.token, 'setWebhook', { url: hook, secret_token: cur.secret, allowed_updates: ['message', 'callback_query'], drop_pending_updates: false });
     if (!wh.ok) return J({ error: 'فشل ربط الـ webhook: ' + wh.error }, 400);
+    await tgApi(cur.token, 'setMyCommands', { commands: (TG_COMMANDS[cur.bot] || []).map(([command, description]) => ({ command, description })) });
     await env.DB.prepare('UPDATE tg_bots SET username=?,webhook=?,last_err=\'\' WHERE bot=?').bind(me.result.username || '', hook, cur.bot).run();
     await log(env, cur.bot, '', 'connect', true, '@' + me.result.username); await audit(env, request, 'admin', 'tg_connect', cur.bot);
     return J({ ok: true, username: me.result.username });

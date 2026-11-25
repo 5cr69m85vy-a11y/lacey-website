@@ -10,7 +10,7 @@
       "/order", "/order/*", "/orders", "/status", "/track",
       "/customers", "/customer", "/discount", "/discounts",
       "/auth/*", "/staff", "/staff/*", "/tg/*", "/chat/*", "/adm/*", "/media", "/media/*", "/manifest.json", "/quote", "/codes", "/me", "/me/*",
-      "/categories", "/offers", "/routine", "/routine/*", "/cart", "/checkout", "/account", "/account/*", "/notifications", "/support", "/help", "/help/*", "/tracking", "/preferences", "/search", "/brands", "/brands/*", "/p/*", "/pimg/*", "/sitemap.xml", "/robots.txt", "/delivery/hook"
+      "/categories", "/offers", "/routine", "/routine/*", "/cart", "/checkout", "/account", "/account/*", "/notifications", "/admin", "/support", "/help", "/help/*", "/tracking", "/preferences", "/search", "/brands", "/brands/*", "/p/*", "/pimg/*", "/sitemap.xml", "/robots.txt", "/delivery/hook"
     ]
   },
   "d1_databases": [
