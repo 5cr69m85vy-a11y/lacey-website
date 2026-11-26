@@ -61,7 +61,7 @@ export async function sessionCustomer(env, request) {
   if (row) env.DB.prepare('UPDATE customers SET last_seen_at=? WHERE id=?').bind(now(), row.id).run().catch(() => {});
   return row || null;
 }
-const pub = c => ({ id: c.id, name: c.name, ph: c.phone || '', email: c.email || '', city: c.city, area: c.area, lm: c.landmark, wa: !!c.wa_verified, pw: !!c.pw_hash, google: !!c.google_sub, orders: c.orders_count, birth: c.birth || '', age: ageOf(c.birth), mkt: !!c.mkt, routine: c.routine || '', diary: c.diary || '', skin: c.skin || '', avatar: c.avatar || '' });
+const pub = c => ({ id: c.id, name: c.name, ph: c.phone || '', email: c.email || '', city: c.city, area: c.area, lm: c.landmark, wa: !!c.wa_verified, pw: !!c.pw_hash, google: !!c.google_sub, orders: c.orders_count, birth: c.birth || '', age: ageOf(c.birth), mkt: !!c.mkt, routine: c.routine || '', diary: c.diary || '', skin: c.skin || '', avatar: c.avatar || '', photo: c.photo_key ? `/cphoto/${c.photo_key}?v=${c.photo_at}` : '' });
 
 async function welcomeOnce(env, c, origin, ctx) {
   if (c.welcomed || !c.phone) return;

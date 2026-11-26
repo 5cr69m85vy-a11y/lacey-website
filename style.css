@@ -542,3 +542,26 @@ html.admpg .sxp{padding:4px 0}
 html.admpg .sx-top{position:static;border:0;padding:0 0 14px;justify-content:flex-end}
 }
 @media(min-width:900px){html.admpg #ad>.ad:has(nav.sn)>div:first-child{margin-inline-start:218px}html.admpg #ad>.ad>div:first-child{position:relative;z-index:2}}
+
+/* ===== account home (v66) ===== */
+#acv .ah{padding:2px 0 16px}.ah-top{display:flex;align-items:center;justify-content:center;position:relative;min-height:40px;margin-bottom:8px}
+#acv .ah-top .acx{position:absolute;inset-inline-start:0;top:0}.ah-logo{font-weight:800;letter-spacing:.32em;font-size:18px}
+#acv .ah-bell{position:absolute;inset-inline-end:0;top:2px;width:38px;height:38px;border-radius:50%;border:1px solid #e5eeee;background:#fff;display:grid;place-items:center;cursor:pointer}.ah-bell .ico{width:20px;height:20px}
+#acv .ah-bell i{position:absolute;top:-3px;inset-inline-end:-3px;background:#c2185b;color:#fff;font:700 10px/1 system-ui;min-width:16px;height:16px;border-radius:8px;display:grid;place-items:center;font-style:normal;padding:0 3px}
+#acv .ah-hi{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:10px 0 14px}.ah-hi h3{margin:0 0 2px;font-size:22px}.ah-hi p{margin:0 0 6px;color:#6b7b7b;font-size:14px}
+#acv .ah-hi .ln{padding:0;color:#2e7d8a;font-weight:600;background:none;border:0;cursor:pointer}
+#acv .ah-av,#acv .ph-av{flex:none;width:84px;height:84px;border-radius:50%;overflow:hidden;border:3px solid #fff;box-shadow:0 2px 10px #0002;background:#eadfd6;padding:0;display:block}
+#acv .ah-av .avl,#acv .ph-av .avl,#acv .ah-av img,#acv .ph-av img{width:100%;height:100%;object-fit:cover;display:block;border-radius:50%}
+#acv .as-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}
+#acv .as{background:#fff;border:1px solid #e5eeee;border-radius:18px;padding:14px 6px;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;font:inherit}.as b{font-size:22px}.as small{color:#6b7b7b}
+#acv .ac-card{background:#fff;border:1px solid #e5eeee;border-radius:20px;padding:6px 4px;margin-bottom:14px}.ac-card h4{margin:10px 14px 4px;font-size:15px}
+#acv .ar{display:flex;align-items:center;gap:12px;width:100%;background:none;border:0;border-top:1px solid #f0f5f5;padding:13px 12px;font:inherit;cursor:pointer;text-align:start;color:inherit}.ac-card h4+.ar{border-top:0}
+#acv .ar-i{width:34px;height:34px;border-radius:50%;background:#eaf3f3;display:grid;place-items:center;flex:none}.ar-i .ico{width:18px;height:18px}.ar-t{flex:1;font-weight:600}
+#acv .ar-s{color:#6b7b7b}.chv{width:18px;height:18px;fill:none;stroke:#9aa9a9;stroke-width:2;flex:none}html[dir=rtl] .chv{transform:scaleX(-1)}
+#acv .ar-out{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:13px;border-radius:16px;border:1px solid #f0c9d3;background:#fff;color:#c2185b;font:inherit;font-weight:700;cursor:pointer}.ar-out .ico{width:18px;height:18px}
+#acv .ar-ver{text-align:center;color:#9aa9a9;font-size:12px;letter-spacing:.12em;margin:14px 0 0}
+#acv .ah-sub{display:flex;align-items:center;gap:10px;margin:2px 0 12px}.ah-sub h3{margin:0;font-size:19px}.ah-back{width:38px;height:38px;border-radius:50%;border:1px solid #e5eeee;background:#fff;display:grid;place-items:center;cursor:pointer}.ah-back svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2}html[dir=rtl] .ah-back svg{transform:scaleX(-1)}
+#acv .ph-box{display:flex;align-items:center;gap:14px;margin-bottom:12px}.ph-b{display:flex;flex-direction:column;align-items:flex-start;gap:6px}.ph-b small{color:#6b7b7b}
+#acv .wl{display:grid;gap:10px}.wi{display:flex;gap:12px;background:#fff;border:1px solid #e5eeee;border-radius:16px;padding:10px}.wi-img{width:84px;height:84px;border-radius:12px;background:#f2f2f2 center/cover;border:0;flex:none;cursor:pointer}.wi-b{flex:1;display:flex;flex-direction:column;gap:4px}.wi-a{display:flex;gap:8px;margin-top:auto;align-items:center}
+#acv .ad{display:flex;justify-content:space-between;align-items:center;gap:10px;background:#fff;border:1px solid #e5eeee;border-radius:16px;padding:12px;margin-bottom:8px}.ad.on{border-color:#2e7d8a}.ad small{display:block;color:#6b7b7b}.ad em{font-style:normal;background:#eaf3f3;border-radius:99px;padding:1px 8px;font-size:11px;margin-inline-start:6px}.ad-a{display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+#acv .stars{display:flex;gap:4px}.stars button{background:none;border:0;font-size:30px;color:#d5dede;cursor:pointer;padding:0 2px}.stars button.on{color:#e0a100}.rv-s{color:#e0a100;letter-spacing:1px}.rv-r{color:#2e7d8a}

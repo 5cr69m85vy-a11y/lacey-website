@@ -1,0 +1,63 @@
+const assert = require('assert');
+const { makeDB } = require('./d1shim');
+(async () => {
+  const W = (await import('../worker/worker.js')).default;
+  let n = 0; const ok = async (name, fn) => { await fn(); n++; console.log('✓', name); };
+  const env = { DB: makeDB(), RL_SCALE: '1000', ADMIN_PASS: 'secret', ASSETS: { fetch: async () => new Response('a') } };
+  const call = (path, init = {}) => W.fetch(new Request('https://x.dev' + path, init), env, { waitUntil: p => p });
+  const authFor = require('./sess');
+  const js = (m, path, body, h = {}) => call(path, { method: m, headers: { 'content-type': 'application/json', ...h }, body: body ? JSON.stringify(body) : undefined });
+  const A = { Authorization: 'Bearer ' + (await (await js('POST', '/login', { pw: 'secret' })).json()).token };
+  await js('POST', '/settings', { data: { P: [{ c: 'A1', n: 'Cleanser', p: 50000 }], sf: 0 } }, A);
+  const U = await authFor(env, '07705550002'), V = await authFor(env, '07705550003');
+  const jpg = new Uint8Array([0xFF, 0xD8, 0xFF, 0xE0, 0, 16, 74, 70, 73, 70, 0, 1]);
+  await ok('auth required', async () => { for (const p of ['/me/summary', '/me/wish', '/me/addr', '/me/reviews']) assert.strictEqual((await js('GET', p)).status, 401, p); assert.strictEqual((await js('GET', '/adm/reviews')).status, 401); });
+  await ok('photo upload validates type/signature/size, serves, deletes', async () => {
+    const up = (body, type) => call('/me/photo', { method: 'POST', headers: { 'content-type': type, ...U }, body });
+    assert.strictEqual((await up(jpg, 'text/html')).status, 415);
+    assert.strictEqual((await up(new Uint8Array([1, 2, 3, 4]), 'image/jpeg')).status, 400);
+    assert.strictEqual((await up(new Uint8Array(400 * 1024), 'image/jpeg')).status, 413);
+    const r = await (await up(jpg, 'image/jpeg')).json(); assert(/^\/cphoto\/[a-f0-9]{24}/.test(r.photo), JSON.stringify(r));
+    const g = await call(r.photo.split('?')[0]); assert.strictEqual(g.status, 200); assert.strictEqual(g.headers.get('content-type'), 'image/jpeg');
+    assert.strictEqual((await (await js('GET', '/me', null, U)).json()).customer.photo, r.photo);
+    assert.strictEqual((await call('/cphoto/' + 'a'.repeat(24))).status, 404);
+    await call('/me/photo', { method: 'DELETE', headers: U });
+    assert.strictEqual((await call(r.photo.split('?')[0])).status, 404);
+    assert.strictEqual((await (await js('GET', '/me', null, U)).json()).customer.photo, '');
+  });
+  await ok('wishlist merges, per customer', async () => {
+    let r = await (await js('POST', '/me/wish', { add: ['A1', 'B2'] }, U)).json(); assert.deepStrictEqual(r.codes.sort(), ['A1', 'B2']);
+    r = await (await js('POST', '/me/wish', { add: ['A1'], remove: ['B2'] }, U)).json(); assert.deepStrictEqual(r.codes, ['A1']);
+    assert.deepStrictEqual((await (await js('GET', '/me/wish', null, V)).json()).codes, []);
+  });
+  await ok('addresses: first is default, switch default, isolation, delete', async () => {
+    assert.strictEqual((await js('POST', '/me/addr', { city: 'بغداد' }, U)).status, 400);
+    const a = await (await js('POST', '/me/addr', { label: 'البيت', city: 'بغداد', area: 'الكرادة', lm: 'قرب الجسر' }, U)).json();
+    const b = await (await js('POST', '/me/addr', { label: 'العمل', city: 'البصرة', area: 'المعقل' }, U)).json();
+    let l = (await (await js('GET', '/me/addr', null, U)).json()).items; assert.strictEqual(l.find(x => x.id === a.id).is_default, 1); assert.strictEqual(l.find(x => x.id === b.id).is_default, 0);
+    await js('POST', '/me/addr/default', { id: b.id }, U);
+    assert.strictEqual((await (await js('GET', '/me', null, U)).json()).customer.city, 'البصرة');
+    assert.strictEqual((await js('POST', '/me/addr/default', { id: b.id }, V)).status, 404);
+    assert.strictEqual((await call('/me/addr?id=' + b.id, { method: 'DELETE', headers: V })).status, 404);
+    await call('/me/addr?id=' + b.id, { method: 'DELETE', headers: U });
+    l = (await (await js('GET', '/me/addr', null, U)).json()).items; assert.strictEqual(l.length, 1); assert.strictEqual(l[0].is_default, 1);
+  });
+  await ok('reviews: only delivered products, one per product, moderation gates public view', async () => {
+    assert.strictEqual((await js('POST', '/me/reviews', { code: 'A1', rating: 5 }, U)).status, 403);
+    await js('POST', '/order', { code: 'LC-REV001', name: 'Sara', ph: '07705550002', city: 'B', area: 'K', lm: 'x', items: [{ c: 'A1', q: 1 }] }, U);
+    await js('POST', '/status', { code: 'LC-REV001', s: 5 }, A);
+    const t = await (await js('GET', '/me/reviews', null, U)).json(); assert.strictEqual(t.todo.length, 1);
+    assert.strictEqual((await js('POST', '/me/reviews', { code: 'A1', rating: 9 }, U)).status, 400);
+    assert.strictEqual((await js('POST', '/me/reviews', { code: 'A1', rating: 4, comment: 'ممتاز' }, V)).status, 403);
+    assert.strictEqual((await js('POST', '/me/reviews', { code: 'A1', rating: 4, comment: 'ممتاز' }, U)).status, 200);
+    await js('POST', '/me/reviews', { code: 'A1', rating: 5, comment: 'رائع' }, U);
+    assert.strictEqual(env.DB.raw.prepare('select count(*) n from product_reviews').get().n, 1);
+    assert.strictEqual((await (await js('GET', '/reviews?code=A1')).json()).n, 0);
+    const id = (await (await js('GET', '/adm/reviews?status=pending', null, A)).json()).items[0].id;
+    await js('POST', '/adm/reviews', { id, status: 'approved', reply: 'شكراً' }, A);
+    const pub = await (await js('GET', '/reviews?code=A1')).json(); assert.deepStrictEqual([pub.n, pub.avg, pub.items[0].reply], [1, 5, 'شكراً']);
+    await js('POST', '/adm/reviews', { id, status: 'hidden' }, A); assert.strictEqual((await (await js('GET', '/reviews?code=A1')).json()).n, 0);
+    const s = await (await js('GET', '/me/summary', null, U)).json(); assert.strictEqual(s.reviews, 1); assert.strictEqual(s.wishlist, 1);
+  });
+  console.log(n + ' account2 tests passed');
+})().catch(e => { console.error(e); process.exit(1); });

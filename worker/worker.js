@@ -13,6 +13,7 @@
      ADMIN_PASS (إلزامي)  ADMIN_KEY (اختياري)  BOT_TOKEN / CHAT_ID (اختياري: إشعار تلجرام لك)
    ============================================================ */
 
+import { accountRoutes } from './account2.js';
 import { analyticsRoutes } from './analytics.js';
 import { loyaltyRoutes, earnForOrder, reverseForOrder, expirePoints, redeem, settleRedeem, undoRedeem } from './loyalty.js';
 import { authRoutes, sessionCustomer, ageOf, MIN_AGE } from './auth.js';
@@ -280,6 +281,7 @@ async function handle(request, rawEnv, ctx) {
       { const tr = await tgRoutes({ env, request, url, p, M, body, authed, deps: { setStatus } }); if (tr) return tr; }
       { const orr = await opsRoutes({ env, request, url, p, M, body, authed, setStatus, tg: t => tgNotify(env, t) }); if (orr) return orr; }
       { const ar = await analyticsRoutes({ env, request, p, M, authed }); if (ar) return ar; }
+      { const xr = await accountRoutes({ env, request, p, M, body, authed, url }); if (xr) return xr; }
       { const lr = await loyaltyRoutes({ env, request, p, M, body, authed }); if (lr) return lr; }
       { const sr = await shopRoutes({ env, request, p, M, body, url }, authed); if (sr) return sr; }
       { const ar = await authRoutes({ env, request, url, p, M, body, ctx }); if (ar) return ar; }

@@ -50,7 +50,7 @@
     if (page === 'cart' || page === 'checkout') { try { view = page === 'cart' ? 'bag' : 'form'; rc(); const cv = $1('#cv'); cv.classList.add('on', 'pgv'); } catch (e) { console.error(e); } }
     if (page === 'account' && sub === 'alerts') return show('/notifications', false, true);
     if (page === 'notifications' && window.accountShow) accountShow('n', true);
-    if (page === 'account' && window.accountShow) accountShow({ '': 'p', orders: 'o', receipts: 'r', alerts: 'n' }[sub] || 'p');
+    if (page === 'account' && window.accountShow) accountShow({ '': 'h', profile: 'p', orders: 'o', receipts: 'r', alerts: 'n', points: 'w', wishlist: 'f', reviews: 'v', skin: 's', routine: 'u', addresses: 'a', privacy: 'y' }[sub] || 'h');
     if (page === 'routine') renderRoutine(sub, u);
     if (page === 'help') renderHelp(sub);
     if (page === 'product') renderProduct(sub);
@@ -94,7 +94,7 @@
     const ox = A.x; A.x = function () { ox.apply(this, arguments); if (OVERLAY.includes(cur)) lcNav(prevPath || '/'); };
     const ogo = A.go, MAP = { shop: 'categories', dpt: 'categories', offers: 'offers', best: 'home', half: 'home', delivery: 'home', how: 'home', reviews: 'home', top: 'home', trk: 'tracking' };
     A.go = c => { const pg = MAP[c]; if (pg && cur !== pg) { lcNav(pg === 'home' ? '/' : '/' + pg); setTimeout(() => ogo(c), 80); return; } ogo(c); };
-    window.openAccount = t => lcNav('/account' + ({ o: '/orders', r: '/receipts', n: '/alerts' }[t] || ''));
+    window.openAccount = t => lcNav('/account' + ({ o: '/orders', r: '/receipts', n: '/alerts', p: '/profile', f: '/wishlist', v: '/reviews', a: '/addresses', w: '/points' }[t] || ''));
     const sq = $1('#sq'); if (sq) sq.addEventListener('input', () => { if (sq.value.trim() && cur !== 'categories') lcNav('/categories'); });
     const r0 = window.render; window.render = function () { r0.apply(this, arguments); langBar(); if (cur === 'product') renderProduct(psub, true); if (cur === 'routine') renderRoutine(rsub, null, true); if (cur === 'brands') renderBrands(location.pathname.split('/')[2] || ''); };
     const ls0 = $1('#lsw'); if (ls0) ls0.addEventListener('change', () => setTimeout(() => { langBar(); if (cur === 'routine') renderRoutine(rsub, null, true); }, 50));
