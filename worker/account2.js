@@ -1,6 +1,6 @@
 /* account2.js — مركز حساب العميل: صورة، مفضلة، عناوين، تقييمات المنتجات (مع إدارة التقييمات). */
 import { J, now, jp, randHex } from './lib.js';
-import { hit, audit } from './guard.js';
+import { hit, audit, ipOf } from './guard.js';
 import { sessionCustomer } from './auth.js';
 
 const PHOTO_TYPES = { 'image/jpeg': 1, 'image/png': 1, 'image/webp': 1 }, MAX_PHOTO = 300 * 1024;
@@ -22,6 +22,7 @@ export async function accountRoutes({ env, request, p, M, body, authed, url }) {
   }
   /* تقييمات معتمدة لمنتج (عام) */
   if (p === '/reviews' && M === 'GET') {
+    if (!(await hit(env, 'rvw:' + ipOf(request), 120, 600e3))) return J({ error: 'محاولات كثيرة' }, 429);
     const code = clip(url.searchParams.get('code'), 60); if (!code) return J({ error: 'code' }, 400);
     const rows = (await env.DB.prepare(`SELECT r.rating,r.comment,r.reply,r.created_at,c.name FROM product_reviews r JOIN customers c ON c.id=r.customer_id WHERE r.product_code=? AND r.status='approved' ORDER BY r.id DESC LIMIT 30`).bind(code).all()).results;
     const avg = rows.length ? Math.round(rows.reduce((a, x) => a + x.rating, 0) / rows.length * 10) / 10 : 0;

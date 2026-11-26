@@ -48,12 +48,19 @@ const money = n => Number(n || 0).toLocaleString('en-US');
 const rnd = n => [...crypto.getRandomValues(new Uint8Array(n))].map(b => b.toString(36)).join('').slice(0, n).toUpperCase();
 const today = () => new Date().toISOString().slice(0, 10);
 
-async function adminToken(env) {
-  if (!env.ADMIN_PASS) return '';
+/* رمز الأدمن: انتهاء صلاحية مدمج + توقيع HMAC بكلمة السر (تغيير كلمة السر يبطل كل الرموز) */
+const ADMIN_TTL = 14 * 864e5;
+async function adminSig(env, exp) {
   const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(env.ADMIN_PASS),
     { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode('lacey-admin'));
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode('lacey-admin:' + exp));
   return [...new Uint8Array(sig)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+const adminIssue = async env => { const exp = now() + ADMIN_TTL; return exp + '.' + await adminSig(env, exp); };
+async function adminValid(env, bearer) {
+  if (!env.ADMIN_PASS) return false;
+  const m = /^(\d{10,15})\.([0-9a-f]{64})$/.exec(String(bearer || '')); if (!m || +m[1] < now()) return false;
+  return safeEq(m[2], await adminSig(env, m[1]));
 }
 
 const safeEq = (a, b) => { a = String(a); b = String(b); let d = a.length ^ b.length; for (let i = 0; i < Math.max(a.length, b.length); i++) d |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0); return d === 0; };
@@ -269,9 +276,8 @@ async function handle(request, rawEnv, ctx) {
     if (request.method === 'OPTIONS') return new Response(null, { headers: CORS });
 
     const url = new URL(request.url), p = url.pathname, M = request.method;
-    const token = await adminToken(env);
     const bearer = (request.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
-    const authed = (!!env.ADMIN_KEY && request.headers.get('x-admin') === env.ADMIN_KEY) || (token !== '' && safeEq(bearer, token));
+    const authed = (!!env.ADMIN_KEY && request.headers.get('x-admin') === env.ADMIN_KEY) || (await adminValid(env, bearer));
     const needAuth = () => authed ? null : J({ error: 'unauthorized' }, 401);
     const audited = (action, entity, before, after) => audit(env, request, 'admin', action, entity, before, after);
     const body = async () => { try { return await request.json(); } catch (e) { return {}; } };
@@ -291,7 +297,7 @@ async function handle(request, rawEnv, ctx) {
         if (!env.ADMIN_PASS) return J({ error: 'ADMIN_PASS is not set' }, 503);
         const lim = await limit(env, request, 'adm-login', 8, 15 * 60e3); if (lim) return lim;
         const { pw } = await body();
-        if (pw && safeEq(String(pw).trim(), String(env.ADMIN_PASS).trim())) { await audit(env, request, 'admin', 'login'); return J({ token }); }
+        if (pw && safeEq(String(pw).trim(), String(env.ADMIN_PASS).trim())) { await audit(env, request, 'admin', 'login'); return J({ token: await adminIssue(env) }); }
         await audit(env, request, 'unknown', 'login_failed');
         return J({ error: 'wrong password' }, 401);
       }
@@ -320,6 +326,7 @@ async function handle(request, rawEnv, ctx) {
 
       /* ---------- زيارات ---------- */
       if (p === '/visit' && M === 'POST') {
+        { const lim = await limit(env, request, 'visit', 60, 10 * 60e3); if (lim) return lim; }
         await env.DB.prepare('INSERT INTO visits(day,count) VALUES(?,1) ON CONFLICT(day) DO UPDATE SET count=count+1').bind(today()).run();
         return J({ ok: true });
       }

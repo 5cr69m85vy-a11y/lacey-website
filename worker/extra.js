@@ -123,7 +123,7 @@ export async function extraRoutes(c) {
   if (p.startsWith('/media/') && M === 'GET') {
     const key = p.slice(7);
     if (!/^[a-z0-9]+\.[a-z0-9]+$/.test(key)) return J({ error: 'not found' }, 404);
-    const base = { 'Access-Control-Allow-Origin': '*', 'Accept-Ranges': 'bytes', 'Cache-Control': 'public, max-age=31536000, immutable' };
+    const base = { 'X-Content-Type-Options': 'nosniff', 'Access-Control-Allow-Origin': '*', 'Accept-Ranges': 'bytes', 'Cache-Control': 'public, max-age=31536000, immutable' };
     if (env.MEDIA) {
       const o = await env.MEDIA.get(key, { range: request.headers });
       if (o) { const h = new Headers(base); o.writeHttpMetadata && o.writeHttpMetadata(h); return new Response(o.body, { status: o.range ? 206 : 200, headers: h }); }

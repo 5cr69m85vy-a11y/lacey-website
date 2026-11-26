@@ -16,7 +16,7 @@ const { makeDB } = require('./d1shim');
   await ok('login: refused without ADMIN_PASS; wrong/right password', async () => {
     assert.strictEqual((await post('/login', { pw: 'x' }, {}, ) && (await W.fetch(new Request('https://x.dev/login', { method: 'POST', body: '{"pw":"1234"}' }), { DB: env.DB }))).status, 503);
     assert.strictEqual((await post('/login', { pw: 'bad' })).status, 401);
-    const r = await post('/login', { pw: 'secret' }); tok = (await r.json()).token; assert(tok.length === 64);
+    const r = await post('/login', { pw: 'secret' }); tok = (await r.json()).token; assert(/^\d{13}\.[0-9a-f]{64}$/.test(tok));
   });
   await ok('catalog empty before first save; admin routes need auth', async () => {
     assert.deepStrictEqual(await (await call('/catalog')).json(), { srv: true, data: null });
