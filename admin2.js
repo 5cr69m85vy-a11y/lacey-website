@@ -236,7 +236,7 @@
   A.chx = async () => { await J('/adm/chat/close', { method: 'POST', body: JSON.stringify({ id: chId }) }); toast('أُنهيت المحادثة وسيظهر للزبون نموذج التقييم'); loadChats(); };
 
   /* ---------- الربط والمفاتيح ---------- */
-  const IGF = [['واتساب (Meta Cloud API)', [['WA_TOKEN', 'التوكن الدائم (Access Token)', 1], ['WA_PHONE_ID', 'معرّف رقم الهاتف (Phone Number ID)'], ['WA_LANG', 'لغة القوالب (مثل ar)'], ['WA_TPL_OTP', 'اسم قالب رمز التحقق'], ['WA_TPL_WELCOME', 'اسم قالب الترحيب'], ['WA_TPL_ORDER', 'اسم قالب حالة الطلب'], ['WA_TPL_PROMO', 'اسم قالب الرسائل التسويقية']]],
+  const IGF = [['رسائل Twilio (SMS أو واتساب) — بديل عند عدم تفعيل Meta', [['TWILIO_SID', 'Account SID'], ['TWILIO_TOKEN', 'Auth Token', 1], ['TWILIO_FROM', 'رقم المرسل أو Messaging Service SID'], ['TWILIO_CHANNEL', 'القناة: sms أو whatsapp (الافتراضي sms)']]], ['واتساب (Meta Cloud API)', [['WA_TOKEN', 'التوكن الدائم (Access Token)', 1], ['WA_PHONE_ID', 'معرّف رقم الهاتف (Phone Number ID)'], ['WA_LANG', 'لغة القوالب (مثل ar)'], ['WA_TPL_OTP', 'اسم قالب رمز التحقق'], ['WA_TPL_WELCOME', 'اسم قالب الترحيب'], ['WA_TPL_ORDER', 'اسم قالب حالة الطلب'], ['WA_TPL_PROMO', 'اسم قالب الرسائل التسويقية']]],
     ['المتجر و Google', [['STORE_URL', 'رابط المتجر الذي يُلحق برسائل واتساب'], ['GOOGLE_CLIENT_ID', 'Google Client ID (لتسجيل الدخول بجوجل)']]],
     ['الذكاء الاصطناعي للدعم (اختياري)', [['ANTHROPIC_API_KEY', 'مفتاح Anthropic (Claude API)', 1], ['AI_MODEL', 'اسم النموذج (اتركه فارغاً للافتراضي)'], ['AI_ON', 'تشغيل الرد الآلي (اكتب 0 لإيقافه، وأي قيمة أخرى للتشغيل)'], ['AI_PROMPT', 'تعليمات إضافية للمساعد (نبرة الكلام، سياسات المتجر، ما لا يجيب عنه)']]]];
   TB.ig = () => { setTimeout(loadIg, 0); return `<div id="igb"><p class="em">جارٍ التحميل…</p></div>`; };

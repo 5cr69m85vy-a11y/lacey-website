@@ -86,7 +86,7 @@ export async function extraRoutes(c) {
     }
     if (!/^07\d{9}$/.test(String(b.ph || ''))) return J({ error: 'اكتب رقماً عراقياً صحيحاً 07XXXXXXXXX' }, 400);
     const r = await waSend(env, b.ph, 'promo', ['✅ اختبار الربط من لوحة تحكم لاسي'], '✅ اختبار الربط من لوحة تحكم لاسي');
-    return r.ok ? J({ ok: true }) : J({ error: r.error === 'wa_not_configured' ? 'أدخل WA_TOKEN و WA_PHONE_ID أولاً' : r.error }, 502);
+    return r.ok ? J({ ok: true }) : J({ error: r.error === 'wa_not_configured' ? 'أدخل مفاتيح واتساب (Meta) أو Twilio أولاً' : r.error }, 502);
   }
 
   /* ---------- manifest ديناميكي ---------- */
@@ -509,7 +509,7 @@ export async function extraRoutes(c) {
     const a = adm(); if (a) return a;
     const ig = await readIg(env), n = async sql => ((await env.DB.prepare(sql).first()) || {}).n || 0;
     return J({
-      wa: !!(ig.WA_TOKEN && ig.WA_PHONE_ID), telegram: !!(ig.BOT_TOKEN && ig.CHAT_ID), google: !!ig.GOOGLE_CLIENT_ID, ai: !!(ig.ANTHROPIC_API_KEY && ig.AI_ON !== '0'), storeUrl: !!ig.STORE_URL,
+      wa: !!((ig.WA_TOKEN && ig.WA_PHONE_ID) || (ig.TWILIO_SID && ig.TWILIO_TOKEN && ig.TWILIO_FROM)), telegram: !!(ig.BOT_TOKEN && ig.CHAT_ID), google: !!ig.GOOGLE_CLIENT_ID, ai: !!(ig.ANTHROPIC_API_KEY && ig.AI_ON !== '0'), storeUrl: !!ig.STORE_URL,
       products: await n('SELECT COUNT(*) n FROM products'), codes: await n('SELECT COUNT(*) n FROM discount_codes WHERE active=1'), staff: await n('SELECT COUNT(*) n FROM staff'),
       orders: await n('SELECT COUNT(*) n FROM orders'), customers: await n('SELECT COUNT(*) n FROM customers'), adminPass: !!env.ADMIN_PASS,
     });

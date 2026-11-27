@@ -7,7 +7,9 @@
      OTP [code] · WELCOME [name, storeLink] · ORDER [orderCode, statusText] · PROMO [text]  */
 import { now, jp } from './lib.js';
 
-export const waOn = env => !!(env.WA_TOKEN && env.WA_PHONE_ID);
+export const metaOn = env => !!(env.WA_TOKEN && env.WA_PHONE_ID);
+export const twOn = env => !!(env.TWILIO_SID && env.TWILIO_TOKEN && env.TWILIO_FROM);
+export const waOn = env => metaOn(env) || twOn(env);   // أي مزوّد رسائل مُفعّل (Meta أولاً ثم Twilio)
 export const intl = ph => {                 // 07701234567 → 9647701234567
   const d = String(ph || '').replace(/\D/g, '');
   if (/^07\d{9}$/.test(d)) return '964' + d.slice(1);
@@ -15,10 +17,26 @@ export const intl = ph => {                 // 07701234567 → 9647701234567
 };
 const TPL = { otp: 'WA_TPL_OTP', welcome: 'WA_TPL_WELCOME', order: 'WA_TPL_ORDER', promo: 'WA_TPL_PROMO' };
 
+/* Twilio: رسالة نصية SMS (افتراضي) أو واتساب إذا TWILIO_CHANNEL=whatsapp. TWILIO_FROM رقم أو معرّف Messaging Service (MG…) */
+export async function twSend(env, to, text) {
+  const wa = String(env.TWILIO_CHANNEL || '').toLowerCase() === 'whatsapp', from = String(env.TWILIO_FROM).trim();
+  const f = new URLSearchParams({ To: (wa ? 'whatsapp:+' : '+') + to, Body: String(text).slice(0, 1500) });
+  if (/^MG[0-9a-f]{32}$/i.test(from)) f.set('MessagingServiceSid', from); else f.set('From', wa && !from.startsWith('whatsapp:') ? 'whatsapp:' + from : from);
+  try {
+    const r = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${encodeURIComponent(env.TWILIO_SID)}/Messages.json`, {
+      method: 'POST', headers: { Authorization: 'Basic ' + btoa(env.TWILIO_SID + ':' + env.TWILIO_TOKEN), 'Content-Type': 'application/x-www-form-urlencoded' }, body: f,
+    });
+    if (r.ok) return { ok: true };
+    let e = ''; try { const j = await r.json(); e = (j.code || '') + ' ' + (j.message || ''); } catch (_) {}
+    return { ok: false, error: ('twilio ' + r.status + ' ' + e).slice(0, 300) };
+  } catch (e) { return { ok: false, error: 'network' }; }
+}
+
 export async function waSend(env, phone, kind, vars, text) {
   if (!waOn(env)) return { ok: false, error: 'wa_not_configured' };
   const to = intl(phone);
   if (!to) return { ok: false, error: 'bad_phone' };
+  if (!metaOn(env)) return twSend(env, to, text);
   const tpl = env[TPL[kind]];
   const msg = tpl
     ? { messaging_product: 'whatsapp', to, type: 'template', template: { name: tpl, language: { code: env.WA_LANG || 'ar' },
