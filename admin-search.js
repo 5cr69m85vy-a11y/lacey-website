@@ -11,8 +11,8 @@
     const n = norm(q), out = [];
     for (const g of ADMIN_REGISTRY.groups) for (const t of g[2]) if (norm(t[1]).includes(n) || norm(g[1]).includes(n)) out.push(['قسم', t[1] + ' — ' + g[1], t[0]]);
     (window.S && S.P || []).filter(p => norm(p.n + ' ' + p.c).includes(n)).slice(0, 5).forEach(p => out.push(['منتج', p.n + ' · ' + p.c, 'p']));
-    if (n.length > 1) { const d = await load(); d.o.filter(o => norm([o.code, o.name, o.ph].join(' ')).includes(n)).slice(0, 5).forEach(o => out.push(['طلب', (o.code || o.id) + ' · ' + (o.name || ''), 'or']));
-      d.c.filter(c => norm([c.name, c.ph || c.phone].join(' ')).includes(n)).slice(0, 5).forEach(c => out.push(['عميل', (c.name || '') + ' · ' + (c.ph || c.phone || ''), 'cu'])); }
+    if (n.length > 1) { const d = await load(); d.o.filter(o => norm([o.code, o.name, o.ph].join(' ')).includes(n)).slice(0, 5).forEach(o => out.push(['طلب', (o.code || o.id) + ' · ' + (o.name || ''), 'or|' + (o.code || o.id)]));
+      d.c.filter(c => norm([c.name, c.ph || c.phone].join(' ')).includes(n)).slice(0, 5).forEach(c => out.push(['عميل', (c.name || '') + ' · ' + (c.ph || c.phone || ''), 'cu|' + (c.ph || c.phone || c.name || '')])); }
     return out.slice(0, 14);
   };
   let seq = 0;
@@ -24,6 +24,11 @@
     box.innerHTML = r.length ? r.map(x => `<button type="button" data-a="gsgo" data-c="${E(x[2])}"><small>${x[0]}</small>${E(x[1])}</button>`).join('') : '<p class="em">لا نتائج</p>';
     box.hidden = false;
   });
-  A.gsgo = c => { at = c; ed = null; ea = null; es = null; ra(); };
+  A.gsgo = c => {
+    const [t, q] = String(c).split('|'); at = t; ed = null; ea = null; es = null;
+    if (t === 'or') { window.orQ = q || ''; try { orF = ''; } catch (_) {} }
+    ra();
+    if (t === 'cu' && q) { let n = 0; const iv = setInterval(() => { const i = document.getElementById('cuq'); if (i) { i.value = q; i.dispatchEvent(new Event('input')); clearInterval(iv); } else if (++n > 20) clearInterval(iv); }, 150); }
+  };
   document.addEventListener('click', e => { const b = document.getElementById('gsr'); if (b && !e.target.closest('.gsw')) b.hidden = true; });
 })();

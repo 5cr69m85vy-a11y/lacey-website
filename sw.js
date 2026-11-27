@@ -1,5 +1,5 @@
 /* sw.js — Service Worker: يعمل الموقع دون اتصال (واجهة + آخر كتالوج) ويتحدّث تلقائياً */
-const V = 'lacey-v75', SHELL = ['/', '/index.html', '/style.css', '/storage.js', '/lang.js', '/script.js', '/account.js', '/admin-registry.js', '/admin2.js', '/admin3.js', '/admin-ops.js', '/admin-search.js', '/admin-settings.js', '/store2.js', '/chat.js', '/staff.js', '/pages.js', '/icons/icon-192.png'];
+const V = 'lacey-v76', SHELL = ['/', '/index.html', '/style.css', '/storage.js', '/lang.js', '/script.js', '/account.js', '/admin-registry.js', '/admin2.js', '/admin3.js', '/admin-ops.js', '/admin-search.js', '/admin-settings.js', '/store2.js', '/chat.js', '/staff.js', '/pages.js', '/icons/icon-192.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(V).then(c => Promise.all(SHELL.map(u => fetch(new Request(u, { cache: 'reload' })).then(r => r.ok && c.put(u, r)).catch(() => {})))).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(k => Promise.all(k.filter(x => x !== V).map(x => caches.delete(x)))).then(() => self.clients.claim())); });
 const DYN = /^\/(login|settings|code|visit|stats|order|orders|status|track|customers?|discounts?|auth|me|quote|codes|chat|adm|staff)(\/|$)/;

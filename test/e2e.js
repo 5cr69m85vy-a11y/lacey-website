@@ -12,7 +12,7 @@ const assert = require('assert');
   await adm.waitForSelector('#lf'); await adm.fill('#lf input[name=pw]', 'secret'); await adm.click('#lf button');
   await adm.waitForFunction(() => document.querySelector('#ab nav'), null, { timeout: 8000 });
   await adm.waitForFunction(() => true); await new Promise(r => setTimeout(r, 1500));
-  await adm.fill('#gsq', 'الطلبات'); await adm.waitForSelector('#gsr button'); await adm.click('#gsr button[data-c=or]'); assert.strictEqual(await adm.evaluate(() => at), 'or'); ok('admin global search jumps to a section');
+  await adm.fill('#gsq', 'الطلبات'); await adm.waitForSelector('#gsr button'); await adm.click('#gsr button[data-c^=or]'); assert.strictEqual(await adm.evaluate(() => at), 'or'); ok('admin global search jumps to a section');
   const miss = await adm.evaluate(() => ADMIN_REGISTRY.ids().filter(id => typeof TB[id] !== 'function')); assert.deepStrictEqual(miss, [], 'تبويبات بلا شاشة: ' + miss); ok('every registry tab has a renderer');
   assert.strictEqual(db.prepare('select count(*) n from products').get().n, 10); ok('admin login seeds 10 default products on the server');
   await adm.evaluate(() => { S.ann = 'شريط جديد للجميع'; S.P = S.P.filter(p => p.c !== 'LC204'); S.P.push({ c: 'NEW1', n: 'منتج جديد', p: 5000, o: 0, k: 'Cleansers', d: 'x', i: '' }); save(); });
