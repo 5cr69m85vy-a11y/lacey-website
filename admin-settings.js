@@ -45,21 +45,3 @@
   if (typeof window.ra == 'function') { const _ra = window.ra; window.ra = function () { const r = _ra.apply(this, arguments); try { enhance(); } catch (e) {} return r; }; ra = window.ra; }
   window.addEventListener('beforeunload', e => { const f = document.getElementById('sf'); if (f && f.classList.contains('dirty')) { e.preventDefault(); e.returnValue = ''; } });
 })();
-
-/* Glass theme helper: any element that still paints a light surface inside the admin page becomes a glass card/pill. */
-(function () {
-  if (!document.documentElement.classList.contains('admpg') && !/^\/admin/.test(location.pathname)) return;
-  let q = 0;
-  const lum = c => { const m = c.match(/rgba?\(([\d.]+)[, ]+([\d.]+)[, ]+([\d.]+)(?:[,/ ]+([\d.]+))?/); return m ? (m[4] === undefined || +m[4] > .6) && (.2126 * m[1] + .7152 * m[2] + .0722 * m[3]) > 205 : false; };
-  const run = () => {
-    q = 0; const root = document.getElementById('ad'); if (!root) return;
-    root.querySelectorAll('*').forEach(el => {
-      if (el.tagName === 'svg' || el.closest('svg') || el.tagName === 'IMG' || el.tagName === 'CANVAS' || el.classList.contains('on') || el.closest('.cfv')) return;
-      const bg = getComputedStyle(el).backgroundColor;
-      if (lum(bg)) el.classList.add('gl-l'); else if (el.classList.contains('gl-l')) el.classList.remove('gl-l');
-    });
-  };
-  const sched = () => { if (!q) q = requestAnimationFrame(run); };
-  new MutationObserver(sched).observe(document.body, { childList: true, subtree: true });
-  addEventListener('load', sched); sched();
-})();
