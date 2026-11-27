@@ -1,7 +1,7 @@
 /* tg.js — بوتات تلغرام المستقلة: orders / support / reports
    لكل بوت: توكن خاص، webhook بسرّ خاص، وقائمة معرّفات (مستلمين) مستقلة بصلاحيات منفصلة.
    التوكن يُحفظ في D1 ولا يُرجَع للواجهة ولا يُكتب في أي رسالة أو سجل. */
-import { J, now, jp, randHex } from './lib.js';
+import { J, now, jp, randHex, safeEq } from './lib.js';
 import { audit, hit } from './guard.js';
 import { buildReport, summary, baghdad } from './reports.js';
 
@@ -291,7 +291,7 @@ export const TG_COMMANDS = { orders: [['menu', 'قائمة الطلبات'], ['i
 /* ================= webhook ================= */
 export async function tgHook(env, bot, request, deps) {
   const b = await getBot(env, bot); if (!b || !b.token || !b.enabled) return J({ ok: true });
-  if (request.headers.get('X-Telegram-Bot-Api-Secret-Token') !== b.secret || !b.secret) return J({ error: 'forbidden' }, 403);
+  if (!b.secret || !safeEq(request.headers.get('X-Telegram-Bot-Api-Secret-Token') || '', b.secret)) return J({ error: 'forbidden' }, 403);
   const u = await request.json().catch(() => null); if (!u || !u.update_id) return J({ ok: true });
   const ins = await env.DB.prepare('INSERT OR IGNORE INTO tg_updates(bot,update_id,at) VALUES(?,?,?)').bind(bot, u.update_id, now()).run();
   if (!ins.meta.changes) return J({ ok: true, dup: true });                       // حماية من التكرار

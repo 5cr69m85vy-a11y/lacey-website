@@ -36,4 +36,13 @@ const { makeDB } = require('./d1shim');
   const legacy = [...new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode('lacey-admin')))].map(b => b.toString(16).padStart(2, '0')).join('');
   assert.strictEqual((await withTok(legacy)).status, 401, 'legacy permanent token rejected');
   console.log('✓ admin token: signed, expiring, unforgeable, legacy format revoked');
+  /* abuse throttles (real limits, no scaling) */
+  const env2 = { ...env, RL_SCALE: '1', WA_DEV: '1', OTP_GLOBAL_RL: '2' };
+  const call2 = (path, init = {}) => W.fetch(new Request('https://x.dev' + path, { ...init, headers: { 'content-type': 'application/json', 'cf-connecting-ip': '9.9.9.9', ...(init.headers || {}) } }), env2);
+  let last = 0; for (let i = 0; i < 45; i++) last = (await call2('/track?code=LC-ZZ' + String(i).padStart(4, '0'))).status;
+  assert.strictEqual(last, 429, 'order-code guessing is throttled after 40 misses');
+  const otp = ph => call2('/auth/otp/send', { method: 'POST', body: JSON.stringify({ ph }) });
+  assert.strictEqual((await otp('07705551001')).status, 200); assert.strictEqual((await otp('07705551002')).status, 200);
+  assert.strictEqual((await otp('07705551003')).status, 429, 'global OTP hourly cap stops WhatsApp cost abuse');
+  console.log('✓ track-miss throttle and global OTP cap');
 })().catch(e => { console.error(e); process.exit(1); });

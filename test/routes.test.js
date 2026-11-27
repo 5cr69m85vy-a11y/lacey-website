@@ -22,3 +22,12 @@ for (const f of [...idx.matchAll(/<script[^>]*src="(\/[^"?]+)/g), ...idx.matchAl
   assert(sw.includes("'" + f + "'"), 'asset not in service-worker SHELL: ' + f);
 }
 console.log('✓ service-worker shell covers every script and stylesheet');
+/* CSP guard: script-src has no 'unsafe-inline', so no inline <script> blocks or inline event-handler attributes may exist */
+const hdr = fs.readFileSync(__dirname + '/../_headers', 'utf8');
+assert(/script-src 'self'[^;]*;/.test(hdr) && !/script-src[^;]*unsafe-inline/.test(hdr), 'CSP script-src must stay strict');
+assert(!/<script(?![^>]*\bsrc=)[^>]*>/i.test(idx), 'inline <script> in index.html would be blocked by CSP');
+for (const f of fs.readdirSync(__dirname + '/..').filter(f => /\.(js|html)$/.test(f))) {
+  const t = fs.readFileSync(__dirname + '/../' + f, 'utf8');
+  assert(!/\son(click|load|error|change|input|submit|focus|blur|keyup|keydown)=["'\\]/i.test(t), 'inline event-handler attribute in ' + f + ' (blocked by CSP)');
+}
+console.log('✓ CSP guard: no inline scripts or event-handler attributes');

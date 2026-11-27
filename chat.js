@@ -6,7 +6,7 @@
   const ls = { get: k => { try { return localStorage.getItem(k) } catch (e) { return null } }, set: (k, v) => { try { localStorage.setItem(k, v) } catch (e) {} } };
   const base = () => (typeof API == 'function' && API()) || '';
   const hdrs = () => ({ 'Content-Type': 'application/json', ...(typeof custAuth == 'function' ? custAuth() : {}) });
-  async function api(path, body) { const r = await fetch(base() + path, { method: body ? 'POST' : 'GET', headers: hdrs(), body: body ? JSON.stringify(body) : undefined }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'error'); return j; }
+  async function api(path, body, tk) { const r = await fetch(base() + path, { method: body ? 'POST' : 'GET', headers: tk ? { ...hdrs(), 'X-Chat-Token': tk } : hdrs(), body: body ? JSON.stringify(body) : undefined }); const j = await r.json().catch(() => ({})); if (!r.ok) throw new Error(j.error || 'error'); return j; }
   const DEPT = {
     service: { ar: 'خدمة الزبائن', en: 'Customer service', hi: ['أهلاً بك في لاسي 🌸 كيف أستطيع مساعدتك؟ اختر السبب أدناه أو اكتب سؤالك.', 'Welcome to Lacey 🌸 How can we help? Pick a reason below or type your question.'], chips: [['where', 'أين طلبي؟'], ['modify', 'تعديل طلبي'], ['cancel', 'إلغاء طلبي'], ['human', 'الاتصال بموظف']] },
     routine: { ar: 'دعم روتين', en: 'Routine support', hi: ['أهلاً بك في «روتين» 🌸 مستشارتك للعناية بالبشرة. اختاري ما يناسبك أو اكتبي سؤالك.', 'Welcome to “Routine” 🌸 your skincare advisor. Pick an option or type your question.'], chips: [['skin', 'اعرفي نوع بشرتي'], ['plan', 'اقترحوا لي روتين'], ['ingr', 'دليل المكونات'], ['human', 'تحدثي مع مختصة']] },
@@ -58,7 +58,7 @@
   async function refresh(d, mark) {
     const s = get(d);
     try {
-      const j = await api(`/chat/poll?dept=${d}&token=${encodeURIComponent(s.tk)}&after=${s.after}${mark ? '&mark=1' : ''}`);
+      const j = await api(`/chat/poll?dept=${d}&after=${s.after}${mark ? '&mark=1' : ''}`, null, s.tk);
       if (!j.chat) { if (s.chat || s.all.length) { s.all = []; s.after = 0; s.chat = 0; s.status = 'open'; s.rated = false; s.mode = 'bot'; s.staff = ''; s.typing = false; s.unread = 0; if (j.done) s.thanks = true; } sig = ''; if (cur == d) { frame(d, s); paint(d); } return; }
       if (s.chat && s.chat != j.chat) { s.all = []; s.after = 0; s.rate = 0; return refresh(d, mark); }
       s.chat = j.chat; s.status = j.status; s.rated = j.rated; s.mode = j.mode || 'bot'; s.staff = j.staff || ''; s.seen = j.seen || 0; s.typing = !!j.typing; s.unread = j.unread || 0;
@@ -86,7 +86,7 @@
   function setDots(d, n) { const sel = d == 'routine' ? '#bnav [data-p=routine]' : '#hlp'; const a = document.querySelector(sel); if (a) { a.classList.toggle(d == 'routine' ? 'dot' : 'hn', n > 0); a.dataset.n = n > 0 ? String(n) : ''; } }
   async function dots() {
     if (!ls.get('lc_ch') && !ls.get('lc_ch_routine') && !(typeof custAuth == 'function' && custAuth().Authorization)) return;
-    for (const d of Object.keys(DEPT)) { if (cur == d) continue; const s = get(d); try { const j = await api(`/chat/poll?dept=${d}&token=${encodeURIComponent(s.tk)}&after=${s.after || 0}`); setDots(d, j.chat ? j.unread || 0 : 0); } catch (e) {} }
+    for (const d of Object.keys(DEPT)) { if (cur == d) continue; const s = get(d); try { const j = await api(`/chat/poll?dept=${d}&after=${s.after || 0}`, null, s.tk); setDots(d, j.chat ? j.unread || 0 : 0); } catch (e) {} }
   }
   clearInterval(dotT); dotT = setInterval(dots, 25000); setTimeout(dots, 3000);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) { dots(); if (cur) refresh(cur, true); } });

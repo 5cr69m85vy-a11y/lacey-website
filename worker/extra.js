@@ -195,7 +195,7 @@ export async function extraRoutes(c) {
   if (p === '/chat/poll' && M === 'GET') {
     { const lim = await limit(env, request, 'chat-poll', 400, 10 * 60e3); if (lim) return lim; }
     const dept = deptOf(url.searchParams.get('dept'));
-    const ch = await guestChat(env, url.searchParams.get('token') || '', false, sess, {}, dept);
+    const ch = await guestChat(env, request.headers.get('X-Chat-Token') || '', false, sess, {}, dept);
     if (!ch) return J({ chat: null, messages: [], unread: 0 });
     const rated = await env.DB.prepare('SELECT 1 x FROM reviews WHERE chat_id=?').bind(ch.id).first();
     if (rated && ch.status === 'closed') return J({ chat: null, messages: [], unread: 0, done: true }, 200, { 'Cache-Control': 'no-store' });   // بعد التقييم تختفي المحادثة من جهة الزبون (تبقى للموظفين)

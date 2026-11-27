@@ -108,6 +108,8 @@ export async function authRoutes(c) {
     const { ph } = await body();
     if (!PHONE.test(String(ph || ''))) return J({ error: 'رقم الهاتف غير صحيح' }, 400);
     { const lim = await limit(env, request, 'otp-send', 10, 3600e3); if (lim) return lim; }
+    /* سقف عام وسقف يومي لكل رقم: يمنع استنزاف رصيد واتساب من عناوين IP كثيرة */
+    if (!(await hit(env, 'otp-all', Number(env.OTP_GLOBAL_RL) || 300, 3600e3)) || !(await hit(env, 'otp-day:' + ph, 10, 864e5))) return J({ error: 'محاولات كثيرة، حاول لاحقاً' }, 429);
     if (!waOn(env) && env.WA_DEV !== '1') return J({ error: 'واتساب غير مُفعّل بعد' }, 503);
     const recent = await env.DB.prepare('SELECT COUNT(*) n FROM otp_codes WHERE phone=? AND created_at>?').bind(ph, now() - OTP_MS).first();
     if (recent.n >= 3) return J({ error: 'محاولات كثيرة، انتظر بضع دقائق' }, 429);

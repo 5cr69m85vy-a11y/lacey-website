@@ -22,7 +22,7 @@ import { quote, shopRoutes } from './shop.js';
 import { extraRoutes } from './extra.js';
 import { runReminders } from './remind.js';
 import { opsRoutes, restock, takeStock, stockMap, refreshDeliveries, productPage, sitemap, robots } from './ops.js';
-import { ensureSchema, withIntegrations } from './lib.js';
+import { ensureSchema, withIntegrations, safeEq } from './lib.js';
 import { limit, hit, tooMany, audit, gc, ipOf } from './guard.js';
 import { tgRoutes, tgOrderNew, tgOrderRefresh, botReady, tgSend, tgSupportWaiting, tgReportsTick } from './tg.js';
 
@@ -63,7 +63,6 @@ async function adminValid(env, bearer) {
   return safeEq(m[2], await adminSig(env, m[1]));
 }
 
-const safeEq = (a, b) => { a = String(a); b = String(b); let d = a.length ^ b.length; for (let i = 0; i < Math.max(a.length, b.length); i++) d |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0); return d === 0; };
 
 async function tgPhoto(env, buf, caption) {
   if (!env.BOT_TOKEN || !env.CHAT_ID) return false;
@@ -378,10 +377,10 @@ async function handle(request, rawEnv, ctx) {
 
       if (p === '/track' && M === 'GET') {
         const lim = await limit(env, request, 'track', 300, 10 * 60e3); if (lim) return lim;
-        await sweep(env);
+        if (await hit(env, 'sweep-pub', 1, 30e3)) await sweep(env);     // الطلب العام لا يشغّل الكنس أكثر من مرة كل 30 ثانية
         const code = (url.searchParams.get('code') || '').toUpperCase();
         const o = await env.DB.prepare('SELECT * FROM orders WHERE code=?').bind(code).first();
-        if (!o) return J({ s: null });
+        if (!o) { if (!(await hit(env, 'track-miss:' + ipOf(request), 40, 10 * 60e3))) return tooMany('محاولات كثيرة'); return J({ s: null }); }
         const ev = (await env.DB.prepare('SELECT status,at FROM order_events WHERE order_code=? ORDER BY at,id').bind(code).all()).results;
         const cancelUntil = o.created_at + CANCEL_WINDOW_MS;
         return J({

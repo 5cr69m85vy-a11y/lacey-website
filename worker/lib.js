@@ -53,3 +53,6 @@ export async function withIntegrations(env) {
   for (const k of IG_KEYS) if (v[k]) o[k] = v[k];
   return o;
 }
+
+/* مقارنة بزمن ثابت للأسرار */
+export const safeEq = (a, b) => { a = String(a); b = String(b); let d = a.length ^ b.length; for (let i = 0; i < Math.max(a.length, b.length); i++) d |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0); return d === 0; };
