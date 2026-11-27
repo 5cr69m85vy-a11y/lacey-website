@@ -42,8 +42,13 @@ export async function extraRoutes(c) {
   /* ---------- الربط والمفاتيح (تُحفظ في القاعدة بدل أسرار Cloudflare) ---------- */
   if (p === '/adm/audit' && M === 'GET') {
     const a = adm(); if (a) return a;
-    const rows = (await env.DB.prepare('SELECT id,at,actor,action,entity,before,after,ip FROM audit_log ORDER BY id DESC LIMIT 200').all()).results;
-    return J({ items: rows });
+    const sp = url.searchParams, w = [], bnd = [], like = v => '%' + String(v).replace(/[\\%_]/g, c => '\\' + c).slice(0, 60) + '%';
+    if (sp.get('q')) { w.push("(action LIKE ? ESCAPE '\\' OR entity LIKE ? ESCAPE '\\')"); bnd.push(like(sp.get('q')), like(sp.get('q'))); }
+    if (sp.get('actor')) { w.push('actor=?'); bnd.push(String(sp.get('actor')).slice(0, 60)); }
+    const days = Math.min(+sp.get('days') || 0, 365); if (days > 0) { w.push('at>?'); bnd.push(now() - days * 864e5); }
+    const rows = (await env.DB.prepare(`SELECT id,at,actor,action,entity,before,after,ip FROM audit_log ${w.length ? 'WHERE ' + w.join(' AND ') : ''} ORDER BY id DESC LIMIT 200`).bind(...bnd).all()).results;
+    const actors = (await env.DB.prepare('SELECT DISTINCT actor FROM audit_log LIMIT 50').all()).results.map(r => r.actor);
+    return J({ items: rows, actors });
   }
   if (p === '/adm/dashboard' && M === 'GET') {
     const a = adm(); if (a) return a;

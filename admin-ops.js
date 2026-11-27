@@ -101,6 +101,20 @@
   }
   A.rvf = c => { rvF = c; loadRv(); };
   A.rvs = async c => { const [id, st] = String(c).split(':'), t = document.querySelector(`[data-rvr="${id}"]`); try { await post('/adm/reviews', { id: +id, status: st, reply: t ? t.value : undefined }); toast('تم'); loadRv(); } catch (e) { toast(e.message); } };
+
+  /* ---------- سجل النشاط: فلترة + تفاصيل قبل/بعد ---------- */
+  const auF = { q: '', actor: '', days: '' };
+  TB.au = () => { setTimeout(loadAu2, 0); return '<p class="em">آخر 200 عملية إدارية (لا تُسجَّل كلمات السر ولا المفاتيح).</p><form id="auf" class="tl2" style="display:flex;gap:6px;flex-wrap:wrap"><input name="q" placeholder="عملية أو عنصر…" value="' + E(auF.q) + '"><select name="actor"><option value="">كل المنفّذين</option></select><select name="days">' + [['', 'كل الأوقات'], ['1', 'آخر يوم'], ['7', 'آخر أسبوع'], ['30', 'آخر شهر']].map(([v, n]) => `<option value="${v}" ${auF.days === v ? 'selected' : ''}>${n}</option>`).join('') + '</select><button class="btn">تصفية</button></form><div id="aub"><p class="em">جارٍ التحميل…</p></div>'; };
+  async function loadAu2() {
+    const el = document.getElementById('aub'); if (!el) return;
+    try {
+      const j = await api('/adm/audit?' + new URLSearchParams(Object.fromEntries(Object.entries(auF).filter(([, v]) => v)))), r = j.items;
+      const sel = document.querySelector('#auf select[name=actor]'); if (sel) sel.innerHTML = '<option value="">كل المنفّذين</option>' + (j.actors || []).map(a => `<option ${a === auF.actor ? 'selected' : ''}>${E(a)}</option>`).join('');
+      const d = x => { if (!x) return ''; try { return JSON.stringify(JSON.parse(x), null, 1); } catch (_) { return String(x); } };
+      el.innerHTML = r.length ? `<div class="chw"><table class="tb"><tr><th>الوقت</th><th>المنفّذ</th><th>العملية</th><th>العنصر</th><th>IP</th></tr>${r.map(x => `<tr><td>${E(new Date(x.at).toLocaleString('ar-IQ'))}</td><td>${E(x.actor)}</td><td>${E(x.action)}${x.before || x.after ? `<details><summary>التفاصيل</summary><pre dir="ltr" style="white-space:pre-wrap;font-size:11px">قبل: ${E(d(x.before))}\nبعد: ${E(d(x.after))}</pre></details>` : ''}</td><td dir="ltr">${E(x.entity)}</td><td dir="ltr">${E(x.ip)}</td></tr>`).join('')}</table></div>` : '<p class="em">لا توجد عمليات مطابقة</p>';
+    } catch (e) { el.innerHTML = '<p class="em">تعذر التحميل</p>'; }
+  }
+  H.auf = v => { auF.q = v.q || ''; auF.actor = v.actor || ''; auF.days = v.days || ''; loadAu2(); };
   TB.dl = () => { setTimeout(loadDl, 0); return `<div id="dlb"><p class="em">جارٍ التحميل…</p></div>`; };
   async function loadDl() {
     const el = document.getElementById('dlb'); if (!el) return;

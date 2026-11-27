@@ -18,6 +18,8 @@ const authFor = require('./sess');
     const r = await post('/login', { pw: 'secret' }); adm = { Authorization: 'Bearer ' + (await r.json()).token };
     const a = await (await call('/adm/audit', {}, adm)).json(); assert(a.items.some(i => i.action === 'login_failed') && a.items.some(i => i.action === 'login'));
     assert.strictEqual((await call('/adm/audit')).status, 401);
+    const f = await (await call('/adm/audit?q=login_failed&days=1', {}, adm)).json(); assert(f.items.length && f.items.every(i => i.action.includes('login_failed')), 'audit filter by action'); assert(Array.isArray(f.actors));
+    const inj = await call("/adm/audit?q=%25'%20OR%201=1--&actor=x'", {}, adm); assert.strictEqual(inj.status, 200); assert.strictEqual((await inj.json()).items.length, 0, 'audit filter is parameterised');
   });
   await ok('guest cannot place an order (API), signed-in customer can; account links the order', async () => {
     await post('/settings', { data: { P: [{ c: 'A1', n: 'Cleanser', p: 10000, o: 0, k: 'C', i: '' }] } }, adm);
