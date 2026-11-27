@@ -664,3 +664,5 @@ html.admpg #ab nav.gn{border-radius:22px}html.admpg #ab nav.sn{border-radius:22p
 .sx-nav .sxg{margin:16px 4px 6px;font-size:12px;letter-spacing:.06em;opacity:.6;font-weight:700}
 .sx.sx-search .sxg,.sx-search .sx-nav .sxg{display:none}
 html.admpg .sx-nav .sxg{color:var(--g-mut)}
+
+.rvs{margin:6px 0}.rvs .rst{color:#c9a24b;letter-spacing:1px}.rvi{border-top:1px solid rgba(0,0,0,.08);padding:6px 0;font-size:13px}.rvi p{margin:2px 0}.rvr{opacity:.75;padding-inline-start:10px;border-inline-start:2px solid #c9a24b}

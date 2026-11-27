@@ -86,6 +86,21 @@
   }
   H.orm = async v => { try { await post('/adm/reminders', { cart: !!v.cart, stock: !!v.stock, reorder: !!v.reorder, cartHours: +v.cartHours || 3 }); toast('تم الحفظ'); loadRm(); } catch (e) { toast(e.message); } };
   A.rmrun = async () => { try { const r = await post('/adm/reminders/run', {}); toast(`أُرسل: سلة ${r.cart}، إعادة شراء ${r.reorder}`); loadRm(); } catch (e) { toast(e.message); } };
+
+  /* ---------- تقييمات المنتجات ---------- */
+  let rvF = 'pending';
+  TB.rv = () => { setTimeout(loadRv, 0); return `<div id="rvb"><p class="em">جارٍ التحميل…</p></div>`; };
+  async function loadRv() {
+    const el = document.getElementById('rvb'); if (!el) return; let j;
+    try { j = await api('/adm/reviews?status=' + rvF); } catch (e) { el.innerHTML = '<p class="em">تعذّر التحميل</p>'; return; }
+    const stars = n => '★'.repeat(n) + '☆'.repeat(5 - n);
+    el.innerHTML = `<div class="chips" style="margin-bottom:8px">${[['pending', 'بانتظار المراجعة'], ['approved', 'معتمدة'], ['hidden', 'مخفية'], ['', 'الكل']].map(([k, n]) => `<button data-a="rvf" data-c="${k}" class="${rvF === k ? 'on' : ''}">${n}</button>`).join('')}</div>`
+      + (j.items.length ? j.items.map(r => `<div class="kp" style="margin-bottom:8px;text-align:start"><b style="color:#c9a24b">${stars(r.rating)}</b> <small>${E(r.name || '—')} · ${E(r.product_code)} · ${E(r.status)}</small><p style="margin:6px 0">${E(r.comment || '')}</p>
+        <textarea data-rvr="${r.id}" maxlength="500" placeholder="رد المتجر (اختياري)" rows="2" style="width:100%">${E(r.reply || '')}</textarea>
+        <div style="display:flex;gap:6px;margin-top:6px"><button class="btn" data-a="rvs" data-c="${r.id}:approved">اعتماد</button><button class="btn g" data-a="rvs" data-c="${r.id}:hidden">إخفاء</button></div></div>`).join('') : '<p class="em">لا توجد تقييمات</p>');
+  }
+  A.rvf = c => { rvF = c; loadRv(); };
+  A.rvs = async c => { const [id, st] = String(c).split(':'), t = document.querySelector(`[data-rvr="${id}"]`); try { await post('/adm/reviews', { id: +id, status: st, reply: t ? t.value : undefined }); toast('تم'); loadRv(); } catch (e) { toast(e.message); } };
   TB.dl = () => { setTimeout(loadDl, 0); return `<div id="dlb"><p class="em">جارٍ التحميل…</p></div>`; };
   async function loadDl() {
     const el = document.getElementById('dlb'); if (!el) return;
