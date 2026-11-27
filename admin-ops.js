@@ -8,9 +8,6 @@
   const GOV = ['بغداد', 'نينوى', 'أربيل', 'السليمانية', 'دهوك', 'كركوك', 'البصرة', 'النجف', 'كربلاء', 'بابل', 'الأنبار', 'ديالى', 'صلاح الدين', 'واسط', 'ميسان', 'ذي قار', 'المثنى', 'القادسية', 'حلبجة'];
   const tabs = [['sk', 'المخزون'], ['dl', 'الشحن والتوصيل'], ['rm', 'التذكيرات']];
   tabs.forEach(t => { if (!TABS.find(x => x[0] === t[0])) TABS.push(t); });
-  const G = window.GROUPS || [];
-  const grp = (id, k) => { const g = G.find(x => x[0] === id); if (g && !g[2].includes(k)) g[2].push(k); };
-  grp('catalog', 'sk'); grp('settings', 'dl'); grp('settings', 'rm');
 
   /* ---------- المخزون ---------- */
   let stk = [], stF = '';

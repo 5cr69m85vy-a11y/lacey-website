@@ -18,16 +18,8 @@
 
   /* ---------- تنظيم الأقسام في مجموعات (صفحة مستقلة لكل مجموعة) ---------- */
   add('db', 'اللوحة'); add('au', 'سجل النشاط'); add('tg', 'بوتات تلغرام');
-  const GROUPS = window.GROUPS = [
-    ['home', 'الرئيسية', ['db', 'st']],
-    ['orders', 'الطلبات', ['or']],
-    ['catalog', 'الكتالوج', ['p', 'g', 'sb', 'br', 'bx']],
-    ['customers', 'العملاء', ['cu']],
-    ['marketing', 'التسويق', ['a', 'cp', 'lo', 'wm']],
-    ['support', 'الدعم والموظفون', ['ch', 'sf']],
-    ['settings', 'إعدادات المتجر', ['s', 'l', 'hr', 'pm', 'lg', 'gd']],
-    ['system', 'الأمان والنظام', ['tg', 'ig', 'au', 'u']],
-  ];
+  const GROUPS = window.GROUPS;   // يأتي من admin-registry.js
+  ADMIN_REGISTRY.groups.forEach(g => g[2].forEach(t => add(t[0], t[1])));
   const tl = k => (TABS.find(t => t[0] === k) || [k, k])[1];
   window.navHTML = () => {
     const gi = Math.max(0, GROUPS.findIndex(g => g[2].includes(at))), g = GROUPS[gi];

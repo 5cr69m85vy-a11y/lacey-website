@@ -653,3 +653,14 @@ html.admpg .gl-l:not(.on){background:var(--g-card)!important;color:var(--g-tx)!i
 html.admpg .gl-l:not(.on) *{color:inherit}
 html.admpg .gl-l:not(.on) input:not([type=checkbox]),html.admpg .gl-l:not(.on) select{background:rgba(0,0,0,.22)!important}
 html.admpg .cx button.on:not(.btn){background:#fff!important;border-color:#fff!important}
+/* admin mobile fixes (v70): readable top tabs, no storefront section padding inside the admin card */
+html.admpg #ab nav.gn button:not(.on){background:rgba(255,255,255,.08)!important;color:var(--g-tx)!important;border:1px solid var(--g-line)}
+html.admpg #ab nav.gn button.on{background:rgba(255,255,255,.2)!important;color:#fff!important;border:1px solid rgba(255,255,255,.35)}
+html.admpg #ab nav.sn button:not(.on){background:transparent!important;color:var(--g-mut)!important}
+html.admpg #ab .cx{align-items:stretch;gap:12px}
+@media(max-width:899px){html.admpg #ab .cx{padding:18px 14px;margin:0 14px 28px}html.admpg #ab nav.gn,html.admpg #ab nav.sn{margin-inline:14px}}
+html.admpg #stgd,html.admpg .sx-top .stg-s{background:var(--g-card2)!important;color:var(--g-tx)!important;border:1px solid var(--g-line)}
+html.admpg #ab nav.gn{border-radius:22px}html.admpg #ab nav.sn{border-radius:22px}
+.sx-nav .sxg{margin:16px 4px 6px;font-size:12px;letter-spacing:.06em;opacity:.6;font-weight:700}
+.sx.sx-search .sxg,.sx-search .sx-nav .sxg{display:none}
+html.admpg .sx-nav .sxg{color:var(--g-mut)}

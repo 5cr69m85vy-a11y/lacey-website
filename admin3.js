@@ -132,8 +132,5 @@
   A.csvc = async () => { try { const l = (await J('/customers')).customers || []; csv('customers.csv', ['name', 'phone', 'city', 'orders', 'spent', 'last_order'], l.map(c => [c.name, c.ph || c.phone, c.city, c.orders || c.n, c.spent || c.sp, c.last ? new Date(c.last).toISOString() : ''])); toast('تم التصدير'); } catch (e) { toast('تعذر التصدير'); } };
 
   /* ---------- تعديل المجموعات ---------- */
-  const G = window.GROUPS || [];
-  const set = (id, items) => { const g = G.find(x => x[0] === id); if (g) g[2] = items; };
-  set('home', ['db', 'st']); set('settings', ['hl', 's', 'l', 'hr', 'pm', 'lg', 'gd']);
   at = 'db';
 })();
