@@ -13,6 +13,13 @@ const assert = require('assert');
   await adm.waitForFunction(() => document.querySelector('#ab nav'), null, { timeout: 8000 });
   await adm.waitForFunction(() => true); await new Promise(r => setTimeout(r, 1500));
   await adm.fill('#gsq', 'الطلبات'); await adm.waitForSelector('#gsr button'); await adm.click('#gsr button[data-c^=or]'); assert.strictEqual(await adm.evaluate(() => at), 'or'); ok('admin global search jumps to a section');
+  await adm.evaluate(() => A.tab('sf')); await adm.waitForSelector('#sff', { state: 'attached' }); await adm.click('.sfa summary');
+  await adm.fill('#sff [name=name]', 'نور'); await adm.fill('#sff [name=username]', 'noor'); await adm.fill('#sff [name=pw]', 'secret123'); await adm.selectOption('#sff [name=xp]', 'dept:routine'); await adm.click('#sff button.btn'); await adm.click('[data-k=y]');
+
+  await adm.waitForSelector('.sfc'); assert.strictEqual(await adm.locator('.sfc').count(), 1); assert((await adm.textContent('#sfk')).includes('1'));
+  await adm.fill('#sfq', 'zzz'); assert.strictEqual(await adm.locator('.sfc').count(), 0); await adm.fill('#sfq', 'نو'); assert.strictEqual(await adm.locator('.sfc').count(), 1);
+  await adm.click('.sft .chips button[data-c=routine]'); assert.strictEqual(await adm.locator('.sfc').count(), 0); await adm.click('.sft .chips button[data-c=""]'); await adm.fill('#sfq', '');
+  assert((await adm.textContent('#sfm')).includes('✓')); ok('staff page: cards, filters, matrix');
   const miss = await adm.evaluate(() => ADMIN_REGISTRY.ids().filter(id => typeof TB[id] !== 'function')); assert.deepStrictEqual(miss, [], 'تبويبات بلا شاشة: ' + miss); ok('every registry tab has a renderer');
   assert.strictEqual(db.prepare('select count(*) n from products').get().n, 10); ok('admin login seeds 10 default products on the server');
   await adm.evaluate(() => { S.ann = 'شريط جديد للجميع'; S.P = S.P.filter(p => p.c !== 'LC204'); S.P.push({ c: 'NEW1', n: 'منتج جديد', p: 5000, o: 0, k: 'Cleansers', d: 'x', i: '' }); save(); });
